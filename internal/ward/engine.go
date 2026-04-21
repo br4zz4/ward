@@ -99,7 +99,7 @@ func (e *Engine) EnvVars(r *MergeResult, prefixed bool) (map[string]secrets.EnvE
 	if prefixed {
 		return secrets.ToEnvEntries(r.Tree), nil
 	}
-	return secrets.ToFlatEnvEntries(r.Tree), nil
+	return secrets.ToFlatEnvEntries(r.Tree)
 }
 
 // EnvVarsMap is like EnvVars but returns plain string values (for injection into

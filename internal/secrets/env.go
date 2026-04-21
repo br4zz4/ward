@@ -42,21 +42,94 @@ func ToEnvVarsFromAnchor(tree map[string]*Node, anchorData map[string]interface{
 	return out
 }
 
-// ToFlatEnvEntries returns only the leaf values as env vars using just the leaf key name
-// (uppercased), without any path prefix. Used by ward envs/exec without --prefixed.
-func ToFlatEnvEntries(tree map[string]*Node) map[string]EnvEntry {
-	out := map[string]EnvEntry{}
-	collectFlatEntries(tree, out)
-	return out
+// parentDotPath returns the dot-path one level above the leaf (strips last segment).
+func parentDotPath(dotPath string) string {
+	if i := strings.LastIndex(dotPath, "."); i >= 0 {
+		return dotPath[:i]
+	}
+	return dotPath
 }
 
-func collectFlatEntries(nodes map[string]*Node, out map[string]EnvEntry) {
+// EnvConflict holds a single env var name collision between two dot-paths.
+type EnvConflict struct {
+	EnvKey   string
+	DotPaths [2]string
+}
+
+// EnvConflictError is returned when flat env var names collide across different dot-paths.
+type EnvConflictError struct {
+	Conflicts []EnvConflict
+}
+
+func (e *EnvConflictError) Error() string {
+	var sb strings.Builder
+	n := len(e.Conflicts)
+	word := "collision"
+	if n > 1 {
+		word = "collisions"
+	}
+	fmt.Fprintf(&sb, "%s%sfound %d env var %s%s — use a more specific dot-path:\n\n",
+		colorBold, colorRed, n, word, colorReset,
+	)
+	for _, c := range e.Conflicts {
+		fmt.Fprintf(&sb, "%s%s%s%s\n", colorBold, colorPink, c.EnvKey, colorReset)
+		fmt.Fprintf(&sb, "  defined under %s%s%s\n", colorYellow, c.DotPaths[0], colorReset)
+		fmt.Fprintf(&sb, "  defined under %s%s%s\n\n", colorYellow, c.DotPaths[1], colorReset)
+		fmt.Fprintf(&sb, "  %sto resolve:%s\n", colorBold, colorReset)
+		fmt.Fprintf(&sb, "    %s1.%s scope to the path you need:\n", colorGray, colorReset)
+		fmt.Fprintf(&sb, "         %sward exec %s -- <cmd>%s\n", colorCyan, parentDotPath(c.DotPaths[0]), colorReset)
+		fmt.Fprintf(&sb, "         %sward exec %s -- <cmd>%s\n", colorCyan, parentDotPath(c.DotPaths[1]), colorReset)
+		fmt.Fprintf(&sb, "    %s2.%s use %s--prefixed%s to keep full path names:\n", colorGray, colorReset, colorCyan, colorReset)
+		fmt.Fprintf(&sb, "         %sward exec --prefixed -- <cmd>%s\n\n", colorCyan, colorReset)
+	}
+	fmt.Fprintf(&sb, "  %s→ read more:%s https://github.com/oporpino/ward/blob/main/docs/conflicts.md\n",
+		colorGray, colorReset)
+	return sb.String()
+}
+
+// ToFlatEnvEntries returns only the leaf values as env vars using just the leaf key name
+// (uppercased), without any path prefix. Used by ward envs/exec without --prefixed.
+// Returns EnvConflictError when two different dot-paths produce the same env var name.
+func ToFlatEnvEntries(tree map[string]*Node) (map[string]EnvEntry, error) {
+	out := map[string]EnvEntry{}
+	dotPaths := map[string]string{} // envKey → first dot-path that set it
+	var conflicts []EnvConflict
+	collectFlatEntries(tree, "", out, dotPaths, &conflicts)
+	if len(conflicts) > 0 {
+		return nil, &EnvConflictError{Conflicts: conflicts}
+	}
+	return out, nil
+}
+
+func collectFlatEntries(nodes map[string]*Node, prefix string, out map[string]EnvEntry, dotPaths map[string]string, conflicts *[]EnvConflict) {
 	for k, node := range nodes {
+		dotPath := k
+		if prefix != "" {
+			dotPath = prefix + "." + k
+		}
 		if node.Children != nil {
-			collectFlatEntries(node.Children, out)
+			collectFlatEntries(node.Children, dotPath, out, dotPaths, conflicts)
 		} else {
-			key := strings.ToUpper(strings.ReplaceAll(k, "-", "_"))
-			out[key] = EnvEntry{Value: fmt.Sprintf("%v", node.Value), Origin: node.Origin, Overrides: node.Overrides}
+			envKey := strings.ToUpper(strings.ReplaceAll(k, "-", "_"))
+			if existing, seen := dotPaths[envKey]; seen && existing != dotPath {
+				// check not already recorded
+				already := false
+				for _, c := range *conflicts {
+					if c.EnvKey == envKey {
+						already = true
+						break
+					}
+				}
+				if !already {
+					*conflicts = append(*conflicts, EnvConflict{
+						EnvKey:   envKey,
+						DotPaths: [2]string{existing, dotPath},
+					})
+				}
+				continue
+			}
+			dotPaths[envKey] = dotPath
+			out[envKey] = EnvEntry{Value: fmt.Sprintf("%v", node.Value), Origin: node.Origin, Overrides: node.Overrides}
 		}
 	}
 }

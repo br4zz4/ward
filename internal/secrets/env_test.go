@@ -70,7 +70,10 @@ func TestToFlatEnvEntries_basic(t *testing.T) {
 		},
 	}
 
-	got := ToFlatEnvEntries(tree)
+	got, err := ToFlatEnvEntries(tree)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	if v, ok := got["DATABASE_URL"]; !ok || v.Value != "postgres://localhost/myapp" {
 		t.Errorf("expected DATABASE_URL=postgres://localhost/myapp, got %v", got)
@@ -98,7 +101,10 @@ func TestToFlatEnvEntries_nested(t *testing.T) {
 		},
 	}
 
-	got := ToFlatEnvEntries(tree)
+	got, err := ToFlatEnvEntries(tree)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	if _, ok := got["URL"]; !ok {
 		t.Error("expected URL")
@@ -115,7 +121,10 @@ func TestToFlatEnvEntries_nested(t *testing.T) {
 }
 
 func TestToFlatEnvEntries_empty(t *testing.T) {
-	got := ToFlatEnvEntries(map[string]*Node{})
+	got, err := ToFlatEnvEntries(map[string]*Node{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	if len(got) != 0 {
 		t.Errorf("expected empty map")
 	}
