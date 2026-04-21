@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"sort"
@@ -24,6 +25,17 @@ func SetConfigFile(path string) {
 func newEngine() (*ward.Engine, error) {
 	cfg, err := config.Load(configFile)
 	if err != nil {
+		if os.IsNotExist(err) || isNotExistWrapped(err) {
+			return nil, fmt.Errorf(
+				"this doesn't look like a ward project — %s not found\n\n"+
+					"ward organises secrets in layers using encrypted .ward files.\n"+
+					"to get started, run:\n\n"+
+					"  ward init\n\n"+
+					"this will create ward.yaml and a starter secrets file.\n"+
+					"see https://github.com/oporpino/ward for more.",
+				configFile,
+			)
+		}
 		return nil, fmt.Errorf("loading %s: %w", configFile, err)
 	}
 	dec, err := decryptorFor(cfg)
@@ -56,6 +68,11 @@ func requireWardFile(path string) error {
 		return fmt.Errorf("%s: is a directory — specify a .ward file", path)
 	}
 	return nil
+}
+
+// isNotExistWrapped unwraps err chain to check for os.ErrNotExist.
+func isNotExistWrapped(err error) bool {
+	return errors.Is(err, os.ErrNotExist)
 }
 
 // fatal prints err to stderr and exits 1.
