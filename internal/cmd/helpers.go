@@ -178,6 +178,18 @@ func isNotExistWrapped(err error) bool {
 	return errors.Is(err, os.ErrNotExist)
 }
 
+// spaces returns a string of n space characters.
+func spaces(n int) string {
+	if n <= 0 {
+		return " "
+	}
+	b := make([]byte, n)
+	for i := range b {
+		b[i] = ' '
+	}
+	return string(b)
+}
+
 // fatal prints err to stderr and exits 1.
 func fatal(err error) {
 	fmt.Fprintln(os.Stderr, "ward:", err)

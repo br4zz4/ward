@@ -60,9 +60,17 @@ func NewInitCmd() *cobra.Command {
 			token, err := encodeWardKey(".ward.key")
 			if err == nil {
 				fmt.Printf("\n  %s✓ ward is ready%s\n\n", clrGreen+clrBold, clrReset)
-				fmt.Printf("  %s.ward/config.yaml%s    config — %scommit this%s\n", clrCyan, clrReset, clrGreen, clrReset)
-				fmt.Printf("  %s.ward.key%s             age key — %skeep private, never commit%s\n", clrCyan, clrReset, clrOrange, clrReset)
-				fmt.Printf("  %s.ward/vault/%s          encrypted secrets — %ssafe to commit%s\n", clrCyan, clrReset, clrGreen, clrReset)
+				col := 22 // fixed column width for file names
+				printFileRow := func(name, desc string) {
+					pad := col - len(name)
+					if pad < 2 {
+						pad = 2
+					}
+					fmt.Printf("  %s%s%s%s%s\n", clrCyan, name, clrReset, spaces(pad), desc)
+				}
+				printFileRow(".ward.key", "age key — "+clrOrange+"keep private, never commit"+clrReset)
+				printFileRow(".ward/config.yaml", "config — "+clrGreen+"commit this"+clrReset)
+				printFileRow(".ward/vault/", "encrypted secrets — "+clrGreen+"safe to commit"+clrReset)
 				fmt.Printf("\n  %sWARD_KEY%s=%s%s%s\n", clrYellow, clrReset, clrGray, token, clrReset)
 				fmt.Printf("  %s↑ copy this to CI / secrets manager%s\n", clrGray, clrReset)
 				fmt.Printf("\n  %s─────────────────────────────────────%s\n\n", clrGray, clrReset)
