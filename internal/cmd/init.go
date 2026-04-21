@@ -68,27 +68,35 @@ func NewInitCmd() *cobra.Command {
 			// 5. Print summary and WARD_KEY token
 			token, err := encodeWardKey(".ward.key")
 			if err == nil {
-				fmt.Printf("\n  %s✓ ward is ready%s\n\n", clrGreen+clrBold, clrReset)
-				col := 22 // fixed column width for file names
+				// cyan dark = \033[36m (regular cyan, darker than bright)
+				clrCyanDark := "\033[36m"
+
+				fmt.Printf("\n  %s✓ ward is ready%s\n", clrGreen+clrBold, clrReset)
+
+				// — setup section —
+				fmt.Printf("\n  %s%ssetup%s%s%s\n",
+					clrCyanDark+clrBold, "", clrReset+clrGray, strings.Repeat("─", 46), clrReset)
+				col := 22
 				printFileRow := func(name, desc string) {
 					pad := col - len(name)
 					if pad < 2 {
 						pad = 2
 					}
-					fmt.Printf("    %s%s%s%s%s\n", clrCyan, name, clrReset, spaces(pad), desc)
+					fmt.Printf("      %s%s%s%s%s\n", clrCyan, name, clrReset, spaces(pad), desc)
 				}
 				printFileRow(".ward.key", "encryption key — "+clrOrange+"keep private, never commit"+clrReset)
 				printFileRow(".ward/config.yaml", "config — "+clrGreen+"commit this"+clrReset)
 				printFileRow(".ward/vault/", "encrypted secrets — "+clrGreen+"safe to commit"+clrReset)
 
-				// WARD_KEY — label header + token on a single copyable line
+				// — WARD_KEY section —
 				fmt.Printf("\n  %s%sWARD_KEY%s%s%s\n",
-					clrGray, clrYellow+clrBold, clrReset+clrGray, strings.Repeat("─", 44), clrReset)
-				fmt.Printf("  %s%s%s\n", clrGray, token, clrReset)
+					clrYellow+clrBold, "", clrReset+clrGray, strings.Repeat("─", 44), clrReset)
+				fmt.Printf("  %s%s%s\n\n", clrGray, token, clrReset)
 				fmt.Printf("  %s↑ copy this to CI / secrets manager%s\n", clrGray, clrReset)
-				fmt.Printf("\n  %s─────────────────────────────────────%s\n\n", clrGray, clrReset)
 
-				// Command table: cyan command, gray args, reset description
+				// — useful commands section —
+				fmt.Printf("\n  %s%suseful commands%s%s%s\n\n",
+					clrOrange+clrBold, "", clrReset+clrGray, strings.Repeat("─", 36), clrReset)
 				type cmdRow struct{ cmd, args, desc string }
 				rows := []cmdRow{
 					{"ward edit", "", "edit a secrets file"},
