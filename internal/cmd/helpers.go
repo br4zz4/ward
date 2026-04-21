@@ -14,35 +14,62 @@ import (
 	"github.com/oporpino/ward/internal/ward"
 )
 
-var configFile = "ward.yaml"
+// configFile holds the explicit --config flag value; empty means auto-detect.
+var configFile = ""
+
+// resolvedConfig caches the config path after first resolution.
+var resolvedConfig = ""
 
 func SetConfigFile(path string) {
-	if path != "" {
-		configFile = path
-	}
+	configFile = path
+	resolvedConfig = "" // reset cache
 }
 
-// newEngine loads ward.yaml and returns a ready-to-use Engine.
-func newEngine() (*ward.Engine, error) {
-	cfg, err := config.Load(configFile)
+// resolvedConfigFile returns the config file path to use: explicit flag or auto-detected.
+// The result is cached after the first successful resolution.
+func resolvedConfigFile() (string, error) {
+	if resolvedConfig != "" {
+		return resolvedConfig, nil
+	}
+	if configFile != "" {
+		resolvedConfig = configFile
+		return resolvedConfig, nil
+	}
+	found, err := config.FindConfigFile()
 	if err != nil {
-		if os.IsNotExist(err) || isNotExistWrapped(err) {
+		return "", err
+	}
+	resolvedConfig = found
+	return resolvedConfig, nil
+}
+
+// newEngine loads the ward config and returns a ready-to-use Engine.
+func newEngine() (*ward.Engine, error) {
+	cfgPath, err := resolvedConfigFile()
+	if err != nil {
+		if isNotExistWrapped(err) {
 			fmt.Fprintf(os.Stderr,
 				"\n%s✗ not a ward project%s — %s not found\n\n"+
 					"%sward%s organises secrets in layers using encrypted %s.ward%s files.\n"+
 					"to get started, run:\n\n"+
 					"  %sward init%s\n\n"+
-					"this will create ward.yaml and a starter secrets file.\n"+
+					"this will create %s.ward/config.yaml%s and a starter secrets file.\n"+
 					"%ssee https://github.com/oporpino/ward%s\n\n",
-				clrLightRed, clrReset, configFile,
+				clrLightRed, clrReset, config.DefaultConfigFile,
 				clrBold, clrReset, clrCyan, clrReset,
 				clrBold, clrReset,
+				clrCyan, clrReset,
 				clrGray, clrReset,
 			)
 			os.Exit(1)
 		}
-		return nil, fmt.Errorf("loading %s: %w", configFile, err)
+		return nil, fmt.Errorf("finding config: %w", err)
 	}
+	cfg, err := config.Load(cfgPath)
+	if err != nil {
+		return nil, fmt.Errorf("loading %s: %w", cfgPath, err)
+	}
+	resolvedConfig = cfgPath // ensure cache is set
 	dec, err := decryptorFor(cfg)
 	if err != nil {
 		return nil, err
@@ -160,8 +187,8 @@ func fatal(err error) {
 // fatalNoSources prints a styled error when no .ward file or source is configured.
 func fatalNoSources() {
 	fmt.Fprintf(os.Stderr,
-		"\n  %s✗ no secrets file%s — no sources configured in %sward.yaml%s\n\n"+
-			"  %s→%s create one with  %sward new .secrets/staging.ward%s\n\n",
+		"\n  %s✗ no secrets file%s — no sources configured in %s.ward/config.yaml%s\n\n"+
+			"  %s→%s create one with  %sward new staging%s\n\n",
 		clrLightRed, clrReset, clrCyan, clrReset,
 		clrGray, clrReset, clrBold, clrReset,
 	)

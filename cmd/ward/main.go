@@ -23,7 +23,7 @@ func main() {
 		},
 	}
 
-	root.PersistentFlags().StringVarP(&configPath, "config", "c", "ward.yaml", "config file")
+	root.PersistentFlags().StringVarP(&configPath, "config", "c", "", "config file (default: auto-detect .ward/config.yaml)")
 
 	root.AddCommand(
 		cmd.NewGetCmd(),

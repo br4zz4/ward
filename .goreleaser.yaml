@@ -72,6 +72,7 @@ homebrew_casks:
     homepage: https://github.com/oporpino/ward
     description: Hierarchical secrets management using SOPS+age.
     license: MIT
+    quarantine: false
     completions:
       zsh: completions/ward.zsh
       bash: completions/ward.bash

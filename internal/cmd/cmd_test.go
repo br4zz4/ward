@@ -300,10 +300,10 @@ func TestCmd_init_creates_files(t *testing.T) {
 		t.Fatalf("init failed: %s\n%s", err, out)
 	}
 
-	if _, err := os.Stat(filepath.Join(dir, "ward.yaml")); err != nil {
-		t.Error("ward.yaml not created")
+	if _, err := os.Stat(filepath.Join(dir, ".ward", "config.yaml")); err != nil {
+		t.Error(".ward/config.yaml not created")
 	}
-	if _, err := os.Stat(filepath.Join(dir, ".secrets", ".ward")); err != nil {
-		t.Error(".secrets/.ward not created")
+	if _, err := os.Stat(filepath.Join(dir, ".ward", "vault", "secrets.ward")); err != nil {
+		t.Error(".ward/vault/secrets.ward not created")
 	}
 }

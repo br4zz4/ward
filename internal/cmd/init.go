@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -12,24 +13,19 @@ import (
 	wardage "github.com/oporpino/ward/internal/age"
 )
 
-const wardYAMLTemplate = `encryption:
+// wardConfigTemplate is the minimal config written by ward init.
+// merge is intentionally omitted — the default (deep merge) is used automatically.
+const wardConfigTemplate = `encryption:
   key_file: .ward.key
 
-merge: merge
-
 sources:
-  - path: ./.secrets
-`
-
-const wardFileTemplate = `myapp:
-  database_url: "postgres://localhost/myapp"
-  redis_url: "redis://localhost:6379"
+  - path: ./.ward/vault
 `
 
 func NewInitCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "init",
-		Short: "Initialize ward: generate age key, ward.yaml, and an encrypted secrets file",
+		Short: "Initialize ward in the current directory",
 		Args:  cobra.NoArgs,
 		Run: func(_ *cobra.Command, _ []string) {
 			// 1. Generate age key
@@ -37,8 +33,11 @@ func NewInitCmd() *cobra.Command {
 				fatal(err)
 			}
 
-			// 2. Create ward.yaml
-			if err := writeIfAbsent("ward.yaml", wardYAMLTemplate); err != nil {
+			// 2. Create .ward/ directory and config
+			if err := os.MkdirAll(".ward", 0755); err != nil {
+				fatal(fmt.Errorf("creating .ward/: %w", err))
+			}
+			if err := writeIfAbsent(".ward/config.yaml", wardConfigTemplate); err != nil {
 				fatal(err)
 			}
 
@@ -47,33 +46,53 @@ func NewInitCmd() *cobra.Command {
 				fatal(err)
 			}
 
-			// 4. Create .secrets/ and encrypt the initial .ward file
-			if err := os.MkdirAll(".secrets", 0755); err != nil {
-				fatal(err)
+			// 4. Create .ward/vault/ and encrypt the initial secrets file
+			if err := os.MkdirAll(".ward/vault", 0755); err != nil {
+				fatal(fmt.Errorf("creating .ward/vault/: %w", err))
 			}
-			if err := encryptIfAbsent(".secrets/.ward", wardFileTemplate, ".ward.key"); err != nil {
+			dirName := currentDirName()
+			stub := initSecretsStub(dirName)
+			if err := encryptIfAbsent(".ward/vault/secrets.ward", stub, ".ward.key"); err != nil {
 				fatal(err)
 			}
 
-			// 5. Print WARD_KEY token for CI
+			// 5. Print summary and WARD_KEY token
 			token, err := encodeWardKey(".ward.key")
 			if err == nil {
 				fmt.Printf("\n  %s✓ ward is ready%s\n\n", clrGreen+clrBold, clrReset)
-				fmt.Printf("  %sward.yaml%s    config — %scommit this%s\n", clrCyan, clrReset, clrGreen, clrReset)
-				fmt.Printf("  %s.ward.key%s    age key — %skeep private, never commit%s\n", clrCyan, clrReset, clrOrange, clrReset)
-				fmt.Printf("  %s.secrets/%s    encrypted secrets — %ssafe to commit%s\n", clrCyan, clrReset, clrGreen, clrReset)
+				fmt.Printf("  %s.ward/config.yaml%s    config — %scommit this%s\n", clrCyan, clrReset, clrGreen, clrReset)
+				fmt.Printf("  %s.ward.key%s             age key — %skeep private, never commit%s\n", clrCyan, clrReset, clrOrange, clrReset)
+				fmt.Printf("  %s.ward/vault/%s          encrypted secrets — %ssafe to commit%s\n", clrCyan, clrReset, clrGreen, clrReset)
 				fmt.Printf("\n  %sWARD_KEY%s=%s%s%s\n", clrYellow, clrReset, clrGray, token, clrReset)
 				fmt.Printf("  %s↑ copy this to CI / secrets manager%s\n", clrGray, clrReset)
 				fmt.Printf("\n  %s─────────────────────────────────────%s\n\n", clrGray, clrReset)
 				fmt.Printf("  %sedit secrets%s\n", clrBold, clrReset)
-				fmt.Printf("    %sward edit .secrets/.ward%s\n\n", clrCyan, clrReset)
+				fmt.Printf("    %sward edit%s\n\n", clrCyan, clrReset)
 				fmt.Printf("  %screate a new secrets file%s\n", clrBold, clrReset)
-				fmt.Printf("    %sward new .secrets/staging.ward%s\n\n", clrCyan, clrReset)
+				fmt.Printf("    %sward new staging%s\n\n", clrCyan, clrReset)
 				fmt.Printf("  %sedit config%s\n", clrBold, clrReset)
 				fmt.Printf("    %sward config%s\n\n", clrCyan, clrReset)
 			}
 		},
 	}
+}
+
+// currentDirName returns the base name of the current working directory.
+func currentDirName() string {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return "app"
+	}
+	name := filepath.Base(cwd)
+	if name == "." || name == "/" {
+		return "app"
+	}
+	return name
+}
+
+// initSecretsStub returns a YAML stub using dirName as the root key.
+func initSecretsStub(dirName string) string {
+	return fmt.Sprintf("%s:\n  secret_1: <your content>\n  secret_2: <your content>\n", dirName)
 }
 
 // isGitRepo returns true if the current directory is inside a git repository.

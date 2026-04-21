@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -12,11 +13,33 @@ import (
 
 func NewNewCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "new <file.ward>",
+		Use:   "new <name>",
 		Short: "Create a new encrypted .ward file and open it in $EDITOR",
 		Args:  cobra.ExactArgs(1),
 		Run: func(_ *cobra.Command, args []string) {
-			path := args[0]
+			cfgPath, err := resolvedConfigFile()
+			if err != nil {
+				fatal(fmt.Errorf("no ward project found — run `ward init` first"))
+			}
+
+			cfg, err := config.Load(cfgPath)
+			if err != nil {
+				fatal(err)
+			}
+
+			path := resolveNewPath(args[0], cfgPath, cfg)
+
+			// Colored confirmation
+			fmt.Printf("\n  %s→%s creating %s%s%s\n\n", clrGray, clrReset, clrCyan, path, clrReset)
+			fmt.Printf("  continue? [y/N] ")
+			scanner := bufio.NewScanner(os.Stdin)
+			scanner.Scan()
+			answer := strings.TrimSpace(strings.ToLower(scanner.Text()))
+			if answer != "y" && answer != "yes" {
+				fmt.Printf("  %saborted%s\n\n", clrGray, clrReset)
+				return
+			}
+			fmt.Println()
 
 			if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 				fatal(fmt.Errorf("creating directory: %w", err))
@@ -31,8 +54,9 @@ func NewNewCmd() *cobra.Command {
 				fatal(err)
 			}
 
-			stub := []byte("{}\n")
-			if err := eng.Encrypt(path, stub); err != nil {
+			// Build example content using the directory name as root key
+			stub := newFileStub(path, cfgPath)
+			if err := eng.Encrypt(path, []byte(stub)); err != nil {
 				fatal(fmt.Errorf("creating %s: %w", path, err))
 			}
 
@@ -60,19 +84,63 @@ func NewNewCmd() *cobra.Command {
 				fatal(fmt.Errorf("re-encrypting %s: %w", path, err))
 			}
 
-			if err := maybeAddSource(configFile, path); err != nil {
+			if err := maybeAddSource(cfgPath, path); err != nil {
 				fatal(err)
 			}
 		},
 	}
 }
 
+// resolveNewPath turns the user's input into a full file path.
+//
+// Rules:
+//  1. Already has .ward extension and contains a path separator → use as-is (relative to CWD)
+//  2. Otherwise → resolve inside the default_dir (or .ward/vault/ as fallback)
+//     e.g. "staging" → "<default_dir>/staging.ward"
+//     e.g. "staging/secrets.ward" → "<default_dir>/staging/secrets.ward"
+func resolveNewPath(arg, cfgPath string, cfg *config.Config) string {
+	// Absolute path: use as-is
+	if filepath.IsAbs(arg) {
+		return arg
+	}
+
+	defaultDir := cfg.DefaultDir
+	if defaultDir == "" {
+		defaultDir = ".ward/vault"
+	}
+
+	// If arg already has .ward extension and a slash → treat as path relative to CWD
+	if strings.HasSuffix(arg, ".ward") && strings.ContainsRune(arg, '/') {
+		return arg
+	}
+
+	// Strip .ward suffix if present before joining
+	name := strings.TrimSuffix(arg, ".ward")
+
+	// Resolve default_dir relative to the project root (parent of .ward/)
+	projectRoot := filepath.Dir(filepath.Dir(cfgPath))
+	base := filepath.Join(projectRoot, defaultDir)
+
+	return filepath.Join(base, name+".ward")
+}
+
+// newFileStub returns a YAML stub with the directory name as root key and
+// placeholder secrets, matching the structure the user expects.
+func newFileStub(filePath, cfgPath string) string {
+	stem := strings.TrimSuffix(filepath.Base(filePath), ".ward")
+	if stem == "" || stem == "." {
+		stem = filepath.Base(filepath.Dir(filePath))
+	}
+	_ = cfgPath
+	return fmt.Sprintf("%s:\n  secret_1: <your content>\n  secret_2: <your content>\n", stem)
+}
+
 // maybeAddSource appends the directory of newFile to the sources list in
-// wardYAML if it is not already covered by an existing source.
-func maybeAddSource(wardYAML, newFile string) error {
-	cfg, err := config.Load(wardYAML)
+// the config file if it is not already covered by an existing source.
+func maybeAddSource(cfgPath, newFile string) error {
+	cfg, err := config.Load(cfgPath)
 	if err != nil {
-		return nil // best-effort: if we can't load, skip silently
+		return nil // best-effort
 	}
 
 	newDir, err := filepath.Abs(filepath.Dir(newFile))
@@ -80,14 +148,13 @@ func maybeAddSource(wardYAML, newFile string) error {
 		return nil
 	}
 
-	wardDir := filepath.Dir(wardYAML)
+	projectRoot := filepath.Dir(filepath.Dir(cfgPath))
 
 	for _, src := range cfg.Sources {
-		srcAbs, err := filepath.Abs(filepath.Join(wardDir, src.Path))
+		srcAbs, err := filepath.Abs(filepath.Join(projectRoot, src.Path))
 		if err != nil {
 			continue
 		}
-		// covered if newDir is srcAbs or a subdirectory of srcAbs
 		rel, err := filepath.Rel(srcAbs, newDir)
 		if err != nil {
 			continue
@@ -97,18 +164,17 @@ func maybeAddSource(wardYAML, newFile string) error {
 		}
 	}
 
-	// Compute a relative path from wardYAML's directory to newDir
-	rel, err := filepath.Rel(wardDir, newDir)
+	rel, err := filepath.Rel(projectRoot, newDir)
 	if err != nil {
 		rel = newDir
 	}
 	sourcePath := "./" + rel
 
 	cfg.Sources = append(cfg.Sources, config.Source{Path: sourcePath})
-	if err := config.Save(wardYAML, cfg); err != nil {
-		return fmt.Errorf("updating %s: %w", wardYAML, err)
+	if err := config.Save(cfgPath, cfg); err != nil {
+		return fmt.Errorf("updating %s: %w", cfgPath, err)
 	}
-	fmt.Printf("ward: added %s%s%s to sources in %s%s%s\n",
-		clrCyan, sourcePath, clrReset, clrCyan, wardYAML, clrReset)
+	fmt.Printf("  %s+%s added %s%s%s to sources\n",
+		clrGreen, clrReset, clrCyan, sourcePath, clrReset)
 	return nil
 }
