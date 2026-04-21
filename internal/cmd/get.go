@@ -96,25 +96,25 @@ func pickDotPath(paths []string) string {
 			limit = len(visible)
 		}
 
-		// Print filter line + list
-		fmt.Fprintf(os.Stderr, "\r  %s> %s%s\n", clrCyan, clrReset, filter)
+		// Print filter line + list (use \r\n — raw mode doesn't auto-CR on \n)
+		fmt.Fprintf(os.Stderr, "\r  %s>%s %s\r\n", clrCyan, clrReset, filter)
 		for i := 0; i < limit; i++ {
 			p := visible[i]
-			prefix := "  "
-			if i == cursor {
-				prefix = clrCyan + " ›" + clrReset
-			}
 			highlighted := p
 			if filter != "" {
 				highlighted = strings.ReplaceAll(p, filter, clrGreen+filter+clrReset)
 			}
-			fmt.Fprintf(os.Stderr, "%s %s\n", prefix, highlighted)
+			if i == cursor {
+				fmt.Fprintf(os.Stderr, "  %s>%s %s\r\n", clrCyan, clrReset, highlighted)
+			} else {
+				fmt.Fprintf(os.Stderr, "    %s\r\n", highlighted)
+			}
 		}
 		if len(visible) > 12 {
-			fmt.Fprintf(os.Stderr, "  %s… %d more%s\n", clrGray, len(visible)-12, clrReset)
+			fmt.Fprintf(os.Stderr, "  %s… %d more%s\r\n", clrGray, len(visible)-12, clrReset)
 		}
 		if len(visible) == 0 {
-			fmt.Fprintf(os.Stderr, "  %sno matches%s\n", clrGray, clrReset)
+			fmt.Fprintf(os.Stderr, "  %sno matches%s\r\n", clrGray, clrReset)
 		}
 	}
 
