@@ -9,12 +9,15 @@ import (
 	"github.com/oporpino/ward/internal/cmd"
 )
 
+var version = "dev"
+
 func main() {
 	var configPath string
 
 	root := &cobra.Command{
-		Use:   "ward",
-		Short: "Hierarchical secrets management using SOPS+age",
+		Use:     "ward",
+		Short:   "Hierarchical secrets management using SOPS+age",
+		Version: version,
 		PersistentPreRun: func(_ *cobra.Command, _ []string) {
 			cmd.SetConfigFile(configPath)
 		},

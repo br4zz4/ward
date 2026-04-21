@@ -56,7 +56,12 @@ func NewInitCmd() *cobra.Command {
 				fatal(err)
 			}
 
-			fmt.Println("ward: ready. commit ward.yaml, secrets/, and .gitignore — keep .ward.key private.")
+			fmt.Printf("\n%s  ward is ready%s\n\n", clrGreen+clrBold, clrReset)
+			fmt.Printf("  %s.ward.key%s     age key — %skeep private, never commit%s\n", clrCyan, clrReset, clrOrange, clrReset)
+			fmt.Printf("  %sward.yaml%s      config — commit this\n", clrCyan, clrReset)
+			fmt.Printf("  %ssecrets/%s       encrypted secrets — safe to commit\n\n", clrCyan, clrReset)
+			fmt.Printf("  %snext:%s edit your first secrets file\n\n", clrGray, clrReset)
+			fmt.Printf("    %sward edit secrets/secrets.ward%s\n\n", clrBold, clrReset)
 		},
 	}
 }
