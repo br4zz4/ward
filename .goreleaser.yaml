@@ -44,11 +44,33 @@ nfpms:
     vendor: oporpino
     homepage: https://github.com/oporpino/ward
     maintainer: oporpino
-    description: Hierarchical secrets management using SOPS+age.
+    description: Hierarchical secrets management with zero external dependencies.
     license: MIT
     formats:
       - deb
+    contents:
+      - src: ./LICENSE
+        dst: /usr/share/doc/ward/LICENSE
+      - src: ./completions/ward.zsh
+        dst: /usr/share/zsh/vendor-completions/_ward
+      - src: ./completions/ward.bash
+        dst: /usr/share/bash-completion/completions/ward
+      - src: ./completions/ward.fish
+        dst: /usr/share/fish/vendor_completions.d/ward.fish
+
+  - id: ward-apk
+    package_name: ward
+    vendor: oporpino
+    homepage: https://github.com/oporpino/ward
+    maintainer: oporpino
+    description: Hierarchical secrets management with zero external dependencies.
+    license: MIT
+    formats:
       - apk
+    apk:
+      key_name: ward-apk
+      signature:
+        key_file: "{{ .Env.APK_KEY_FILE }}"
     contents:
       - src: ./LICENSE
         dst: /usr/share/doc/ward/LICENSE
@@ -70,7 +92,7 @@ homebrew_casks:
       email: oporpino@users.noreply.github.com
     directory: Casks
     homepage: https://github.com/oporpino/ward
-    description: Hierarchical secrets management using SOPS+age.
+    description: Hierarchical secrets management with zero external dependencies.
     license: MIT
     custom_block: |
       postflight do

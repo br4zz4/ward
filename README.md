@@ -123,7 +123,7 @@ ward exec .ward/vault/staging.ward -- env | grep DATABASE
 
 ### `ward init`
 
-Initialise ward in the current directory. Creates `.ward/config.yaml`, generates a `.ward.key` age key, and creates an initial `.ward/vault/secrets.ward`.
+Initialise ward in the current directory. Creates `.ward/config.yaml`, generates a `.ward.key` encryption key, and creates an initial `.ward/vault/secrets.ward`.
 
 Prints the `WARD_KEY` token to copy to CI or a secrets manager.
 
@@ -210,7 +210,7 @@ Open `.ward/config.yaml` in `$EDITOR`.
 
 ```yaml
 encryption:
-  key_file: .ward.key        # age key file (gitignored); or use key_env
+  key_file: .ward.key        # encryption key file (gitignored); or use key_env
 
 vaults:
   - path: ./.ward/vault      # directories to discover .ward files in
@@ -220,13 +220,8 @@ vaults:
 
 | Field | Description |
 |---|---|
-| `engine` | `age+armor` (default) or `sops+age` (legacy). |
-| `key_file` | Path to the age private key file. Gitignore this. |
-| `key_env` | Name of an env var holding the age private key. Takes precedence over `key_file`. |
-
-`age+armor` is the default engine — no external tools required. The entire file is encrypted as an opaque armored blob.
-
-`sops+age` is available for projects that previously used SOPS. It requires the SOPS Go library (bundled — no binary needed).
+| `key_file` | Path to the encryption key file. Gitignore this. |
+| `key_env` | Name of an env var holding the encryption key. Takes precedence over `key_file`. |
 
 ### merge
 

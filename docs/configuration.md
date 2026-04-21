@@ -6,9 +6,8 @@ Created by `ward init`. Can also be passed explicitly with `-c`.
 
 ```yaml
 encryption:
-  engine: age+armor          # age+armor (default) | sops+age
-  key_file: .ward.key        # path to age key file (gitignored)
-  key_env: WARD_KEY          # or: name of env var holding the age key
+  key_file: .ward.key        # path to encryption key file (gitignored)
+  key_env: WARD_KEY          # or: name of env var holding the encryption key
 
 merge: merge                 # merge | override | error
 
@@ -26,13 +25,8 @@ vaults:
 
 | Field | Description |
 |---|---|
-| `engine` | Encryption backend. `age+armor` (default) or `sops+age`. |
-| `key_file` | Path to a file containing the age private key. Gitignore this. |
-| `key_env` | Name of an environment variable holding the age private key. Takes precedence over `key_file`. |
-
-**age+armor** (default): the entire `.ward` file is encrypted as an opaque ASCII-armored blob using `filippo.io/age`. No external binaries required.
-
-**sops+age**: YAML keys remain visible, only values are encrypted (ENC[AES256_GCM,...] format). Uses the `getsops/sops` Go library — no `sops` binary required. Compatible with files previously created by the `sops` CLI.
+| `key_file` | Path to the encryption key file. Gitignore this. |
+| `key_env` | Name of an environment variable holding the encryption key. Takes precedence over `key_file`. |
 
 If both `key_env` and `key_file` are set, `key_env` takes precedence.
 
@@ -76,7 +70,7 @@ default_dir: secrets
 ward init
 ```
 
-Generates a fresh age key at `.ward.key`, adds it to `.gitignore`, creates `.ward/config.yaml` and an initial `.ward/vault/secrets.ward`. Prints a `WARD_KEY` token for use in CI.
+Generates a fresh encryption key at `.ward.key`, adds it to `.gitignore`, creates `.ward/config.yaml` and an initial `.ward/vault/secrets.ward`. Prints a `WARD_KEY` token for use in CI.
 
 ### WARD_KEY token
 
