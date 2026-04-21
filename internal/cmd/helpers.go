@@ -46,6 +46,18 @@ func decryptorFor(cfg *config.Config) (sops.Decryptor, error) {
 	return sops.MockDecryptor{}, nil
 }
 
+// requireWardFile returns an error if path is not an existing .ward file.
+func requireWardFile(path string) error {
+	info, err := os.Stat(path)
+	if err != nil {
+		return fmt.Errorf("%s: file not found", path)
+	}
+	if info.IsDir() {
+		return fmt.Errorf("%s: is a directory — specify a .ward file", path)
+	}
+	return nil
+}
+
 // fatal prints err to stderr and exits 1.
 func fatal(err error) {
 	fmt.Fprintln(os.Stderr, "ward:", err)

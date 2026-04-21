@@ -30,6 +30,9 @@ func main() {
 		cmd.NewExecCmd(),
 		cmd.NewInitCmd(),
 		cmd.NewEditCmd(),
+		cmd.NewRawCmd(),
+		cmd.NewExportCmd(),
+		cmd.NewOverrideCmd(),
 	)
 
 	if err := root.Execute(); err != nil {
