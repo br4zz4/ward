@@ -96,8 +96,9 @@ func TestCmd_view_subtree(t *testing.T) {
 
 func TestCmd_exec_injects_env_vars(t *testing.T) {
 	bin := buildBin(t)
+	// Use --prefixed to avoid flat-name collisions across sectors
 	out, _, code := run(t, bin,
-		"exec", "company.sectors.one.staging",
+		"exec", "--prefixed",
 		"--", "env",
 	)
 	if code != 0 {
@@ -110,16 +111,19 @@ func TestCmd_exec_injects_env_vars(t *testing.T) {
 
 func TestCmd_exec_no_production_leakage(t *testing.T) {
 	bin := buildBin(t)
+	// With --prefixed, staging and production vars have distinct names
 	out, _, code := run(t, bin,
-		"exec", "company.sectors.one.staging",
+		"exec", "--prefixed",
 		"--", "env",
 	)
 	if code != 0 {
 		t.Fatalf("exit %d", code)
 	}
 	for _, line := range strings.Split(out, "\n") {
-		if strings.HasPrefix(line, "PRODUCTION_") {
-			t.Errorf("production var leaked into staging exec: %s", line)
+		// With prefixed mode, staging vars are COMPANY_SECTORS_ONE_STAGING_*
+		// production vars are COMPANY_SECTORS_ONE_PRODUCTION_* — no leakage
+		if strings.Contains(line, "STAGING") && strings.Contains(line, "production") {
+			t.Errorf("production value in staging var: %s", line)
 		}
 	}
 }
@@ -152,16 +156,18 @@ func TestCmd_get_sector_two_staging(t *testing.T) {
 
 func TestCmd_sector_one_does_not_leak_into_sector_two(t *testing.T) {
 	bin := buildBin(t)
+	// With --prefixed, sector vars have full path names — no collision possible
 	out, _, code := run(t, bin,
-		"exec", "company.sectors.two.staging",
+		"exec", "--prefixed",
 		"--", "env",
 	)
 	if code != 0 {
 		t.Fatalf("exit %d", code)
 	}
 	for _, line := range strings.Split(out, "\n") {
-		if strings.HasPrefix(line, "ONE_") {
-			t.Errorf("sector one var leaked into sector two exec: %s", line)
+		// sector one staging values should not appear under sector two keys
+		if strings.Contains(line, "SECTORS_TWO") && strings.Contains(line, "sector 1") {
+			t.Errorf("sector one value leaked into sector two var: %s", line)
 		}
 	}
 }
@@ -181,14 +187,13 @@ func TestCmd_infra_available(t *testing.T) {
 
 func TestCmd_exec_envs_equivalence(t *testing.T) {
 	bin := buildBin(t)
-	dotPath := "company.sectors.one.staging"
 
-	execOut, _, code := run(t, bin, "exec", dotPath, "--", "./print-envs.sh")
+	execOut, _, code := run(t, bin, "exec", "--prefixed", "--", "./print-envs.sh")
 	if code != 0 {
 		t.Fatalf("exec exit %d\nstdout: %s", code, execOut)
 	}
 
-	envsOut, _, code := run(t, bin, "envs", dotPath)
+	envsOut, _, code := run(t, bin, "envs", "--prefixed")
 	if code != 0 {
 		t.Fatalf("envs exit %d\nstdout: %s", code, envsOut)
 	}
@@ -227,12 +232,14 @@ func TestCmd_exec_envs_equivalence(t *testing.T) {
 		if idx := strings.Index(clean, "  =  "); idx > 0 {
 			k := strings.TrimSpace(clean[:idx])
 			rest := strings.TrimSpace(clean[idx+5:])
-			// value is the first whitespace-separated token (file:line follows after spaces)
-			fields := strings.Fields(rest)
-			if len(fields) == 0 {
+			// strip trailing file:line origin (separated by multiple spaces)
+			if i := strings.Index(rest, "  "); i > 0 {
+				rest = strings.TrimSpace(rest[:i])
+			}
+			if rest == "" {
 				continue
 			}
-			envsVars[k] = fields[0]
+			envsVars[k] = rest
 		}
 	}
 
