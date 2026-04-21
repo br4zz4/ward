@@ -1,0 +1,43 @@
+package sops_test
+
+import (
+	"path/filepath"
+	"runtime"
+	"strings"
+	"testing"
+
+	"github.com/oporpino/ward/internal/sops"
+)
+
+// testdataDir returns the path to testdata/case3_encrypted relative to this file.
+func testdataDir(t *testing.T) string {
+	t.Helper()
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("cannot determine test file location")
+	}
+	return filepath.Join(filepath.Dir(file), "..", "..", "testdata", "case3_encrypted")
+}
+
+func TestSopsDecryptor_decrypt_existing_file(t *testing.T) {
+	dir := testdataDir(t)
+	keyFile := filepath.Join(dir, ".ward.key")
+	wardFile := filepath.Join(dir, "secrets", "company.ward")
+
+	dec := sops.SopsDecryptor{KeyFile: keyFile}
+	got, err := dec.Decrypt(wardFile)
+	if err != nil {
+		t.Fatalf("Decrypt: %v", err)
+	}
+
+	content := string(got)
+	if !strings.Contains(content, "company:") {
+		t.Errorf("expected 'company:' in decrypted output, got:\n%s", content)
+	}
+	if strings.Contains(content, "ENC[") {
+		t.Errorf("expected no ENC[] tokens in decrypted output, got:\n%s", content)
+	}
+	if strings.Contains(content, "sops:") {
+		t.Errorf("expected no sops metadata in decrypted output, got:\n%s", content)
+	}
+}

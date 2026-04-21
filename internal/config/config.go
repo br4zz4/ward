@@ -51,7 +51,8 @@ func Load(path string) (*Config, error) {
 	}
 
 	cfg := &Config{
-		Merge: MergeModeDeep, // default
+		Merge: MergeModeDeep,
+		Encryption: Encryption{Engine: "age+armor"},
 	}
 	if err := yaml.Unmarshal(data, cfg); err != nil {
 		return nil, fmt.Errorf("parsing %s: %w", path, err)
@@ -59,6 +60,9 @@ func Load(path string) (*Config, error) {
 
 	if cfg.Merge == "" {
 		cfg.Merge = MergeModeDeep
+	}
+	if cfg.Encryption.Engine == "" {
+		cfg.Encryption.Engine = "age+armor"
 	}
 
 	return cfg, nil

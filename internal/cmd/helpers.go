@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/oporpino/ward/internal/config"
+	wardage "github.com/oporpino/ward/internal/age"
 	"github.com/oporpino/ward/internal/secrets"
 	"github.com/oporpino/ward/internal/sops"
 	"github.com/oporpino/ward/internal/ward"
@@ -52,13 +53,33 @@ func newEngine() (*ward.Engine, error) {
 // decryptorFor returns the appropriate Decryptor based on the config.
 // Priority: WARD_KEY env var → key_env (user-defined env var) → key_file → MockDecryptor.
 func decryptorFor(cfg *config.Config) (sops.Decryptor, error) {
+	keyFile, err := resolveKeyFile(cfg)
+	if err != nil {
+		return nil, err
+	}
+	if keyFile == "" {
+		return sops.MockDecryptor{}, nil
+	}
+	switch cfg.Encryption.Engine {
+	case "sops+age":
+		return sops.SopsDecryptor{KeyFile: keyFile}, nil
+	case "age+armor", "":
+		return wardage.AgeArmorDecryptor{KeyFile: keyFile}, nil
+	default:
+		return nil, fmt.Errorf("unknown encryption engine %q (supported: age+armor, sops+age)", cfg.Encryption.Engine)
+	}
+}
+
+// resolveKeyFile resolves the age key file path from config/env, writing temp files as needed.
+// Returns "" when no encryption is configured (plain files).
+func resolveKeyFile(cfg *config.Config) (string, error) {
 	// 1. WARD_KEY — portable base64 token, always checked first (CI-friendly)
 	if token := os.Getenv("WARD_KEY"); token != "" {
 		keyFile, err := writeTempKey(token)
 		if err != nil {
-			return nil, fmt.Errorf("decoding WARD_KEY: %w", err)
+			return "", fmt.Errorf("decoding WARD_KEY: %w", err)
 		}
-		return sops.SopsDecryptor{KeyFile: keyFile}, nil
+		return keyFile, nil
 	}
 
 	// 2. key_env — user-defined env var name containing raw age key content
@@ -72,9 +93,9 @@ func decryptorFor(cfg *config.Config) (sops.Decryptor, error) {
 		}
 		keyFile, err := writeTempKeyRaw([]byte(content))
 		if err != nil {
-			return nil, fmt.Errorf("writing temp key from %s: %w", cfg.Encryption.KeyEnv, err)
+			return "", fmt.Errorf("writing temp key from %s: %w", cfg.Encryption.KeyEnv, err)
 		}
-		return sops.SopsDecryptor{KeyFile: keyFile}, nil
+		return keyFile, nil
 	}
 
 	// 3. key_file
@@ -85,10 +106,10 @@ func decryptorFor(cfg *config.Config) (sops.Decryptor, error) {
 				fmt.Sprintf("run %sward init%s to generate it, or copy your %s.ward.key%s here", clrBold, clrReset, clrCyan, clrReset),
 			)
 		}
-		return sops.SopsDecryptor{KeyFile: cfg.Encryption.KeyFile}, nil
+		return cfg.Encryption.KeyFile, nil
 	}
 
-	return sops.MockDecryptor{}, nil
+	return "", nil
 }
 
 // writeTempKey decodes a ward-<base64url> token and writes it to a temp file.

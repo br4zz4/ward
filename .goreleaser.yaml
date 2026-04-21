@@ -49,9 +49,6 @@ nfpms:
     formats:
       - deb
       - apk
-    dependencies:
-      - sops
-      - age
     contents:
       - src: ./LICENSE
         dst: /usr/share/doc/ward/LICENSE
@@ -75,9 +72,6 @@ homebrew_casks:
     homepage: https://github.com/oporpino/ward
     description: Hierarchical secrets management using SOPS+age.
     license: MIT
-    dependencies:
-      - formula: sops
-      - formula: age
     completions:
       zsh: completions/ward.zsh
       bash: completions/ward.bash

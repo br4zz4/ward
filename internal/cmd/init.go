@@ -1,8 +1,6 @@
 package cmd
 
 import (
-	"bufio"
-	"bytes"
 	"encoding/base64"
 	"fmt"
 	"os"
@@ -10,10 +8,11 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+
+	wardage "github.com/oporpino/ward/internal/age"
 )
 
 const wardYAMLTemplate = `encryption:
-  engine: sops+age
   key_file: .ward.key
 
 merge: merge
@@ -34,8 +33,7 @@ func NewInitCmd() *cobra.Command {
 		Args:  cobra.NoArgs,
 		Run: func(_ *cobra.Command, _ []string) {
 			// 1. Generate age key
-			pubKey, err := generateAgeKey(".ward.key")
-			if err != nil {
+			if err := wardage.GenerateKey(".ward.key"); err != nil {
 				fatal(err)
 			}
 
@@ -53,7 +51,7 @@ func NewInitCmd() *cobra.Command {
 			if err := os.MkdirAll(".secrets", 0755); err != nil {
 				fatal(err)
 			}
-			if err := encryptIfAbsent(".secrets/.ward", wardFileTemplate, ".ward.key", pubKey); err != nil {
+			if err := encryptIfAbsent(".secrets/.ward", wardFileTemplate, ".ward.key"); err != nil {
 				fatal(err)
 			}
 
@@ -78,38 +76,6 @@ func NewInitCmd() *cobra.Command {
 	}
 }
 
-// generateAgeKey runs age-keygen and writes the key to path.
-// Returns the public key. If the file already exists, reads the public key from it.
-func generateAgeKey(path string) (string, error) {
-	if _, err := os.Stat(path); err == nil {
-		return readAgePublicKey(path)
-	}
-	cmd := exec.Command("age-keygen", "-o", path)
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("age-keygen: %w\n%s", err, stderr.String())
-	}
-	return readAgePublicKey(path)
-}
-
-// readAgePublicKey reads the public key comment from an age key file.
-func readAgePublicKey(path string) (string, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return "", fmt.Errorf("reading %s: %w", path, err)
-	}
-	defer f.Close()
-	scanner := bufio.NewScanner(f)
-	for scanner.Scan() {
-		line := scanner.Text()
-		if strings.HasPrefix(line, "# public key: ") {
-			return strings.TrimPrefix(line, "# public key: "), nil
-		}
-	}
-	return "", fmt.Errorf("public key not found in %s", path)
-}
-
 // isGitRepo returns true if the current directory is inside a git repository.
 func isGitRepo() bool {
 	cmd := exec.Command("git", "rev-parse", "--git-dir")
@@ -127,7 +93,7 @@ func ensureGitignore(entry string) error {
 	data, _ := os.ReadFile(path)
 	for _, line := range strings.Split(string(data), "\n") {
 		if strings.TrimSpace(line) == entry {
-			return nil // already present
+			return nil
 		}
 	}
 	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
@@ -143,29 +109,12 @@ func ensureGitignore(entry string) error {
 	return err
 }
 
-// encryptIfAbsent creates path by encrypting content with sops+age if it doesn't exist.
-func encryptIfAbsent(path, content, keyFile, pubKey string) error {
+// encryptIfAbsent creates path by encrypting content with age+armor if it doesn't exist.
+func encryptIfAbsent(path, content, keyFile string) error {
 	if _, err := os.Stat(path); err == nil {
 		return nil
 	}
-	cmd := exec.Command("sops", "encrypt",
-		"--age", pubKey,
-		"--input-type", "yaml",
-		"--output-type", "yaml",
-		"/dev/stdin",
-	)
-	cmd.Stdin = strings.NewReader(content)
-	cmd.Env = append(os.Environ(), "SOPS_AGE_KEY_FILE="+keyFile)
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("sops encrypt %s: %w\n%s", path, err, stderr.String())
-	}
-	if err := os.WriteFile(path, stdout.Bytes(), 0644); err != nil {
-		return fmt.Errorf("writing %s: %w", path, err)
-	}
-	return nil
+	return wardage.AgeArmorDecryptor{KeyFile: keyFile}.Encrypt(path, []byte(content))
 }
 
 // encodeWardKey reads a .ward.key file and returns a portable ward-<base64url> token.

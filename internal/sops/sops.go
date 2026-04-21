@@ -1,70 +1,90 @@
 package sops
 
 import (
-	"bufio"
-	"bytes"
 	"fmt"
 	"os"
-	"os/exec"
-	"strings"
+	"time"
+
+	sopslib "github.com/getsops/sops/v3"
+	"github.com/getsops/sops/v3/aes"
+	sopsage "github.com/getsops/sops/v3/age"
+	"github.com/getsops/sops/v3/cmd/sops/common"
+	"github.com/getsops/sops/v3/cmd/sops/formats"
+	"github.com/getsops/sops/v3/config"
+	"github.com/getsops/sops/v3/decrypt"
+	"github.com/oporpino/ward/internal/age"
 )
 
-// SopsDecryptor decrypts and re-encrypts files using the sops CLI with an age key file.
+// SopsDecryptor decrypts and re-encrypts sops+age .ward files using the sops Go library.
 type SopsDecryptor struct {
-	KeyFile string // path to the age key file (e.g. .ward.key)
+	KeyFile string
 }
 
+// Decrypt decrypts a sops+age YAML file and returns the plaintext YAML bytes.
 func (d SopsDecryptor) Decrypt(path string) ([]byte, error) {
-	cmd := exec.Command("sops", "decrypt", "--input-type", "yaml", "--output-type", "yaml", path)
-	cmd.Env = append(cmd.Environ(), "SOPS_AGE_KEY_FILE="+d.KeyFile)
-
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	if err := cmd.Run(); err != nil {
-		return nil, fmt.Errorf("sops decrypt %s: %w\n%s", path, err, stderr.String())
+	if err := os.Setenv(sopsage.SopsAgeKeyFileEnv, d.KeyFile); err != nil {
+		return nil, fmt.Errorf("setting %s: %w", sopsage.SopsAgeKeyFileEnv, err)
 	}
-	return stdout.Bytes(), nil
+	data, err := decrypt.File(path, "yaml")
+	if err != nil {
+		return nil, fmt.Errorf("sops decrypt %s: %w", path, err)
+	}
+	return data, nil
 }
 
+// Encrypt encrypts plaintext YAML and writes the sops+age file to path.
 func (d SopsDecryptor) Encrypt(path string, plaintext []byte) error {
-	pubKey, err := readAgePublicKey(d.KeyFile)
+	pubKey, err := age.PublicKeyFrom(d.KeyFile)
 	if err != nil {
 		return err
 	}
 
-	cmd := exec.Command("sops", "encrypt",
-		"--age", pubKey,
-		"--input-type", "yaml",
-		"--output-type", "yaml",
-		"/dev/stdin",
-	)
-	cmd.Stdin = bytes.NewReader(plaintext)
-	cmd.Env = append(os.Environ(), "SOPS_AGE_KEY_FILE="+d.KeyFile)
-
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("sops encrypt %s: %w\n%s", path, err, stderr.String())
-	}
-	return os.WriteFile(path, stdout.Bytes(), 0644)
-}
-
-func readAgePublicKey(keyFile string) (string, error) {
-	f, err := os.Open(keyFile)
+	masterKey, err := sopsage.MasterKeyFromRecipient(pubKey)
 	if err != nil {
-		return "", fmt.Errorf("reading key file %s: %w", keyFile, err)
+		return fmt.Errorf("building age master key: %w", err)
 	}
-	defer f.Close()
-	scanner := bufio.NewScanner(f)
-	for scanner.Scan() {
-		line := scanner.Text()
-		if strings.HasPrefix(line, "# public key: ") {
-			return strings.TrimPrefix(line, "# public key: "), nil
-		}
+
+	format := formats.FormatForPathOrString(path, "yaml")
+	store := common.StoreForFormat(format, config.NewStoresConfig())
+
+	branches, err := store.LoadPlainFile(plaintext)
+	if err != nil {
+		return fmt.Errorf("loading plaintext: %w", err)
 	}
-	return "", fmt.Errorf("public key not found in %s", keyFile)
+
+	tree := sopslib.Tree{
+		Branches: branches,
+		Metadata: sopslib.Metadata{
+			KeyGroups: []sopslib.KeyGroup{
+				{masterKey},
+			},
+			Version:            "3.12.2",
+			LastModified:       time.Now().UTC(),
+			UnencryptedSuffix:  "_unencrypted",
+			EncryptedRegex:     "",
+			UnencryptedRegex:   "",
+			EncryptedSuffix:    "",
+			ShamirThreshold:    0,
+		},
+	}
+
+	dataKey, errs := tree.GenerateDataKey()
+	if len(errs) > 0 {
+		return fmt.Errorf("generating data key: %v", errs[0])
+	}
+
+	if err := common.EncryptTree(common.EncryptTreeOpts{
+		DataKey: dataKey,
+		Tree:    &tree,
+		Cipher:  aes.NewCipher(),
+	}); err != nil {
+		return fmt.Errorf("encrypting tree: %w", err)
+	}
+
+	out, err := store.EmitEncryptedFile(tree)
+	if err != nil {
+		return fmt.Errorf("emitting encrypted file: %w", err)
+	}
+
+	return os.WriteFile(path, out, 0644)
 }

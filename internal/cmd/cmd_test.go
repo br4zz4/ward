@@ -283,12 +283,6 @@ func TestCmd_exec_envs_equivalence(t *testing.T) {
 }
 
 func TestCmd_init_creates_files(t *testing.T) {
-	if _, err := exec.LookPath("age-keygen"); err != nil {
-		t.Skip("age-keygen not in PATH")
-	}
-	if _, err := exec.LookPath("sops"); err != nil {
-		t.Skip("sops not in PATH")
-	}
 	bin := buildBin(t)
 	dir := t.TempDir()
 
