@@ -59,11 +59,11 @@ func wardFilePath(args []string) string {
 	} else {
 		eng, err := newEngine()
 		if err != nil {
-			fatal(fmt.Errorf("no file specified and no sources configured"))
+			fatalNoSources()
 		}
 		sources := eng.SourcePaths()
 		if len(sources) == 0 {
-			fatal(fmt.Errorf("no file specified and no sources configured"))
+			fatalNoSources()
 		}
 		path = sources[0]
 	}

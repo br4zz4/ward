@@ -110,8 +110,19 @@ func readAgePublicKey(path string) (string, error) {
 	return "", fmt.Errorf("public key not found in %s", path)
 }
 
-// ensureGitignore adds entry to .gitignore if not already present.
+// isGitRepo returns true if the current directory is inside a git repository.
+func isGitRepo() bool {
+	cmd := exec.Command("git", "rev-parse", "--git-dir")
+	cmd.Stdout = nil
+	cmd.Stderr = nil
+	return cmd.Run() == nil
+}
+
+// ensureGitignore adds entry to .gitignore if not already present and inside a git repo.
 func ensureGitignore(entry string) error {
+	if !isGitRepo() {
+		return nil
+	}
 	const path = ".gitignore"
 	data, _ := os.ReadFile(path)
 	for _, line := range strings.Split(string(data), "\n") {

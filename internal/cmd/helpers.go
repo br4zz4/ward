@@ -65,7 +65,10 @@ func decryptorFor(cfg *config.Config) (sops.Decryptor, error) {
 	if cfg.Encryption.KeyEnv != "" {
 		content := os.Getenv(cfg.Encryption.KeyEnv)
 		if content == "" {
-			return nil, fmt.Errorf("env var %q is empty or not set", cfg.Encryption.KeyEnv)
+			fatalKeyError(
+				fmt.Sprintf("env var %s%s%s is empty or not set", clrYellow, cfg.Encryption.KeyEnv, clrReset),
+				fmt.Sprintf("set %s%s%s to the contents of your age key", clrYellow, cfg.Encryption.KeyEnv, clrReset),
+			)
 		}
 		keyFile, err := writeTempKeyRaw([]byte(content))
 		if err != nil {
@@ -77,7 +80,10 @@ func decryptorFor(cfg *config.Config) (sops.Decryptor, error) {
 	// 3. key_file
 	if cfg.Encryption.KeyFile != "" {
 		if _, err := os.Stat(cfg.Encryption.KeyFile); err != nil {
-			return nil, fmt.Errorf("key file %q not found — run `ward init` or copy your .ward.key", cfg.Encryption.KeyFile)
+			fatalKeyError(
+				fmt.Sprintf("key file %s%s%s not found", clrCyan, cfg.Encryption.KeyFile, clrReset),
+				fmt.Sprintf("run %sward init%s to generate it, or copy your %s.ward.key%s here", clrBold, clrReset, clrCyan, clrReset),
+			)
 		}
 		return sops.SopsDecryptor{KeyFile: cfg.Encryption.KeyFile}, nil
 	}
@@ -127,6 +133,27 @@ func isNotExistWrapped(err error) bool {
 // fatal prints err to stderr and exits 1.
 func fatal(err error) {
 	fmt.Fprintln(os.Stderr, "ward:", err)
+	os.Exit(1)
+}
+
+// fatalNoSources prints a styled error when no .ward file or source is configured.
+func fatalNoSources() {
+	fmt.Fprintf(os.Stderr,
+		"\n  %s✗ no secrets file%s — no sources configured in %sward.yaml%s\n\n"+
+			"  %s→%s create one with  %sward new .secrets/staging.ward%s\n\n",
+		clrLightRed, clrReset, clrCyan, clrReset,
+		clrGray, clrReset, clrBold, clrReset,
+	)
+	os.Exit(1)
+}
+
+// fatalKeyError prints a styled key-missing error and exits 1.
+func fatalKeyError(problem, hint string) {
+	fmt.Fprintf(os.Stderr,
+		"\n  %s✗ no decryption key%s — %s\n\n  %s→%s %s\n\n",
+		clrLightRed, clrReset, problem,
+		clrGray, clrReset, hint,
+	)
 	os.Exit(1)
 }
 
