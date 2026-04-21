@@ -1,7 +1,5 @@
 encryption:
   engine: sops+age
-  key_env: WARD_AGE_KEY
-  key_file: .ward.key
 
 merge: merge
 

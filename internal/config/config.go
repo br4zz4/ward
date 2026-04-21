@@ -31,6 +31,19 @@ type Config struct {
 	Sources    []Source   `yaml:"sources"`
 }
 
+// Save writes cfg back to path in YAML. It preserves the structure but
+// does not round-trip comments or formatting from the original file.
+func Save(path string, cfg *Config) error {
+	data, err := yaml.Marshal(cfg)
+	if err != nil {
+		return fmt.Errorf("marshalling config: %w", err)
+	}
+	if err := os.WriteFile(path, data, 0644); err != nil {
+		return fmt.Errorf("writing %s: %w", path, err)
+	}
+	return nil
+}
+
 func Load(path string) (*Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {

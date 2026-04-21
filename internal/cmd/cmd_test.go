@@ -295,7 +295,7 @@ func TestCmd_init_creates_files(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(dir, "ward.yaml")); err != nil {
 		t.Error("ward.yaml not created")
 	}
-	if _, err := os.Stat(filepath.Join(dir, "secrets", "secrets.ward")); err != nil {
-		t.Error("secrets/secrets.ward not created")
+	if _, err := os.Stat(filepath.Join(dir, ".secrets", ".ward")); err != nil {
+		t.Error(".secrets/.ward not created")
 	}
 }
