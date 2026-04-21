@@ -26,20 +26,24 @@ func newEngine() (*ward.Engine, error) {
 	if err != nil {
 		return nil, fmt.Errorf("loading %s: %w", configFile, err)
 	}
-	dec := decryptorFor(cfg)
+	dec, err := decryptorFor(cfg)
+	if err != nil {
+		return nil, err
+	}
 	return ward.NewEngine(cfg, dec), nil
 }
 
 // decryptorFor returns the appropriate Decryptor based on the config.
-// Uses SopsDecryptor only when a key file is configured and exists on disk.
-// Falls back to MockDecryptor otherwise (plain YAML, no decryption).
-func decryptorFor(cfg *config.Config) sops.Decryptor {
+// When a key_file is configured it must exist — returns an error otherwise.
+// Falls back to MockDecryptor only when no encryption is configured at all.
+func decryptorFor(cfg *config.Config) (sops.Decryptor, error) {
 	if cfg.Encryption.KeyFile != "" {
-		if _, err := os.Stat(cfg.Encryption.KeyFile); err == nil {
-			return sops.SopsDecryptor{KeyFile: cfg.Encryption.KeyFile}
+		if _, err := os.Stat(cfg.Encryption.KeyFile); err != nil {
+			return nil, fmt.Errorf("key file %q not found — run `ward init` or copy your .ward.key", cfg.Encryption.KeyFile)
 		}
+		return sops.SopsDecryptor{KeyFile: cfg.Encryption.KeyFile}, nil
 	}
-	return sops.MockDecryptor{}
+	return sops.MockDecryptor{}, nil
 }
 
 // fatal prints err to stderr and exits 1.
