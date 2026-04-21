@@ -223,13 +223,14 @@ const (
 	clrReset      = "\033[0m"
 	clrBold       = "\033[1m"
 	clrDim        = "\033[2m"
-	clrGray       = "\033[90m"       // dark gray — values in conflict winner, file paths
-	clrGrayLight  = "\033[37m"       // light gray — normal values
-	clrCyan       = "\033[36m"
-	clrCyanDim    = "\033[2;36m"     // dim cyan — conflicting file path
+	clrGray       = "\033[90m"         // dark gray — ghosted text
+	clrGrayLight  = "\033[37m"         // light gray — normal values
+	clrCyan       = "\033[36m"         // cyan — normal file paths
+	clrCyanDim    = "\033[2;36m"       // dim cyan — ghosted file path (unused, kept for ref)
 	clrYellow     = "\033[33m"
 	clrLightRed   = "\033[91m"
-	clrRedDim     = "\033[2;31m"     // dim red — conflict arrow + line number
+	clrRedDim     = "\033[2;31m"       // dim red — conflict arrow
+	clrMagentaSoft = "\033[38;5;133m"  // soft magenta — conflict winner line number
 	clrGreen      = "\033[32m"
 	clrOrange     = "\033[38;5;208m"
 )
@@ -345,23 +346,23 @@ func collectListLines(node *secrets.Node, indent int, conflicts map[string]secre
 		child := node.Children[k]
 		dp := dotJoin(dotPrefix, k)
 		if c, isConflict := conflicts[dp]; isConflict {
-			// Winner line: key in light gray, value in dark gray, dim-red arrow, dim-cyan file
+			// Winner line: key green, value light gray, cyan file, soft-magenta line number
 			last := c.Sources[len(c.Sources)-1]
-			lastOrigin := fmt.Sprintf("%s%s%s%s%d%s", clrCyanDim, last.File, clrReset, clrRedDim+":", last.Line, clrReset)
+			lastOrigin := fmt.Sprintf("%s%s%s:%s%d%s", clrCyan, last.File, clrReset, clrMagentaSoft, last.Line, clrReset)
 			*lines = append(*lines, listLine{
-				text:     fmt.Sprintf("%s%s%s:%s %s%v%s", indentStr, clrGrayLight, k, clrReset, clrGray, child.Value, clrReset),
+				text:     fmt.Sprintf("%s%s%s:%s %s%v%s", indentStr, clrGreen, k, clrReset, clrGrayLight, child.Value, clrReset),
 				origin:   lastOrigin,
 				conflict: true,
 			})
-			// Ghosted lines: sources that lost — same indent, fully dimmed
+			// Ghosted lines: sources that lost — uniform gray including line number
 			for _, src := range c.Sources[:len(c.Sources)-1] {
-				srcOrigin := fmt.Sprintf("%s%s%s:%d%s", clrDim+clrGray, src.File, clrReset, src.Line, clrReset)
+				srcOrigin := fmt.Sprintf("%s%s:%d%s", clrGray, src.File, src.Line, clrReset)
 				snippet := src.Snippet
 				if snippet == "" {
 					snippet = src.File
 				}
 				*lines = append(*lines, listLine{
-					text:     fmt.Sprintf("%s%s%s%s", indentStr, clrDim+clrGray, snippet, clrReset),
+					text:     fmt.Sprintf("%s%s%s%s", indentStr, clrGray, snippet, clrReset),
 					origin:   srcOrigin,
 					conflict: true,
 					extra:    true,
