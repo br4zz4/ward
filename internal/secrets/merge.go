@@ -56,14 +56,11 @@ func (e *ConflictError) Error() string {
 		colorBold, colorRed, n, word, colorReset,
 	)
 	for _, c := range e.Conflicts {
-		fmt.Fprintf(&sb, "%s%sconflict:%s cannot merge key %s%q%s — defined in multiple files at the same level:\n",
-			colorBold, colorRed, colorReset,
-			colorBold, LeafKey(c.Key), colorReset,
-		)
+		// Dot-path on its own line, prominent
+		fmt.Fprintf(&sb, "%s%s%s\n", colorBold, c.Key, colorReset)
 		for _, s := range c.Sources {
 			if s.Line > 0 {
-				fmt.Fprintf(&sb, "  %s→%s %s%s%s:%s%d%s\n",
-					colorYellow, colorReset,
+				fmt.Fprintf(&sb, "  %s%s%s:%s%d%s\n",
 					colorCyan, s.File, colorReset,
 					colorLightRed, s.Line, colorReset,
 				)
@@ -71,8 +68,7 @@ func (e *ConflictError) Error() string {
 					fmt.Fprintf(&sb, "    %s%s%s\n", colorGray, s.Snippet, colorReset)
 				}
 			} else {
-				fmt.Fprintf(&sb, "  %s→%s %s%s%s\n",
-					colorYellow, colorReset,
+				fmt.Fprintf(&sb, "  %s%s%s\n",
 					colorCyan, s.File, colorReset,
 				)
 			}

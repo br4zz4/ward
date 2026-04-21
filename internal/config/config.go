@@ -39,7 +39,7 @@ type Source struct {
 type Config struct {
 	Encryption Encryption `yaml:"encryption,omitempty"`
 	OnConflict OnConflict `yaml:"on_conflict,omitempty"`
-	Merge      MergeMode  `yaml:"merge,omitempty"` // legacy: migrated to OnConflict on load
+	Merge      MergeMode  `yaml:"merge,omitempty"`      // legacy: migrated to OnConflict on load
 	DefaultDir string     `yaml:"default_dir,omitempty"`
 	Vaults     []Source   `yaml:"vaults"`
 	Sources    []Source   `yaml:"sources,omitempty"` // legacy: migrated to Vaults on load
