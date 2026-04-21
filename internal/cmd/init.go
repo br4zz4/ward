@@ -60,14 +60,19 @@ func NewInitCmd() *cobra.Command {
 			// 5. Print WARD_KEY token for CI
 			token, err := encodeWardKey(".ward.key")
 			if err == nil {
-				fmt.Printf("\n%s  ward is ready%s\n\n", clrGreen+clrBold, clrReset)
-				fmt.Printf("  %s.ward.key%s     age key — %skeep private, never commit%s\n", clrCyan, clrReset, clrOrange, clrReset)
-				fmt.Printf("  %sward.yaml%s      config — commit this\n", clrCyan, clrReset)
-				fmt.Printf("  %s.secrets/%s      encrypted secrets — safe to commit\n\n", clrCyan, clrReset)
-				fmt.Printf("  %sWARD_KEY%s=%s%s%s\n", clrYellow, clrReset, clrGray, token, clrReset)
-				fmt.Printf("  %s↑ copy this to CI / secrets manager%s\n\n", clrGray, clrReset)
-				fmt.Printf("  %snext:%s edit your first secrets file\n\n", clrGray, clrReset)
-				fmt.Printf("    %sward edit .secrets/.ward%s\n\n", clrBold, clrReset)
+				fmt.Printf("\n  %s✓ ward is ready%s\n\n", clrGreen+clrBold, clrReset)
+				fmt.Printf("  %sward.yaml%s    config — %scommit this%s\n", clrCyan, clrReset, clrGreen, clrReset)
+				fmt.Printf("  %s.ward.key%s    age key — %skeep private, never commit%s\n", clrCyan, clrReset, clrOrange, clrReset)
+				fmt.Printf("  %s.secrets/%s    encrypted secrets — %ssafe to commit%s\n", clrCyan, clrReset, clrGreen, clrReset)
+				fmt.Printf("\n  %sWARD_KEY%s=%s%s%s\n", clrYellow, clrReset, clrGray, token, clrReset)
+				fmt.Printf("  %s↑ copy this to CI / secrets manager%s\n", clrGray, clrReset)
+				fmt.Printf("\n  %s─────────────────────────────────────%s\n\n", clrGray, clrReset)
+				fmt.Printf("  %sedit secrets%s\n", clrBold, clrReset)
+				fmt.Printf("    %sward edit .secrets/.ward%s\n\n", clrCyan, clrReset)
+				fmt.Printf("  %screate a new secrets file%s\n", clrBold, clrReset)
+				fmt.Printf("    %sward new .secrets/staging.ward%s\n\n", clrCyan, clrReset)
+				fmt.Printf("  %sedit config%s\n", clrBold, clrReset)
+				fmt.Printf("    %sward config%s\n\n", clrCyan, clrReset)
 			}
 		},
 	}
@@ -77,7 +82,6 @@ func NewInitCmd() *cobra.Command {
 // Returns the public key. If the file already exists, reads the public key from it.
 func generateAgeKey(path string) (string, error) {
 	if _, err := os.Stat(path); err == nil {
-		fmt.Printf("ward: %s already exists, skipping key generation\n", path)
 		return readAgePublicKey(path)
 	}
 	cmd := exec.Command("age-keygen", "-o", path)
@@ -86,7 +90,6 @@ func generateAgeKey(path string) (string, error) {
 	if err := cmd.Run(); err != nil {
 		return "", fmt.Errorf("age-keygen: %w\n%s", err, stderr.String())
 	}
-	fmt.Printf("ward: generated %s\n", path)
 	return readAgePublicKey(path)
 }
 
@@ -126,14 +129,12 @@ func ensureGitignore(entry string) error {
 		prefix = "\n"
 	}
 	_, err = fmt.Fprintf(f, "%s%s\n", prefix, entry)
-	fmt.Printf("ward: added %s to %s\n", entry, path)
 	return err
 }
 
 // encryptIfAbsent creates path by encrypting content with sops+age if it doesn't exist.
 func encryptIfAbsent(path, content, keyFile, pubKey string) error {
 	if _, err := os.Stat(path); err == nil {
-		fmt.Printf("ward: %s already exists, skipping\n", path)
 		return nil
 	}
 	cmd := exec.Command("sops", "encrypt",
@@ -153,7 +154,6 @@ func encryptIfAbsent(path, content, keyFile, pubKey string) error {
 	if err := os.WriteFile(path, stdout.Bytes(), 0644); err != nil {
 		return fmt.Errorf("writing %s: %w", path, err)
 	}
-	fmt.Printf("ward: created %s (encrypted)\n", path)
 	return nil
 }
 
@@ -174,12 +174,10 @@ func decodeWardKey(token string) ([]byte, error) {
 
 func writeIfAbsent(path, content string) error {
 	if _, err := os.Stat(path); err == nil {
-		fmt.Printf("ward: %s already exists, skipping\n", path)
 		return nil
 	}
 	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
 		return fmt.Errorf("writing %s: %w", path, err)
 	}
-	fmt.Printf("ward: created %s\n", path)
 	return nil
 }
