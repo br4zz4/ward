@@ -76,6 +76,8 @@ func (e *Engine) MergeForView() (*MergeResult, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Mark ancestor leafs that are shadowed by deeper leafs with the same key name.
+	secrets.MarkShadowed(tree)
 	return &MergeResult{Tree: tree, ConflictErr: conflictErr}, nil
 }
 

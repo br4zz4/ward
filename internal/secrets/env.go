@@ -87,50 +87,147 @@ func (e *EnvConflictError) Error() string {
 	return sb.String()
 }
 
+// leafRef is a leaf node with its full dot-path.
+type leafRef struct {
+	dotPath string
+	node    *Node
+}
+
 // ToFlatEnvEntries returns only the leaf values as env vars using just the leaf key name
 // (uppercased), without any path prefix. Used by ward envs/exec without --prefixed.
-// Returns EnvConflictError when two different dot-paths produce the same env var name.
+//
+// Shadow rule: when two dot-paths share the same leaf key name and one is a descendant
+// of the other (e.g. app.log_level and app.config.log_level), the deeper one wins
+// silently — the shallower is shadowed (dropped). This is NOT a conflict.
+//
+// Collision: same leaf key name at unrelated dot-paths (e.g. staging.secret and
+// production.secret) → EnvConflictError.
 func ToFlatEnvEntries(tree map[string]*Node) (map[string]EnvEntry, error) {
+	byEnvKey := map[string][]leafRef{}
+	collectLeafs(tree, "", byEnvKey)
+
 	out := map[string]EnvEntry{}
-	dotPaths := map[string]string{} // envKey → first dot-path that set it
 	var conflicts []EnvConflict
-	collectFlatEntries(tree, "", out, dotPaths, &conflicts)
+
+	for envKey, entries := range byEnvKey {
+		if len(entries) == 1 {
+			e := entries[0]
+			out[envKey] = EnvEntry{Value: fmt.Sprintf("%v", e.node.Value), Origin: e.node.Origin, Overrides: e.node.Overrides}
+			continue
+		}
+		winner, _, isCollision := resolveShadow(entries)
+		if isCollision {
+			already := false
+			for _, c := range conflicts {
+				if c.EnvKey == envKey {
+					already = true
+					break
+				}
+			}
+			if !already {
+				conflicts = append(conflicts, EnvConflict{
+					EnvKey:   envKey,
+					DotPaths: [2]string{entries[0].dotPath, entries[1].dotPath},
+				})
+			}
+			continue
+		}
+		out[envKey] = EnvEntry{Value: fmt.Sprintf("%v", winner.node.Value), Origin: winner.node.Origin, Overrides: true}
+	}
+
 	if len(conflicts) > 0 {
 		return nil, &EnvConflictError{Conflicts: conflicts}
 	}
 	return out, nil
 }
 
-func collectFlatEntries(nodes map[string]*Node, prefix string, out map[string]EnvEntry, dotPaths map[string]string, conflicts *[]EnvConflict) {
+// collectLeafs walks the tree and groups all leaf nodes by their uppercased leaf key name.
+func collectLeafs(nodes map[string]*Node, prefix string, out map[string][]leafRef) {
 	for k, node := range nodes {
 		dotPath := k
 		if prefix != "" {
 			dotPath = prefix + "." + k
 		}
 		if node.Children != nil {
-			collectFlatEntries(node.Children, dotPath, out, dotPaths, conflicts)
+			collectLeafs(node.Children, dotPath, out)
 		} else {
 			envKey := strings.ToUpper(strings.ReplaceAll(k, "-", "_"))
-			if existing, seen := dotPaths[envKey]; seen && existing != dotPath {
-				// check not already recorded
-				already := false
-				for _, c := range *conflicts {
-					if c.EnvKey == envKey {
-						already = true
-						break
-					}
-				}
-				if !already {
-					*conflicts = append(*conflicts, EnvConflict{
-						EnvKey:   envKey,
-						DotPaths: [2]string{existing, dotPath},
-					})
-				}
-				continue
-			}
-			dotPaths[envKey] = dotPath
-			out[envKey] = EnvEntry{Value: fmt.Sprintf("%v", node.Value), Origin: node.Origin, Overrides: node.Overrides}
+			out[envKey] = append(out[envKey], leafRef{dotPath, node})
 		}
+	}
+}
+
+// resolveShadow determines if one entry shadows others (ancestor relationship) or collides.
+// Shadow: deepest dot-path wins when all shallower ones are proper ancestors of it.
+// Collision: entries at unrelated dot-paths.
+func resolveShadow(entries []leafRef) (winner leafRef, shadowed []leafRef, isCollision bool) {
+	// Find the deepest entry by segment count.
+	deepest := entries[0]
+	for _, e := range entries[1:] {
+		if strings.Count(e.dotPath, ".") > strings.Count(deepest.dotPath, ".") {
+			deepest = e
+		}
+	}
+	// All others must be proper ancestors: deepest.dotPath must be under their parent.
+	for _, e := range entries {
+		if e.dotPath == deepest.dotPath {
+			continue
+		}
+		// e's parent path must be a prefix of deepest's parent path (or equal).
+		eParent := parentDotPath(e.dotPath)
+		deepestParent := parentDotPath(deepest.dotPath)
+		if eParent == "" {
+			// e is at root level — deepest is always under it
+			shadowed = append(shadowed, e)
+			continue
+		}
+		if strings.HasPrefix(deepestParent, eParent) {
+			shadowed = append(shadowed, e)
+		} else {
+			return deepest, nil, true // unrelated — collision
+		}
+	}
+	return deepest, shadowed, false
+}
+
+// MarkShadowed walks the tree and sets Overrides=true on any leaf that would be
+// shadowed by a deeper leaf with the same key name (same as shadow rule in ToFlatEnvEntries).
+// This lets view display shadowed leafs in orange.
+func MarkShadowed(tree map[string]*Node) {
+	byEnvKey := map[string][]leafRef{}
+	collectLeafs(tree, "", byEnvKey)
+	for _, entries := range byEnvKey {
+		if len(entries) < 2 {
+			continue
+		}
+		_, shadowed, isCollision := resolveShadow(entries)
+		if isCollision {
+			continue
+		}
+		for _, s := range shadowed {
+			// Navigate to the node and set Overrides=true
+			markNodeAt(tree, s.dotPath)
+		}
+	}
+}
+
+// markNodeAt sets Overrides=true on the leaf node at the given dot-path.
+func markNodeAt(tree map[string]*Node, dotPath string) {
+	parts := strings.Split(dotPath, ".")
+	current := tree
+	for i, part := range parts {
+		node, ok := current[part]
+		if !ok {
+			return
+		}
+		if i == len(parts)-1 {
+			node.Overrides = true
+			return
+		}
+		if node.Children == nil {
+			return
+		}
+		current = node.Children
 	}
 }
 
