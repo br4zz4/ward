@@ -66,12 +66,30 @@ func NewInitCmd() *cobra.Command {
 					if pad < 2 {
 						pad = 2
 					}
-					fmt.Printf("  %s%s%s%s%s\n", clrCyan, name, clrReset, spaces(pad), desc)
+					fmt.Printf("    %s%s%s%s%s\n", clrCyan, name, clrReset, spaces(pad), desc)
 				}
 				printFileRow(".ward.key", "encryption key — "+clrOrange+"keep private, never commit"+clrReset)
 				printFileRow(".ward/config.yaml", "config — "+clrGreen+"commit this"+clrReset)
 				printFileRow(".ward/vault/", "encrypted secrets — "+clrGreen+"safe to commit"+clrReset)
-				fmt.Printf("\n  %sWARD_KEY%s=%s%s%s\n", clrYellow, clrReset, clrGray, token, clrReset)
+
+				// WARD_KEY box
+				boxWidth := 60
+				label := " WARD_KEY "
+				topBorder := "┌" + clrYellow+clrBold+label+clrReset+clrGray + strings.Repeat("─", boxWidth-len(label)-2) + "┐"
+				fmt.Printf("\n  %s%s%s\n", clrGray, topBorder, clrReset)
+				// wrap token across lines inside box
+				inner := boxWidth - 4
+				t := token
+				for len(t) > 0 {
+					chunk := t
+					if len(chunk) > inner {
+						chunk = t[:inner]
+					}
+					padding := strings.Repeat(" ", inner-len(chunk))
+					fmt.Printf("  %s│%s %s%s%s %s│%s\n", clrGray, clrReset, clrGray, chunk+padding, clrReset, clrGray, clrReset)
+					t = t[len(chunk):]
+				}
+				fmt.Printf("  %s└%s┘%s\n", clrGray, strings.Repeat("─", boxWidth-2), clrReset)
 				fmt.Printf("  %s↑ copy this to CI / secrets manager%s\n", clrGray, clrReset)
 				fmt.Printf("\n  %s─────────────────────────────────────%s\n\n", clrGray, clrReset)
 
