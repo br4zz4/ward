@@ -1,6 +1,7 @@
 package sops_test
 
 import (
+	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -22,6 +23,9 @@ func testdataDir(t *testing.T) string {
 func TestSopsDecryptor_decrypt_existing_file(t *testing.T) {
 	dir := testdataDir(t)
 	keyFile := filepath.Join(dir, ".ward.key")
+	if _, err := os.Stat(keyFile); err != nil {
+		t.Skip("testdata key not available")
+	}
 	wardFile := filepath.Join(dir, "secrets", "company.ward")
 
 	dec := sops.SopsDecryptor{KeyFile: keyFile}
