@@ -82,31 +82,19 @@ func (e *ConflictError) Error() string {
 			colorGray, colorReset, colorYellow, leafKey, colorReset)
 		grandparent := parentKey(scopePath)
 		if grandparent == scopePath {
-			// at root level — the only shared ancestor would be a new base vault
-			fmt.Fprintf(&sb, "    %s2.%s move it to a shared base vault that all conflicting files include\n",
+			fmt.Fprintf(&sb, "    %s2.%s move it to a shared base vault included by all sources\n",
 				colorGray, colorReset)
 		} else {
-			movedPath := grandparent + "." + leafKey // e.g. company.sectors.one.database_url
-			fmt.Fprintf(&sb, "    %s2.%s hoist it one level — define %s%s%s in a shared ancestor file\n",
+			movedPath := grandparent + "." + leafKey
+			fmt.Fprintf(&sb, "    %s2.%s define %s%s%s in a shared ancestor file instead\n",
 				colorGray, colorReset, colorYellow, movedPath, colorReset)
 		}
-		// Option 3: --on-conflict=override, optionally scoped
-		if grandparent != scopePath {
-			// deep path — also show a scoping example
-			fmt.Fprintf(&sb, "    %s3.%s allow the last file to win, scoped to avoid the conflict:\n",
-				colorGray, colorReset)
-			fmt.Fprintf(&sb, "         %sward exec %s.<sibling> --on-conflict=override -- <cmd>%s\n",
-				colorCyan, grandparent, colorReset)
-			fmt.Fprintf(&sb, "         %sward envs %s.<sibling> --on-conflict=override%s\n",
-				colorCyan, grandparent, colorReset)
-		} else {
-			fmt.Fprintf(&sb, "    %s3.%s allow the last file to win:\n",
-				colorGray, colorReset)
-			fmt.Fprintf(&sb, "         %sward exec --on-conflict=override -- <cmd>%s\n",
-				colorCyan, colorReset)
-			fmt.Fprintf(&sb, "         %sward envs --on-conflict=override%s\n",
-				colorCyan, colorReset)
-		}
+		// Option 3: --on-conflict=override
+		fmt.Fprintf(&sb, "    %s3.%s let the last file win:\n", colorGray, colorReset)
+		fmt.Fprintf(&sb, "         %sward exec --on-conflict=override -- <cmd>%s\n",
+			colorCyan, colorReset)
+		fmt.Fprintf(&sb, "         %sward envs --on-conflict=override%s\n",
+			colorCyan, colorReset)
 		sb.WriteString("\n")
 	}
 	fmt.Fprintf(&sb, "  %s→ read more:%s https://github.com/oporpino/ward/blob/main/docs/conflicts.md\n",
