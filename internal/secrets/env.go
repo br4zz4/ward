@@ -100,9 +100,11 @@ type leafRef struct {
 // of the other (e.g. app.log_level and app.config.log_level), the deeper one wins
 // silently — the shallower is shadowed (dropped). This is NOT a conflict.
 //
-// Collision: same leaf key name at unrelated dot-paths (e.g. staging.secret and
-// production.secret) → EnvConflictError.
-func ToFlatEnvEntries(tree map[string]*Node) (map[string]EnvEntry, error) {
+// Collision: same leaf key name at unrelated dot-paths → EnvConflictError, unless
+// preferPrefix is set — then the entry whose dot-path is under preferPrefix wins,
+// and all other entries for that env key are discarded. Other (non-colliding) vars
+// from the full tree are still included.
+func ToFlatEnvEntries(tree map[string]*Node, preferPrefix string) (map[string]EnvEntry, error) {
 	byEnvKey := map[string][]leafRef{}
 	collectLeafs(tree, "", byEnvKey)
 
@@ -117,6 +119,20 @@ func ToFlatEnvEntries(tree map[string]*Node) (map[string]EnvEntry, error) {
 		}
 		winner, _, isCollision := resolveShadow(entries)
 		if isCollision {
+			// If a preferPrefix is given, pick the entry under that prefix.
+			if preferPrefix != "" {
+				var preferred *leafRef
+				for i, e := range entries {
+					if strings.HasPrefix(e.dotPath, preferPrefix+".") || e.dotPath == preferPrefix {
+						preferred = &entries[i]
+						break
+					}
+				}
+				if preferred != nil {
+					out[envKey] = EnvEntry{Value: fmt.Sprintf("%v", preferred.node.Value), Origin: preferred.node.Origin, Overrides: preferred.node.Overrides}
+					continue
+				}
+			}
 			already := false
 			for _, c := range conflicts {
 				if c.EnvKey == envKey {

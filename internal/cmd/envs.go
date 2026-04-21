@@ -49,23 +49,12 @@ func NewEnvsCmd() *cobra.Command {
 	return c
 }
 
-// resolveEnvEntries scopes the result to dotPath (if given) and returns env entries.
+// resolveEnvEntries returns env entries from the full merged tree.
+// When dotPath is given it is used as a preference hint to resolve env var
+// collisions — the entry under that dot-path wins — but all other vars are
+// still included.
 func resolveEnvEntries(eng *ward.Engine, result *ward.MergeResult, dotPath string, prefixed bool) (map[string]secrets.EnvEntry, error) {
-	if dotPath == "" {
-		return eng.EnvVars(result, prefixed)
-	}
-	node, err := eng.GetAtPath(result, dotPath)
-	if err != nil {
-		return nil, err
-	}
-	if node.Children == nil {
-		key := strings.ToUpper(lastSegment(dotPath))
-		return map[string]secrets.EnvEntry{
-			key: {Value: fmt.Sprintf("%v", node.Value)},
-		}, nil
-	}
-	scoped := &ward.MergeResult{Tree: node.Children}
-	return eng.EnvVars(scoped, prefixed)
+	return eng.EnvVarsPrefer(result, prefixed, dotPath)
 }
 
 // printEnvEntries renders env entries with colour-coded keys and aligned values.

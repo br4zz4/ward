@@ -95,10 +95,17 @@ func (e *Engine) Inspect() error {
 // EnvVars resolves env vars from the merged result.
 // Flat leaf names (DATABASE_URL), or full path if --prefixed.
 func (e *Engine) EnvVars(r *MergeResult, prefixed bool) (map[string]secrets.EnvEntry, error) {
+	return e.EnvVarsPrefer(r, prefixed, "")
+}
+
+// EnvVarsPrefer is like EnvVars but resolves env var collisions in favour of
+// entries whose dot-path is under preferPrefix. All other vars from the full
+// tree are still included.
+func (e *Engine) EnvVarsPrefer(r *MergeResult, prefixed bool, preferPrefix string) (map[string]secrets.EnvEntry, error) {
 	if prefixed {
 		return secrets.ToEnvEntries(r.Tree), nil
 	}
-	return secrets.ToFlatEnvEntries(r.Tree)
+	return secrets.ToFlatEnvEntries(r.Tree, preferPrefix)
 }
 
 // EnvVarsMap is like EnvVars but returns plain string values (for injection into

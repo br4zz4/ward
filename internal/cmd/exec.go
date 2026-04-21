@@ -56,21 +56,18 @@ func NewExecCmd() *cobra.Command {
 	}
 }
 
-// resolveEnvVars scopes the result to dotPath (if given) and returns env vars.
+// resolveEnvVars returns env vars from the full merged tree.
+// dotPath is used as a preference hint to resolve env var collisions.
 func resolveEnvVars(eng *ward.Engine, result *ward.MergeResult, dotPath string, prefixed bool) (map[string]string, error) {
-	if dotPath == "" {
-		return eng.EnvVarsMap(result, prefixed)
-	}
-	node, err := eng.GetAtPath(result, dotPath)
+	entries, err := eng.EnvVarsPrefer(result, prefixed, dotPath)
 	if err != nil {
 		return nil, err
 	}
-	if node.Children == nil {
-		key := strings.ToUpper(lastSegment(dotPath))
-		return map[string]string{key: fmt.Sprintf("%v", node.Value)}, nil
+	out := make(map[string]string, len(entries))
+	for k, e := range entries {
+		out[k] = e.Value
 	}
-	scoped := &ward.MergeResult{Tree: node.Children}
-	return eng.EnvVarsMap(scoped, prefixed)
+	return out, nil
 }
 
 // parseExecArgs parses: [--prefixed] [--on-conflict=X] [dot.path] -- <cmd> [args...]

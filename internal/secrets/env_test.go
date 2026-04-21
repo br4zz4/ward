@@ -70,7 +70,7 @@ func TestToFlatEnvEntries_basic(t *testing.T) {
 		},
 	}
 
-	got, err := ToFlatEnvEntries(tree)
+	got, err := ToFlatEnvEntries(tree, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -101,7 +101,7 @@ func TestToFlatEnvEntries_nested(t *testing.T) {
 		},
 	}
 
-	got, err := ToFlatEnvEntries(tree)
+	got, err := ToFlatEnvEntries(tree, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -121,7 +121,7 @@ func TestToFlatEnvEntries_nested(t *testing.T) {
 }
 
 func TestToFlatEnvEntries_empty(t *testing.T) {
-	got, err := ToFlatEnvEntries(map[string]*Node{})
+	got, err := ToFlatEnvEntries(map[string]*Node{}, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
