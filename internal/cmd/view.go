@@ -24,11 +24,11 @@ func NewViewCmd() *cobra.Command {
 				fatal(err)
 			}
 
-			// Build conflict key set for highlighting.
-			conflictKeys := map[string]bool{}
+			// Build conflict map: dot-path → Conflict (for full source info).
+			conflicts := map[string]secrets.Conflict{}
 			if result.ConflictErr != nil {
 				for _, c := range result.ConflictErr.Conflicts {
-					conflictKeys[secrets.LeafKey(c.Key)] = true
+					conflicts[c.Key] = c
 				}
 			}
 
@@ -38,9 +38,9 @@ func NewViewCmd() *cobra.Command {
 					fatal(err)
 				}
 				fmt.Println(args[0])
-				printTreeWithOrigin(node, 1, conflictKeys)
+				printTreeWithOrigin(node, 1, conflicts, args[0])
 			} else {
-				printTreeWithOrigin(&secrets.Node{Children: result.Tree}, 0, conflictKeys)
+				printTreeWithOrigin(&secrets.Node{Children: result.Tree}, 0, conflicts, "")
 			}
 		},
 	}

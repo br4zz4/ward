@@ -255,24 +255,30 @@ type listLine struct {
 	text     string
 	origin   string
 	conflict bool
+	extra    bool // secondary conflict source line (indented, no key)
 }
 
 // printTreeWithOrigin renders the merged tree with colour-coded leaf origins.
-// conflictKeys is the set of leaf key names in conflict (may be nil).
-func printTreeWithOrigin(node *secrets.Node, indent int, conflictKeys map[string]bool) {
+// conflicts maps dot-path → Conflict; prefix is the current dot-path scope.
+func printTreeWithOrigin(node *secrets.Node, indent int, conflicts map[string]secrets.Conflict, prefix string) {
 	var lines []listLine
-	collectListLines(node, indent, conflictKeys, &lines)
+	collectListLines(node, indent, conflicts, prefix, &lines)
 
 	maxLen := 0
 	for _, l := range lines {
-		if l.origin != "" && visibleLen(l.text) > maxLen {
+		if l.origin != "" && !l.extra && visibleLen(l.text) > maxLen {
 			maxLen = visibleLen(l.text)
 		}
 	}
 
 	for _, l := range lines {
 		if l.origin != "" {
-			padding := strings.Repeat(" ", maxLen-visibleLen(l.text)+2)
+			vl := visibleLen(l.text)
+			pad := maxLen - vl + 2
+			if pad < 1 {
+				pad = 1
+			}
+			padding := strings.Repeat(" ", pad)
 			arrow := clrYellow
 			if l.conflict {
 				arrow = clrLightRed
@@ -283,7 +289,7 @@ func printTreeWithOrigin(node *secrets.Node, indent int, conflictKeys map[string
 		}
 	}
 
-	if len(conflictKeys) > 0 {
+	if len(conflicts) > 0 {
 		fmt.Printf("\n%s%s●%s active  %s●%s overrides  %s●%s conflict%s\n",
 			clrGray, clrGreen, clrGray, clrOrange, clrGray, clrLightRed, clrGray, clrReset)
 	} else {
@@ -294,11 +300,11 @@ func printTreeWithOrigin(node *secrets.Node, indent int, conflictKeys map[string
 
 // --- tree traversal ----------------------------------------------------------
 
-func collectListLines(node *secrets.Node, indent int, conflictKeys map[string]bool, lines *[]listLine) {
+func collectListLines(node *secrets.Node, indent int, conflicts map[string]secrets.Conflict, dotPrefix string, lines *[]listLine) {
 	if node.Children == nil {
 		return
 	}
-	prefix := strings.Repeat("  ", indent)
+	indentStr := strings.Repeat("  ", indent)
 
 	var leafKeys, mapKeys []string
 	for k, child := range node.Children {
@@ -309,8 +315,13 @@ func collectListLines(node *secrets.Node, indent int, conflictKeys map[string]bo
 		}
 	}
 	sort.Slice(leafKeys, func(i, j int) bool {
-		ci, cj := node.Children[leafKeys[i]], node.Children[leafKeys[j]]
-		pi, pj := leafPriority(ci, leafKeys[i], conflictKeys), leafPriority(cj, leafKeys[j], conflictKeys)
+		dp1 := dotJoin(dotPrefix, leafKeys[i])
+		dp2 := dotJoin(dotPrefix, leafKeys[j])
+		_, ci := conflicts[dp1]
+		_, cj := conflicts[dp2]
+		ni, nj := node.Children[leafKeys[i]], node.Children[leafKeys[j]]
+		pi := leafPriorityConflict(ni, ci)
+		pj := leafPriorityConflict(nj, cj)
 		if pi != pj {
 			return pi < pj
 		}
@@ -320,42 +331,66 @@ func collectListLines(node *secrets.Node, indent int, conflictKeys map[string]bo
 
 	for _, k := range leafKeys {
 		child := node.Children[k]
-		color := leafColor(child, k, conflictKeys)
-		*lines = append(*lines, listLine{
-			text:     fmt.Sprintf("%s%s%s:%s %s%v%s", prefix, color, k, clrReset, clrGray, child.Value, clrReset),
-			origin:   formatOrigin(child.Origin),
-			conflict: conflictKeys[k],
-		})
+		dp := dotJoin(dotPrefix, k)
+		if c, isConflict := conflicts[dp]; isConflict {
+			// First line: key + value from last source (the one that won the override)
+			last := c.Sources[len(c.Sources)-1]
+			lastOrigin := fmt.Sprintf("%s%s%s:%s%d%s", clrCyan, last.File, clrReset, clrLightRed, last.Line, clrReset)
+			*lines = append(*lines, listLine{
+				text:     fmt.Sprintf("%s%s%s:%s %s%v%s", indentStr, clrLightRed, k, clrReset, clrGray, child.Value, clrReset),
+				origin:   lastOrigin,
+				conflict: true,
+			})
+			// Extra lines: all other sources that lost
+			for _, src := range c.Sources[:len(c.Sources)-1] {
+				srcOrigin := fmt.Sprintf("%s%s%s:%s%d%s", clrCyan, src.File, clrReset, clrLightRed, src.Line, clrReset)
+				snippet := src.Snippet
+				if snippet == "" {
+					snippet = src.File
+				}
+				*lines = append(*lines, listLine{
+					text:     fmt.Sprintf("%s  %s%s%s", indentStr, clrGray, snippet, clrReset),
+					origin:   srcOrigin,
+					conflict: true,
+					extra:    true,
+				})
+			}
+		} else {
+			color := clrGreen
+			if child.Overrides {
+				color = clrOrange
+			}
+			*lines = append(*lines, listLine{
+				text:   fmt.Sprintf("%s%s%s:%s %s%v%s", indentStr, color, k, clrReset, clrGray, child.Value, clrReset),
+				origin: formatOrigin(child.Origin),
+			})
+		}
 	}
 	for _, k := range mapKeys {
 		child := node.Children[k]
 		*lines = append(*lines, listLine{
-			text: fmt.Sprintf("%s%s%s%s:", prefix, clrBold, k, clrReset),
+			text: fmt.Sprintf("%s%s%s%s:", indentStr, clrBold, k, clrReset),
 		})
-		collectListLines(child, indent+1, conflictKeys, lines)
+		collectListLines(child, indent+1, conflicts, dotJoin(dotPrefix, k), lines)
 	}
 }
 
-// leafPriority returns sort order: 0=conflict, 1=override, 2=active.
-func leafPriority(child *secrets.Node, k string, conflictKeys map[string]bool) int {
+func dotJoin(prefix, key string) string {
+	if prefix == "" {
+		return key
+	}
+	return prefix + "." + key
+}
+
+// leafPriorityConflict returns sort order: 0=conflict, 1=override, 2=active.
+func leafPriorityConflict(child *secrets.Node, isConflict bool) int {
 	switch {
-	case conflictKeys[k]:
+	case isConflict:
 		return 0
 	case child.Overrides:
 		return 1
 	default:
 		return 2
-	}
-}
-
-func leafColor(child *secrets.Node, k string, conflictKeys map[string]bool) string {
-	switch {
-	case conflictKeys[k]:
-		return clrLightRed
-	case child.Overrides:
-		return clrOrange
-	default:
-		return clrGreen
 	}
 }
 
