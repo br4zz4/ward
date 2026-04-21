@@ -1,8 +1,5 @@
 encryption:
-  engine: sops+age
   key_file: .ward.key
-
-merge: merge
 
 vaults:
   - path: ./secrets
