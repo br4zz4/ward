@@ -259,10 +259,10 @@ type listLine struct {
 }
 
 // printTreeWithOrigin renders the merged tree with colour-coded leaf origins.
-// conflicts maps dot-path → Conflict; prefix is the current dot-path scope.
-func printTreeWithOrigin(node *secrets.Node, indent int, conflicts map[string]secrets.Conflict, prefix string) {
+// conflicts maps dot-path → Conflict; envCollisions marks dot-paths with env var collisions.
+func printTreeWithOrigin(node *secrets.Node, indent int, conflicts map[string]secrets.Conflict, prefix string, envCollisions map[string]bool) {
 	var lines []listLine
-	collectListLines(node, indent, conflicts, prefix, &lines)
+	collectListLines(node, indent, conflicts, prefix, envCollisions, &lines)
 
 	maxLen := 0
 	for _, l := range lines {
@@ -289,7 +289,8 @@ func printTreeWithOrigin(node *secrets.Node, indent int, conflicts map[string]se
 		}
 	}
 
-	if len(conflicts) > 0 {
+	hasConflict := len(conflicts) > 0 || len(envCollisions) > 0
+	if hasConflict {
 		fmt.Printf("\n%s%s●%s active  %s●%s overrides  %s●%s conflict%s\n",
 			clrGray, clrGreen, clrGray, clrOrange, clrGray, clrLightRed, clrGray, clrReset)
 	} else {
@@ -300,7 +301,7 @@ func printTreeWithOrigin(node *secrets.Node, indent int, conflicts map[string]se
 
 // --- tree traversal ----------------------------------------------------------
 
-func collectListLines(node *secrets.Node, indent int, conflicts map[string]secrets.Conflict, dotPrefix string, lines *[]listLine) {
+func collectListLines(node *secrets.Node, indent int, conflicts map[string]secrets.Conflict, dotPrefix string, envCollisions map[string]bool, lines *[]listLine) {
 	if node.Children == nil {
 		return
 	}
@@ -319,6 +320,8 @@ func collectListLines(node *secrets.Node, indent int, conflicts map[string]secre
 		dp2 := dotJoin(dotPrefix, leafKeys[j])
 		_, ci := conflicts[dp1]
 		_, cj := conflicts[dp2]
+		ci = ci || envCollisions[dp1]
+		cj = cj || envCollisions[dp2]
 		ni, nj := node.Children[leafKeys[i]], node.Children[leafKeys[j]]
 		pi := leafPriorityConflict(ni, ci)
 		pj := leafPriorityConflict(nj, cj)
@@ -357,12 +360,16 @@ func collectListLines(node *secrets.Node, indent int, conflicts map[string]secre
 			}
 		} else {
 			color := clrGreen
-			if child.Overrides {
+			isEnvConflict := envCollisions[dp]
+			if isEnvConflict {
+				color = clrLightRed
+			} else if child.Overrides {
 				color = clrOrange
 			}
 			*lines = append(*lines, listLine{
-				text:   fmt.Sprintf("%s%s%s:%s %s%v%s", indentStr, color, k, clrReset, clrGray, child.Value, clrReset),
-				origin: formatOrigin(child.Origin),
+				text:     fmt.Sprintf("%s%s%s:%s %s%v%s", indentStr, color, k, clrReset, clrGray, child.Value, clrReset),
+				origin:   formatOrigin(child.Origin),
+				conflict: isEnvConflict,
 			})
 		}
 	}
@@ -371,7 +378,7 @@ func collectListLines(node *secrets.Node, indent int, conflicts map[string]secre
 		*lines = append(*lines, listLine{
 			text: fmt.Sprintf("%s%s%s%s:", indentStr, clrBold, k, clrReset),
 		})
-		collectListLines(child, indent+1, conflicts, dotJoin(dotPrefix, k), lines)
+		collectListLines(child, indent+1, conflicts, dotJoin(dotPrefix, k), envCollisions, lines)
 	}
 }
 

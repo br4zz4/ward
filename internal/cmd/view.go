@@ -34,27 +34,36 @@ func NewViewCmd() *cobra.Command {
 				}
 			}
 
+			// Detect env var collisions to highlight affected leafs.
+			var envCollisions map[string]bool // dot-path → true
+			if len(args) == 0 {
+				_, envErr := eng.EnvVars(result, false)
+				if envErr != nil {
+					var ece *secrets.EnvConflictError
+					if errors.As(envErr, &ece) {
+						envCollisions = make(map[string]bool, len(ece.Conflicts)*2)
+						for _, c := range ece.Conflicts {
+							envCollisions[c.DotPaths[0]] = true
+							envCollisions[c.DotPaths[1]] = true
+						}
+					}
+				}
+			}
+
 			if len(args) == 1 {
 				node, err := eng.GetAtPath(result, args[0])
 				if err != nil {
 					fatal(err)
 				}
 				fmt.Println(args[0])
-				printTreeWithOrigin(node, 1, conflicts, args[0])
+				printTreeWithOrigin(node, 1, conflicts, args[0], envCollisions)
 			} else {
-				printTreeWithOrigin(&secrets.Node{Children: result.Tree}, 0, conflicts, "")
+				printTreeWithOrigin(&secrets.Node{Children: result.Tree}, 0, conflicts, "", envCollisions)
 			}
 
-			// Warn about env var collisions (only when no dot-path scope is given).
-			if len(args) == 0 {
-				_, envErr := eng.EnvVars(result, false)
-				if envErr != nil {
-					var ece *secrets.EnvConflictError
-					if errors.As(envErr, &ece) {
-						fmt.Fprintf(os.Stderr, "\n%s⚠ env var collisions detected%s — run %sward envs%s to see details\n",
-							clrYellow+clrBold, clrReset, clrCyan, clrReset)
-					}
-				}
+			if len(envCollisions) > 0 {
+				fmt.Fprintf(os.Stderr, "\n%s⚠ env var collisions detected%s — use %s--prefixed%s or a dot-path to resolve\n",
+					clrYellow+clrBold, clrReset, clrCyan, clrReset)
 			}
 		},
 	}
