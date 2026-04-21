@@ -21,10 +21,9 @@ const (
 
 // Origin tracks where a leaf value came from.
 type Origin struct {
-	File        string
-	Line        int
-	Snippet     string
-	Specificity int // higher = more specific (leaf); used to detect same-level conflicts
+	File    string
+	Line    int
+	Snippet string
 }
 
 // Node is either a leaf value with an origin, or a nested map.
@@ -118,18 +117,16 @@ func parentKey(dotPath string) string {
 	return dotPath
 }
 
-// Merge merges a sequence of ParsedFiles in order (index 0 = most ancestral, last = leaf).
-// Files must be pre-sorted from least specific to most specific (SortBySpecificity).
-// A conflict is only raised when two files at the same specificity level define the same key.
-// When scopePrefix is non-empty, conflicts outside that dot-path prefix are silently overridden
-// instead of blocking — allowing scoped commands to work even when other paths conflict.
+// Merge merges a sequence of ParsedFiles in config order (index 0 = first vault, last = last vault).
+// Conflict rule: if two files define the exact same leaf dot-path → conflict (in MergeModeError).
+// If they define different dot-paths they coexist in the tree regardless of depth.
+// When scopePrefix is non-empty, conflicts outside that dot-path prefix are silently overridden.
 func Merge(files []ParsedFile, mode config.MergeMode, scopePrefix string) (map[string]*Node, error) {
 	result := map[string]*Node{}
 	var conflicts []Conflict
 
 	for _, pf := range files {
-		spec := specificity(pf)
-		mergeInto(result, pf.Data, pf.File, pf.Lines, pf.RawLines, mode, "", spec, scopePrefix, &conflicts)
+		mergeInto(result, pf.Data, pf.File, pf.Lines, pf.RawLines, mode, "", scopePrefix, &conflicts)
 	}
 
 	if len(conflicts) > 0 {
@@ -138,7 +135,7 @@ func Merge(files []ParsedFile, mode config.MergeMode, scopePrefix string) (map[s
 	return result, nil
 }
 
-func mergeInto(dst map[string]*Node, src map[string]interface{}, file string, lines LineMap, rawLines []string, mode config.MergeMode, prefix string, spec int, scopePrefix string, conflicts *[]Conflict) {
+func mergeInto(dst map[string]*Node, src map[string]interface{}, file string, lines LineMap, rawLines []string, mode config.MergeMode, prefix string, scopePrefix string, conflicts *[]Conflict) {
 	for k, v := range src {
 		dotPath := k
 		if prefix != "" {
@@ -146,7 +143,6 @@ func mergeInto(dst map[string]*Node, src map[string]interface{}, file string, li
 		}
 
 		// When a scope is active, only raise conflicts for keys inside (or above) that scope.
-		// Keys outside the scope are merged with override semantics to avoid false blocks.
 		effectiveMode := mode
 		if scopePrefix != "" && mode == config.MergeModeError && !isUnderOrEqual(dotPath, scopePrefix) {
 			effectiveMode = config.MergeModeOverride
@@ -156,22 +152,22 @@ func mergeInto(dst map[string]*Node, src map[string]interface{}, file string, li
 		case map[string]interface{}:
 			existing, ok := dst[k]
 			if !ok || existing.Children == nil {
-				if ok && existing.Children == nil && effectiveMode == config.MergeModeError && existing.Origin.Specificity == spec {
-					appendConflict(conflicts, dotPath, existing.Origin, originFor(file, dotPath, lines, rawLines, spec))
+				if ok && existing.Children == nil && effectiveMode == config.MergeModeError {
+					appendConflict(conflicts, dotPath, existing.Origin, originFor(file, dotPath, lines, rawLines))
 					continue
 				}
 				dst[k] = &Node{Children: map[string]*Node{}}
 			}
-			mergeInto(dst[k].Children, val, file, lines, rawLines, effectiveMode, dotPath, spec, scopePrefix, conflicts)
+			mergeInto(dst[k].Children, val, file, lines, rawLines, effectiveMode, dotPath, scopePrefix, conflicts)
 
 		default:
 			existing, ok := dst[k]
-			if ok && effectiveMode == config.MergeModeError && existing.Origin.Specificity == spec {
-				appendConflict(conflicts, dotPath, existing.Origin, originFor(file, dotPath, lines, rawLines, spec))
+			if ok && effectiveMode == config.MergeModeError {
+				appendConflict(conflicts, dotPath, existing.Origin, originFor(file, dotPath, lines, rawLines))
 				continue
 			}
 			overrides := ok
-			dst[k] = &Node{Value: val, Origin: originFor(file, dotPath, lines, rawLines, spec), Overrides: overrides}
+			dst[k] = &Node{Value: val, Origin: originFor(file, dotPath, lines, rawLines), Overrides: overrides}
 		}
 	}
 }
@@ -210,8 +206,8 @@ func appendConflict(conflicts *[]Conflict, dotPath string, existingOrigin, newOr
 	})
 }
 
-func originFor(file, dotPath string, lines LineMap, rawLines []string, spec int) Origin {
-	o := Origin{File: file, Specificity: spec}
+func originFor(file, dotPath string, lines LineMap, rawLines []string) Origin {
+	o := Origin{File: file}
 	if lines != nil {
 		if ln, ok := lines[dotPath]; ok {
 			o.Line = ln

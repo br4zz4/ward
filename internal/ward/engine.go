@@ -44,9 +44,8 @@ func (e *Engine) MergeWithConflict(onConflict config.OnConflict, scopePrefix str
 	if err != nil {
 		return nil, err
 	}
-	ordered := secrets.SortBySpecificity(files)
 	mode := e.conflictMode(onConflict)
-	tree, err := secrets.Merge(ordered, mode, scopePrefix)
+	tree, err := secrets.Merge(files, mode, scopePrefix)
 	if err != nil {
 		return nil, err
 	}
@@ -61,11 +60,10 @@ func (e *Engine) MergeForView() (*MergeResult, error) {
 	if err != nil {
 		return nil, err
 	}
-	ordered := secrets.SortBySpecificity(files)
 
 	// First pass: detect conflicts without blocking.
 	var conflictErr *secrets.ConflictError
-	if _, cerr := secrets.Merge(ordered, config.MergeModeError, ""); cerr != nil {
+	if _, cerr := secrets.Merge(files, config.MergeModeError, ""); cerr != nil {
 		if ce, ok := cerr.(*secrets.ConflictError); ok {
 			conflictErr = ce
 		} else {
@@ -74,7 +72,7 @@ func (e *Engine) MergeForView() (*MergeResult, error) {
 	}
 
 	// Second pass: override mode so we always get a full tree.
-	tree, err := secrets.Merge(ordered, config.MergeModeOverride, "")
+	tree, err := secrets.Merge(files, config.MergeModeOverride, "")
 	if err != nil {
 		return nil, err
 	}
@@ -88,8 +86,7 @@ func (e *Engine) Inspect() error {
 	if err != nil {
 		return err
 	}
-	ordered := secrets.SortBySpecificity(files)
-	_, mergeErr := secrets.Merge(ordered, config.MergeModeError, "")
+	_, mergeErr := secrets.Merge(files, config.MergeModeError, "")
 	return mergeErr
 }
 
