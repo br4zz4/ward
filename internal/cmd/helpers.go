@@ -261,6 +261,7 @@ type listLine struct {
 	origin      string
 	conflict    bool // file-level conflict (same dot-path, multiple files)
 	envConflict bool // env var collision (different dot-paths, same leaf name)
+	overrides   bool // shadowed by a deeper leaf with same key name
 	extra       bool // ghosted secondary source line
 }
 
@@ -285,13 +286,15 @@ func printTreeWithOrigin(node *secrets.Node, indent int, conflicts map[string]se
 				pad = 1
 			}
 			padding := strings.Repeat(" ", pad)
-			arrow := clrYellow
+			arrow := clrMagentaSoft // active
 			if l.extra {
-				arrow = clrDim + clrGray
+				arrow = clrGray
 			} else if l.conflict {
 				arrow = clrRedDim
 			} else if l.envConflict {
 				arrow = clrLightRed
+			} else if l.overrides {
+				arrow = clrOrange
 			}
 			fmt.Printf("%s%s%s←%s %s\n", l.text, padding, arrow, clrReset, l.origin)
 		} else {
@@ -302,7 +305,7 @@ func printTreeWithOrigin(node *secrets.Node, indent int, conflicts map[string]se
 	hasConflict := len(conflicts) > 0 || len(envCollisions) > 0
 	if hasConflict {
 		fmt.Printf("\n%s%s●%s active  %s●%s overrides  %s●%s conflict  %s●%s ghosted%s\n",
-			clrGray, clrGreen, clrGray, clrOrange, clrGray, clrLightRed, clrGray, clrDim+clrGray, clrGray, clrReset)
+			clrGray, clrGreen, clrGray, clrOrange, clrGray, clrLightRed, clrGray, clrGray, clrGray, clrReset)
 	} else {
 		fmt.Printf("\n%s%s●%s active  %s●%s overrides%s\n",
 			clrGray, clrGreen, clrGray, clrOrange, clrGray, clrReset)
@@ -376,10 +379,16 @@ func collectListLines(node *secrets.Node, indent int, conflicts map[string]secre
 			} else if child.Overrides {
 				color = clrOrange
 			}
+			origin := formatOrigin(child.Origin)
+			if child.Overrides && !isEnvConflict {
+				// shadowed — show origin in gray
+				origin = formatOriginDim(child.Origin)
+			}
 			*lines = append(*lines, listLine{
 				text:        fmt.Sprintf("%s%s%s:%s %s%v%s", indentStr, color, k, clrReset, clrGrayLight, child.Value, clrReset),
-				origin:      formatOrigin(child.Origin),
+				origin:      origin,
 				envConflict: isEnvConflict,
+				overrides:   child.Overrides && !isEnvConflict,
 			})
 		}
 	}
@@ -416,9 +425,20 @@ func formatOrigin(o secrets.Origin) string {
 		return ""
 	}
 	if o.Line > 0 {
-		return fmt.Sprintf("%s%s%s%s%s%d%s", clrCyan, o.File, clrReset, clrGray, ":", o.Line, clrReset)
+		return fmt.Sprintf("%s%s%s:%s%d%s", clrCyan, o.File, clrReset, clrMagentaSoft, o.Line, clrReset)
 	}
 	return fmt.Sprintf("%s%s%s", clrCyan, o.File, clrReset)
+}
+
+// formatOriginDim renders origin in muted gray (for overridden/shadowed nodes).
+func formatOriginDim(o secrets.Origin) string {
+	if o.File == "" {
+		return ""
+	}
+	if o.Line > 0 {
+		return fmt.Sprintf("%s%s:%d%s", clrGray, o.File, o.Line, clrReset)
+	}
+	return fmt.Sprintf("%s%s%s", clrGray, o.File, clrReset)
 }
 
 // --- utilities ---------------------------------------------------------------

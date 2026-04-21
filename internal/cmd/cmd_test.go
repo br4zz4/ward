@@ -226,8 +226,13 @@ func TestCmd_exec_envs_equivalence(t *testing.T) {
 		clean := strings.TrimSpace(ansiStrip(line))
 		if idx := strings.Index(clean, "  =  "); idx > 0 {
 			k := strings.TrimSpace(clean[:idx])
-			v := strings.TrimSpace(clean[idx+5:])
-			envsVars[k] = v
+			rest := strings.TrimSpace(clean[idx+5:])
+			// value is the first whitespace-separated token (file:line follows after spaces)
+			fields := strings.Fields(rest)
+			if len(fields) == 0 {
+				continue
+			}
+			envsVars[k] = fields[0]
 		}
 	}
 

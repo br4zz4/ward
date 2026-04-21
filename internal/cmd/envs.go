@@ -82,22 +82,37 @@ func printEnvEntries(entries map[string]secrets.EnvEntry) {
 		return keys[i] < keys[j]
 	})
 
-	maxLen := 0
+	// Compute column widths: key and value.
+	maxKey := 0
+	maxVal := 0
 	for _, k := range keys {
-		if len(k) > maxLen {
-			maxLen = len(k)
+		if len(k) > maxKey {
+			maxKey = len(k)
+		}
+		if v := fmt.Sprintf("%v", entries[k].Value); len(v) > maxVal {
+			maxVal = len(v)
 		}
 	}
 
 	for _, k := range keys {
 		e := entries[k]
-		padding := strings.Repeat(" ", maxLen-len(k))
+		keyPad := strings.Repeat(" ", maxKey-len(k))
+		valStr := fmt.Sprintf("%v", e.Value)
+		valPad := strings.Repeat(" ", maxVal-len(valStr))
 		color := clrGreen
 		if e.Overrides {
 			color = clrOrange
 		}
-		fmt.Printf("%s%s%s%s  =  %s%v%s\n",
-			color, k, clrReset, padding, clrGray, e.Value, clrReset)
+		origin := ""
+		if e.Origin.File != "" {
+			if e.Origin.Line > 0 {
+				origin = fmt.Sprintf("  %s%s%s:%s%d%s", clrCyan, e.Origin.File, clrReset, clrMagentaSoft, e.Origin.Line, clrReset)
+			} else {
+				origin = fmt.Sprintf("  %s%s%s", clrCyan, e.Origin.File, clrReset)
+			}
+		}
+		fmt.Printf("%s%s%s%s  =  %s%s%s%s%s\n",
+			color, k, clrReset, keyPad, clrGrayLight, valStr, clrReset, valPad, origin)
 	}
 
 	fmt.Printf("\n%s%s●%s active  %s●%s overrides%s\n",
