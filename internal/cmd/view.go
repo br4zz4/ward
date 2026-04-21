@@ -62,7 +62,7 @@ func NewViewCmd() *cobra.Command {
 			}
 
 			if len(envCollisions) > 0 {
-				fmt.Fprintf(os.Stderr, "\n%s⚠ env var collisions detected%s — use %s--prefixed%s or a dot-path to resolve\n",
+				fmt.Fprintf(os.Stderr, "\n%s⚠ env var collisions detected%s — scope with a dot-path or run %sward envs%s for details\n",
 					clrYellow+clrBold, clrReset, clrCyan, clrReset)
 			}
 		},
