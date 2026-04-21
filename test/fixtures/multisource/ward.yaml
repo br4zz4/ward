@@ -5,6 +5,6 @@ encryption:
 
 merge: merge
 
-sources:
+vaults:
   - path: ./shared
   - path: ./secrets

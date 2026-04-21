@@ -59,3 +59,64 @@ func TestToEnvVars_empty(t *testing.T) {
 		t.Errorf("expected empty map")
 	}
 }
+
+func TestToFlatEnvEntries_basic(t *testing.T) {
+	tree := map[string]*Node{
+		"myapp": {
+			Children: map[string]*Node{
+				"database_url": {Value: "postgres://localhost/myapp"},
+				"redis_url":    {Value: "redis://localhost:6379"},
+			},
+		},
+	}
+
+	got := ToFlatEnvEntries(tree)
+
+	if v, ok := got["DATABASE_URL"]; !ok || v.Value != "postgres://localhost/myapp" {
+		t.Errorf("expected DATABASE_URL=postgres://localhost/myapp, got %v", got)
+	}
+	if v, ok := got["REDIS_URL"]; !ok || v.Value != "redis://localhost:6379" {
+		t.Errorf("expected REDIS_URL=redis://localhost:6379, got %v", got)
+	}
+	if _, ok := got["MYAPP_DATABASE_URL"]; ok {
+		t.Error("should not have prefixed key MYAPP_DATABASE_URL")
+	}
+}
+
+func TestToFlatEnvEntries_nested(t *testing.T) {
+	tree := map[string]*Node{
+		"app": {
+			Children: map[string]*Node{
+				"db": {
+					Children: map[string]*Node{
+						"url":  {Value: "postgres://x"},
+						"port": {Value: "5432"},
+					},
+				},
+				"token": {Value: "abc"},
+			},
+		},
+	}
+
+	got := ToFlatEnvEntries(tree)
+
+	if _, ok := got["URL"]; !ok {
+		t.Error("expected URL")
+	}
+	if _, ok := got["PORT"]; !ok {
+		t.Error("expected PORT")
+	}
+	if _, ok := got["TOKEN"]; !ok {
+		t.Error("expected TOKEN")
+	}
+	if _, ok := got["APP_DB_URL"]; ok {
+		t.Error("should not have prefixed key APP_DB_URL")
+	}
+}
+
+func TestToFlatEnvEntries_empty(t *testing.T) {
+	got := ToFlatEnvEntries(map[string]*Node{})
+	if len(got) != 0 {
+		t.Errorf("expected empty map")
+	}
+}

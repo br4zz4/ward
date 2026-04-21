@@ -18,7 +18,7 @@ import (
 const wardConfigTemplate = `encryption:
   key_file: .ward.key
 
-sources:
+vaults:
   - path: ./.ward/vault
 `
 

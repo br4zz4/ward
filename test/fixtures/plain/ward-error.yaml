@@ -5,5 +5,5 @@ encryption:
 
 merge: error
 
-sources:
+vaults:
   - path: ./secrets

@@ -32,7 +32,8 @@ type Config struct {
 	Encryption Encryption `yaml:"encryption,omitempty"`
 	Merge      MergeMode  `yaml:"merge,omitempty"`
 	DefaultDir string     `yaml:"default_dir,omitempty"`
-	Sources    []Source   `yaml:"sources"`
+	Vaults     []Source   `yaml:"vaults"`
+	Sources    []Source   `yaml:"sources,omitempty"` // legacy: migrated to Vaults on load
 }
 
 // Save writes cfg back to path in YAML.
@@ -83,6 +84,10 @@ func Load(path string) (*Config, error) {
 	if cfg.Merge == "" {
 		cfg.Merge = MergeModeDeep
 	}
+	if len(cfg.Vaults) == 0 && len(cfg.Sources) > 0 {
+		cfg.Vaults = cfg.Sources
+	}
+	cfg.Sources = nil // avoid double-serialization
 
 	return cfg, nil
 }

@@ -10,9 +10,9 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-func writeWardYAML(t *testing.T, dir, sources string) string {
+func writeWardYAML(t *testing.T, dir, vaults string) string {
 	t.Helper()
-	content := "encryption:\n  key_file: .ward.key\nsources:\n" + sources
+	content := "encryption:\n  key_file: .ward.key\nvaults:\n" + vaults
 	if err := os.MkdirAll(filepath.Join(dir, ".ward"), 0755); err != nil {
 		t.Fatal(err)
 	}
@@ -30,15 +30,15 @@ func readSources(t *testing.T, cfgPath string) []string {
 		t.Fatal(err)
 	}
 	var cfg struct {
-		Sources []struct {
+		Vaults []struct {
 			Path string `yaml:"path"`
-		} `yaml:"sources"`
+		} `yaml:"vaults"`
 	}
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		t.Fatal(err)
 	}
-	paths := make([]string, len(cfg.Sources))
-	for i, s := range cfg.Sources {
+	paths := make([]string, len(cfg.Vaults))
+	for i, s := range cfg.Vaults {
 		paths[i] = s.Path
 	}
 	return paths

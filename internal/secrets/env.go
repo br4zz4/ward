@@ -42,6 +42,25 @@ func ToEnvVarsFromAnchor(tree map[string]*Node, anchorData map[string]interface{
 	return out
 }
 
+// ToFlatEnvEntries returns only the leaf values as env vars using just the leaf key name
+// (uppercased), without any path prefix. Used by ward envs/exec without --prefixed.
+func ToFlatEnvEntries(tree map[string]*Node) map[string]EnvEntry {
+	out := map[string]EnvEntry{}
+	collectFlatEntries(tree, out)
+	return out
+}
+
+func collectFlatEntries(nodes map[string]*Node, out map[string]EnvEntry) {
+	for k, node := range nodes {
+		if node.Children != nil {
+			collectFlatEntries(node.Children, out)
+		} else {
+			key := strings.ToUpper(strings.ReplaceAll(k, "-", "_"))
+			out[key] = EnvEntry{Value: fmt.Sprintf("%v", node.Value), Origin: node.Origin, Overrides: node.Overrides}
+		}
+	}
+}
+
 // ToEnvEntriesFromAnchor is like ToEnvVarsFromAnchor but preserves origin information.
 func ToEnvEntriesFromAnchor(tree map[string]*Node, anchorData map[string]interface{}) map[string]EnvEntry {
 	result := map[string]EnvEntry{}

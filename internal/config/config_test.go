@@ -66,7 +66,25 @@ func TestLoad_missing_file(t *testing.T) {
 	}
 }
 
-func TestLoad_sources(t *testing.T) {
+func TestLoad_vaults(t *testing.T) {
+	path := writeTemp(t, `
+vaults:
+  - path: ../commons/secrets
+  - path: /org/infra/secrets
+`)
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(cfg.Vaults) != 2 {
+		t.Fatalf("expected 2 vaults, got %d", len(cfg.Vaults))
+	}
+	if cfg.Vaults[0].Path != "../commons/secrets" {
+		t.Errorf("unexpected vault path: %q", cfg.Vaults[0].Path)
+	}
+}
+
+func TestLoad_sources_legacy_compat(t *testing.T) {
 	path := writeTemp(t, `
 sources:
   - path: ../commons/secrets
@@ -76,10 +94,10 @@ sources:
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(cfg.Sources) != 2 {
-		t.Fatalf("expected 2 sources, got %d", len(cfg.Sources))
+	if len(cfg.Vaults) != 2 {
+		t.Fatalf("expected 2 vaults (migrated from sources), got %d", len(cfg.Vaults))
 	}
-	if cfg.Sources[0].Path != "../commons/secrets" {
-		t.Errorf("unexpected source path: %q", cfg.Sources[0].Path)
+	if cfg.Vaults[0].Path != "../commons/secrets" {
+		t.Errorf("unexpected vault path: %q", cfg.Vaults[0].Path)
 	}
 }

@@ -150,7 +150,7 @@ func maybeAddSource(cfgPath, newFile string) error {
 
 	projectRoot := filepath.Dir(filepath.Dir(cfgPath))
 
-	for _, src := range cfg.Sources {
+	for _, src := range cfg.Vaults {
 		srcAbs, err := filepath.Abs(filepath.Join(projectRoot, src.Path))
 		if err != nil {
 			continue
@@ -170,11 +170,11 @@ func maybeAddSource(cfgPath, newFile string) error {
 	}
 	sourcePath := "./" + rel
 
-	cfg.Sources = append(cfg.Sources, config.Source{Path: sourcePath})
+	cfg.Vaults = append(cfg.Vaults, config.Source{Path: sourcePath})
 	if err := config.Save(cfgPath, cfg); err != nil {
 		return fmt.Errorf("updating %s: %w", cfgPath, err)
 	}
-	fmt.Printf("  %s+%s added %s%s%s to sources\n",
+	fmt.Printf("  %s+%s added %s%s%s to vaults\n",
 		clrGreen, clrReset, clrCyan, sourcePath, clrReset)
 	return nil
 }

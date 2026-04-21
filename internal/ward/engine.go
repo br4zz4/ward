@@ -96,10 +96,17 @@ func (e *Engine) Inspect(anchorPath string) error {
 }
 
 // EnvVars resolves the env vars for a merged result.
-// Without an anchor (or with prefixed=true) it returns full dot-path names.
-// With an anchor it returns names relative to the anchor's container level.
+// EnvVars resolves env vars from the merged result.
+// Without anchor: flat leaf names (DATABASE_URL), or full path if --prefixed.
+// With anchor: names relative to the anchor's container level.
 func (e *Engine) EnvVars(r *MergeResult, prefixed bool) (map[string]secrets.EnvEntry, error) {
-	if prefixed || r.AnchorPath == "" {
+	if r.AnchorPath == "" {
+		if prefixed {
+			return secrets.ToEnvEntries(r.Tree), nil
+		}
+		return secrets.ToFlatEnvEntries(r.Tree), nil
+	}
+	if prefixed {
 		return secrets.ToEnvEntries(r.Tree), nil
 	}
 	anchorData, err := e.anchorData(r.AnchorPath)
@@ -279,8 +286,8 @@ func (e *Engine) anchorData(anchorPath string) (map[string]interface{}, error) {
 }
 
 func sourcePaths(cfg *config.Config) []string {
-	paths := make([]string, len(cfg.Sources))
-	for i, s := range cfg.Sources {
+	paths := make([]string, len(cfg.Vaults))
+	for i, s := range cfg.Vaults {
 		paths[i] = s.Path
 	}
 	return paths

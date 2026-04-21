@@ -3,5 +3,5 @@ encryption:
 
 merge: merge
 
-sources:
+vaults:
   - path: ./secrets
