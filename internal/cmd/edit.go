@@ -13,10 +13,11 @@ import (
 )
 
 func NewEditCmd() *cobra.Command {
-	return &cobra.Command{
+	c := &cobra.Command{
 		Use:   "edit [file.ward]",
 		Short: "Decrypt a .ward file, open in $EDITOR, re-encrypt on save",
 		Args:  cobra.MaximumNArgs(1),
+		ValidArgsFunction: completeWardFiles,
 		Run: func(_ *cobra.Command, args []string) {
 			path := wardFilePath(args)
 
@@ -50,6 +51,7 @@ func NewEditCmd() *cobra.Command {
 			}
 		},
 	}
+	return c
 }
 
 func wardFilePath(args []string) string {
@@ -70,12 +72,54 @@ func wardFilePath(args []string) string {
 	// If path is a directory, resolve to the first .ward file inside it.
 	info, err := os.Stat(path)
 	if err != nil {
-		return path // let Decrypt report the error
+		// Path doesn't exist — try to find it inside the vaults.
+		if found := findInVaults(path); found != "" {
+			return found
+		}
+		return path // let Decrypt report the original error
 	}
 	if info.IsDir() {
 		return pickWardFile(path)
 	}
 	return path
+}
+
+// findInVaults searches vault source directories for a .ward file whose path
+// ends with the given suffix (e.g. "company.ward" or "secrets/company.ward").
+func findInVaults(partial string) string {
+	eng, err := newEngine()
+	if err != nil {
+		return ""
+	}
+	// Normalise: add .ward extension if missing
+	if !strings.HasSuffix(partial, ".ward") {
+		partial = partial + ".ward"
+	}
+	allFiles, err := secrets.Discover(eng.SourcePaths())
+	if err != nil {
+		return ""
+	}
+	// Exact suffix match first
+	for _, f := range allFiles {
+		if strings.HasSuffix(f, partial) || strings.HasSuffix(f, "/"+partial) {
+			return f
+		}
+	}
+	// Basename match (e.g. "company" matches ".ward/vault/company.ward")
+	base := filepath.Base(partial)
+	var matches []string
+	for _, f := range allFiles {
+		if filepath.Base(f) == base {
+			matches = append(matches, f)
+		}
+	}
+	if len(matches) == 1 {
+		return matches[0]
+	}
+	if len(matches) > 1 {
+		return pickWardFile(filepath.Dir(matches[0])) // ambiguous — show picker
+	}
+	return ""
 }
 
 // pickWardFile lists .ward files under dir and prompts the user to choose one.
