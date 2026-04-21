@@ -73,14 +73,26 @@ func (e *ConflictError) Error() string {
 				)
 			}
 		}
+		// Per-conflict resolution hints with dot-path examples
+		leafKey := LeafKey(c.Key)
+		grandparentPath := parentKey(parentKey(c.Key)) // two levels up from leaf
+		movedPath := grandparentPath + "." + leafKey   // e.g. company.sectors.one.database_url
+		scopePath := parentKey(c.Key)                  // e.g. company.sectors.one.staging
+		fmt.Fprintf(&sb, "\n  %sto resolve:%s\n", colorBold, colorReset)
+		fmt.Fprintf(&sb, "    %s1.%s remove %s%s%s from one of the files above\n",
+			colorGray, colorReset, colorYellow, leafKey, colorReset)
+		fmt.Fprintf(&sb, "    %s2.%s move it one level up — define %s%s%s in a shared ancestor file\n",
+			colorGray, colorReset, colorYellow, movedPath, colorReset)
+		fmt.Fprintf(&sb, "    %s3.%s scope your command to a specific path:\n",
+			colorGray, colorReset)
+		fmt.Fprintf(&sb, "         %sward exec %s -- <cmd>%s\n",
+			colorCyan, scopePath, colorReset)
+		fmt.Fprintf(&sb, "         %sward envs %s%s\n",
+			colorCyan, scopePath, colorReset)
 		sb.WriteString("\n")
 	}
-	sb.WriteString("  to resolve:\n")
-	sb.WriteString("    1. remove the key from one of the files\n")
-	fmt.Fprintf(&sb, "    2. move it to a common %sancestor%s if shared across %senvironments%s\n",
-		colorGreen, colorReset,
-		colorCyan, colorReset,
-	)
+	fmt.Fprintf(&sb, "  %s→ read more:%s https://github.com/oporpino/ward/blob/main/docs/conflicts.md\n",
+		colorGray, colorReset)
 	return sb.String()
 }
 
@@ -88,6 +100,14 @@ func (e *ConflictError) Error() string {
 func LeafKey(dotPath string) string {
 	if i := strings.LastIndex(dotPath, "."); i >= 0 {
 		return dotPath[i+1:]
+	}
+	return dotPath
+}
+
+// parentKey returns the dot-path one level above the leaf.
+func parentKey(dotPath string) string {
+	if i := strings.LastIndex(dotPath, "."); i >= 0 {
+		return dotPath[:i]
 	}
 	return dotPath
 }
