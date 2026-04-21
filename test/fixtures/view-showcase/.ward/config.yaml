@@ -3,7 +3,6 @@ encryption:
 
 vaults:
   - path: .ward/vault/base
-  - path: .ward/vault/overrides
   - path: .ward/vault/peer-a
   - path: .ward/vault/peer-b
   - path: .ward/vault/shared
