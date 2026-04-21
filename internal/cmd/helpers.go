@@ -286,7 +286,7 @@ func printTreeWithOrigin(node *secrets.Node, indent int, conflicts map[string]se
 				pad = 1
 			}
 			padding := strings.Repeat(" ", pad)
-			arrow := clrMagentaSoft // active
+			arrow := clrGreen // active
 			if l.extra {
 				arrow = clrGray
 			} else if l.conflict {
@@ -425,7 +425,7 @@ func formatOrigin(o secrets.Origin) string {
 		return ""
 	}
 	if o.Line > 0 {
-		return fmt.Sprintf("%s%s%s:%s%d%s", clrCyan, o.File, clrReset, clrMagentaSoft, o.Line, clrReset)
+		return fmt.Sprintf("%s%s%s:%s%d%s", clrCyan, o.File, clrReset, clrGreen, o.Line, clrReset)
 	}
 	return fmt.Sprintf("%s%s%s", clrCyan, o.File, clrReset)
 }
