@@ -27,3 +27,5 @@ completions/
 
 # Backup files
 *.bak
+.PKGINFO
+ward-apk.rsa.pub
