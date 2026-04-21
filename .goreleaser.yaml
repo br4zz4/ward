@@ -24,7 +24,8 @@ builds:
 archives:
   - id: ward
     name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
-    format: tar.gz
+    formats:
+      - tar.gz
     files:
       - LICENSE
       - README.md
@@ -43,11 +44,14 @@ nfpms:
     formats:
       - deb
       - apk
+    dependencies:
+      - sops
+      - age
     contents:
       - src: ./LICENSE
         dst: /usr/share/doc/ward/LICENSE
 
-brews:
+homebrew_casks:
   - name: ward
     repository:
       owner: oporpino
@@ -56,12 +60,13 @@ brews:
     commit_author:
       name: oporpino
       email: oporpino@users.noreply.github.com
-    directory: Formula
+    directory: Casks
     homepage: https://github.com/oporpino/ward
     description: Hierarchical secrets management using SOPS+age.
     license: MIT
-    test: |
-      system "#{bin}/ward", "--version"
+    dependencies:
+      - formula: sops
+      - formula: age
 
 publishers:
   - name: packagecloud
