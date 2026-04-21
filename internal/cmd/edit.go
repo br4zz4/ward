@@ -5,6 +5,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
+	"strings"
 
 	"github.com/oporpino/ward/internal/secrets"
 	"github.com/spf13/cobra"
@@ -71,18 +73,37 @@ func wardFilePath(args []string) string {
 		return path // let Decrypt report the error
 	}
 	if info.IsDir() {
-		return firstWardFile(path)
+		return pickWardFile(path)
 	}
 	return path
 }
 
-// firstWardFile returns the first .ward file found (recursively) under dir.
-func firstWardFile(dir string) string {
+// pickWardFile lists .ward files under dir and prompts the user to choose one.
+func pickWardFile(dir string) string {
 	files, err := secrets.Discover([]string{dir})
 	if err != nil || len(files) == 0 {
 		fatal(fmt.Errorf("no .ward files found in %s", dir))
 	}
-	return files[0]
+	sort.Slice(files, func(i, j int) bool {
+		di, dj := strings.Count(files[i], "/"), strings.Count(files[j], "/")
+		if di != dj {
+			return di < dj
+		}
+		return files[i] < files[j]
+	})
+	if len(files) == 1 {
+		return files[0]
+	}
+	fmt.Println("Select a file to edit:")
+	for i, f := range files {
+		fmt.Printf("  %d) %s\n", i+1, f)
+	}
+	fmt.Print("> ")
+	var choice int
+	if _, err := fmt.Fscan(os.Stdin, &choice); err != nil || choice < 1 || choice > len(files) {
+		fatal(fmt.Errorf("invalid choice"))
+	}
+	return files[choice-1]
 }
 
 func writeTempFile(originalPath string, content []byte) (string, error) {
