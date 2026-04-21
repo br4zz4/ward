@@ -110,6 +110,23 @@ func TestMaybeAddSource_idempotent(t *testing.T) {
 	}
 }
 
+func TestMaybeAddSource_no_double_slash(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := writeWardYAML(t, dir, "  - path: ./.ward/vault\n")
+
+	newFile := filepath.Join(dir, ".commons", "ward", "vault", "shared.ward")
+	if err := maybeAddSource(cfgPath, newFile); err != nil {
+		t.Fatal(err)
+	}
+
+	sources := readSources(t, cfgPath)
+	for _, s := range sources {
+		if strings.Contains(s, "//") {
+			t.Errorf("source path contains double slash: %q", s)
+		}
+	}
+}
+
 func TestMaybeAddSource_missing_config_is_noop(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, ".ward", "config.yaml") // does not exist

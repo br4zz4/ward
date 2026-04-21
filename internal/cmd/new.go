@@ -168,7 +168,7 @@ func maybeAddSource(cfgPath, newFile string) error {
 	if err != nil {
 		rel = newDir
 	}
-	sourcePath := "./" + rel
+	sourcePath := filepath.Join(".", rel)
 
 	cfg.Vaults = append(cfg.Vaults, config.Source{Path: sourcePath})
 	if err := config.Save(cfgPath, cfg); err != nil {
