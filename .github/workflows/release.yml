@@ -20,9 +20,6 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - name: install package_cloud
-        run: gem install package_cloud
-
       - uses: goreleaser/goreleaser-action@v6
         with:
           version: latest
@@ -30,4 +27,13 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+
+      - name: push to packagecloud
+        if: ${{ secrets.PACKAGECLOUD_TOKEN != '' }}
+        run: |
+          sudo gem install package_cloud
+          for f in dist/*.deb; do
+            package_cloud push oporpino/ward/debian/bookworm "$f"
+          done
+        env:
           PACKAGECLOUD_TOKEN: ${{ secrets.PACKAGECLOUD_TOKEN }}

@@ -68,16 +68,6 @@ homebrew_casks:
       - formula: sops
       - formula: age
 
-publishers:
-  - name: packagecloud
-    ids:
-      - ward-deb
-    cmd: >
-      package_cloud push oporpino/ward/debian/bookworm
-      {{ .ArtifactPath }}
-    env:
-      - PACKAGECLOUD_TOKEN={{ .Env.PACKAGECLOUD_TOKEN }}
-
 release:
   github:
     owner: oporpino
