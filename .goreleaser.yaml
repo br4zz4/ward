@@ -5,9 +5,10 @@ project_name: ward
 before:
   hooks:
     - go mod tidy
-    - go run ./cmd/ward completion zsh > completions/ward.zsh
-    - go run ./cmd/ward completion bash > completions/ward.bash
-    - go run ./cmd/ward completion fish > completions/ward.fish
+    - mkdir -p completions
+    - sh -c "go run ./cmd/ward completion zsh > completions/ward.zsh"
+    - sh -c "go run ./cmd/ward completion bash > completions/ward.bash"
+    - sh -c "go run ./cmd/ward completion fish > completions/ward.fish"
 
 builds:
   - id: ward
