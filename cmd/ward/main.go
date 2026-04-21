@@ -24,8 +24,9 @@ func main() {
 
 	root.AddCommand(
 		cmd.NewGetCmd(),
-		cmd.NewListCmd(),
-		cmd.NewShowCmd(),
+		cmd.NewViewCmd(),
+		cmd.NewEnvsCmd(),
+		cmd.NewInspectCmd(),
 		cmd.NewExecCmd(),
 		cmd.NewInitCmd(),
 		cmd.NewEditCmd(),

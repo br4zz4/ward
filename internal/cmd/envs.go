@@ -11,12 +11,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func NewShowCmd() *cobra.Command {
+func NewEnvsCmd() *cobra.Command {
 	var prefixed bool
 
 	c := &cobra.Command{
-		Use:   "show [anchor.ward]",
-		Short: "Show the env vars that would be injected by exec (use anchor for short names)",
+		Use:   "envs [anchor.ward]",
+		Short: "Show the env vars that would be injected by exec",
 		Args:  cobra.MaximumNArgs(1),
 		Run: func(_ *cobra.Command, args []string) {
 			anchorPath := ""
@@ -43,7 +43,6 @@ func NewShowCmd() *cobra.Command {
 			if prefixed || anchorPath == "" {
 				entries = secrets.ToEnvEntries(tree)
 			} else if isDir {
-				// Use any file in the dir as structural reference for relative naming
 				dec := sops.MockDecryptor{}
 				dirFiles, err := secrets.Discover([]string{anchorPath})
 				if err != nil || len(dirFiles) == 0 {
@@ -68,12 +67,11 @@ func NewShowCmd() *cobra.Command {
 			for k := range entries {
 				keys = append(keys, k)
 			}
-			// Sort: overridden first, then alphabetical within each group
 			sort.Slice(keys, func(i, j int) bool {
 				oi := entries[keys[i]].Overrides
 				oj := entries[keys[j]].Overrides
 				if oi != oj {
-					return oi // overridden first
+					return oi
 				}
 				return keys[i] < keys[j]
 			})
@@ -85,7 +83,6 @@ func NewShowCmd() *cobra.Command {
 				}
 			}
 
-			// Collect leaf key names that appear in ancestor nodes (outside anchor scope)
 			ancestorLeafKeys := map[string]bool{}
 			if anchorPath != "" {
 				collectAncestorKeys(&secrets.Node{Children: tree}, anchorPath, ancestorLeafKeys)
@@ -95,7 +92,6 @@ func NewShowCmd() *cobra.Command {
 				e := entries[k]
 				padding := strings.Repeat(" ", maxLen-len(k))
 
-				// green = new key; orange = overrides ancestor OR key name exists in ancestor
 				var keyColor string
 				if e.Overrides || (anchorPath != "" && !isFromAnchorScope(e.Origin.File, anchorPath)) || ancestorLeafKeys[strings.ToLower(lastEnvSegment(k))] {
 					keyColor = "\033[38;5;208m"

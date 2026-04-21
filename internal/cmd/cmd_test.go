@@ -82,10 +82,10 @@ func TestCmd_get_staging_key_not_in_production(t *testing.T) {
 	}
 }
 
-func TestCmd_list_subtree_with_origin(t *testing.T) {
+func TestCmd_view_subtree_with_origin(t *testing.T) {
 	bin := buildBin(t)
 	out, _, code := run(t, bin,
-		"list", "secrets/company/sectors/one/staging.ward",
+		"view", "secrets/company/sectors/one/staging.ward",
 	)
 	if code != 0 {
 		t.Fatalf("exit %d", code)
