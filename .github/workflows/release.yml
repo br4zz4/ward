@@ -35,6 +35,13 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      - name: write apk signing key
+        run: |
+          echo "$APK_SIGNING_RSA_KEY" > /tmp/ward-apk.rsa
+          chmod 600 /tmp/ward-apk.rsa
+        env:
+          APK_SIGNING_RSA_KEY: ${{ secrets.APK_SIGNING_RSA_KEY }}
+
       - uses: goreleaser/goreleaser-action@v6
         with:
           version: latest
@@ -42,13 +49,21 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          APK_KEY_FILE: /tmp/ward-apk.rsa
 
-      - name: push to packagecloud
-        if: env.PACKAGECLOUD_TOKEN != ''
+      - name: push to buildkite registries
         run: |
-          sudo gem install package_cloud
           for f in dist/*.deb; do
-            package_cloud push oporpino/ward/debian/bookworm "$f"
+            curl -sf -X POST \
+              -H "Authorization: Bearer $BUILDKITE_PACKAGE_TOKEN" \
+              -F "file=@$f" \
+              "https://api.buildkite.com/v2/packages/organizations/oporpino/registries/ward-debian/packages"
+          done
+          for f in dist/*.apk; do
+            curl -sf -X POST \
+              -H "Authorization: Bearer $BUILDKITE_PACKAGE_TOKEN" \
+              -F "file=@$f" \
+              "https://api.buildkite.com/v2/packages/organizations/oporpino/registries/ward-alpine/packages"
           done
         env:
-          PACKAGECLOUD_TOKEN: ${{ secrets.PACKAGECLOUD_TOKEN }}
+          BUILDKITE_PACKAGE_TOKEN: ${{ secrets.BUILDKITE_PACKAGE_TOKEN }}
