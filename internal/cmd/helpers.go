@@ -309,9 +309,9 @@ func printTreeWithOrigin(node *secrets.Node, indent int, conflicts map[string]se
 			if l.extra {
 				originStr = fmt.Sprintf("%s%s:%d%s", clrGray, l.originFile, l.originLine, clrReset)
 			} else if l.originLine > 0 {
-				originStr = fmt.Sprintf("%s%s%s:%s%d%s", statusClr, l.originFile, clrReset, lineClr, l.originLine, clrReset)
+				originStr = fmt.Sprintf("%s%s%s:%s%d%s", clrCyan, l.originFile, clrReset, lineClr, l.originLine, clrReset)
 			} else {
-				originStr = fmt.Sprintf("%s%s%s", statusClr, l.originFile, clrReset)
+				originStr = fmt.Sprintf("%s%s%s", clrCyan, l.originFile, clrReset)
 			}
 
 			fmt.Printf("%s%s%s←%s %s\n", l.text, padding, statusClr, clrReset, originStr)
