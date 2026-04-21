@@ -35,6 +35,8 @@ func main() {
 		cmd.NewOverrideCmd(),
 	)
 
+	root.CompletionOptions.DisableDefaultCmd = false
+
 	if err := root.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
