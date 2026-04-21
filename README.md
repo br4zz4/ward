@@ -1,19 +1,18 @@
 # ward
 
-Hierarchical secrets management using SOPS+age.
+Hierarchical secrets management with zero external dependencies.
 
 `ward` organises secrets the way your infrastructure is already organised — in layers. A root file defines shared config. Environment files add or override specifics. There is no duplication, no syncing, no drift.
 
 ```
-secrets/
-  company.ward                      ← shared: name, region, base config
-  company/sectors/one/
-    staging.ward                    ← staging: database_url, redis_url
-    production.ward                 ← production: database_url, redis_url
+.ward/vault/
+  secrets.ward                      ← shared: name, region, base config
+  staging.ward                      ← staging: database_url, redis_url
+  production.ward                   ← production: database_url, redis_url
 ```
 
 ```sh
-ward exec company/sectors/one/staging.ward -- your-app
+ward exec staging.ward -- your-app
 # DATABASE_URL=postgres://staging.acme.internal/app
 # NAME=sector 1 override
 # REDIS_URL=redis://staging.acme.internal:6379
@@ -23,11 +22,11 @@ ward exec company/sectors/one/staging.ward -- your-app
 
 ## How it works
 
-Each `.ward` file is an encrypted YAML document. `ward` discovers all files under your configured sources, determines which are ancestors of your target, merges them from least to most specific, and exposes the result as env vars.
+Each `.ward` file is an encrypted YAML document. `ward` discovers all files under your configured vaults, determines which are ancestors of your target, merges them from least to most specific, and exposes the result as env vars.
 
 **Ancestry is determined by content structure, not file path.** A file is an ancestor if its map-branch structure is compatible with the target's — meaning it covers the same root key and doesn't declare conflicting branches.
 
-**Leaf files override ancestors.** If `company.ward` sets `name: acme` and `staging.ward` sets `name: acme staging`, the merged result is `acme staging`, tracked back to `staging.ward`.
+**Leaf files override ancestors.** If `secrets.ward` sets `name: acme` and `staging.ward` sets `name: acme staging`, the merged result is `acme staging`, tracked back to `staging.ward`.
 
 **Same-level conflicts are errors.** If two files at the same specificity level define the same key, `ward` refuses to merge and tells you exactly where each definition lives.
 
@@ -35,9 +34,9 @@ Each `.ward` file is an encrypted YAML document. `ward` discovers all files unde
 found 2 conflicts — cannot merge:
 
 conflict: cannot merge key "database_url" — defined in multiple files at the same level:
-  → secrets/company/sectors/one/conflict_a.ward:5
+  → .ward/vault/conflict_a.ward:5
     database_url: postgres://conflict-a.internal/app
-  → secrets/company/sectors/one/conflict_b.ward:5
+  → .ward/vault/conflict_b.ward:5
     database_url: postgres://conflict-b.internal/app
 
   to resolve:
@@ -68,6 +67,7 @@ sudo apt install ward
 **Alpine Linux (APK)**
 
 ```sh
+curl -s https://packagecloud.io/install/repositories/oporpino/ward/script.alpine.sh | sudo bash
 apk add ward
 ```
 
@@ -93,69 +93,71 @@ go build -o ~/.local/bin/ward ./cmd/ward
 # Initialise a new project
 ward init
 
-# Edit your first secrets file (decrypts, opens $EDITOR, re-encrypts)
-ward edit secrets/company.ward
+# Edit the default secrets file
+ward edit
+
+# Create a new secrets file
+ward new staging
+
+# Create a file in a specific path
+ward new ./.commons/ward/vaults/ruby/staging
 
 # List all secrets with origins
 ward list
 
 # Inspect a specific environment
-ward list secrets/company/sectors/one/staging.ward
+ward list .ward/vault/staging.ward
 
 # Show the env vars that would be injected
-ward show secrets/company/sectors/one/staging.ward
+ward envs .ward/vault/staging.ward
 
 # Inject and run
-ward exec secrets/company/sectors/one/staging.ward -- env | grep DATABASE
+ward exec .ward/vault/staging.ward -- env | grep DATABASE
 ```
 
 ---
 
 ## Commands
 
-### `ward get <dot.path>`
+### `ward init`
 
-Print the merged value at a dot-path.
+Initialise ward in the current directory. Creates `.ward/config.yaml`, generates a `.ward.key` age key, and creates an initial `.ward/vault/secrets.ward`.
 
-```sh
-ward get company.sectors.one.staging.database_url
-# postgres://staging.acme.internal/app
-```
+Prints the `WARD_KEY` token to copy to CI or a secrets manager.
 
-### `ward list [anchor]`
+### `ward new <name>`
 
-Print the merged tree with source file and line for each value.
+Create a new encrypted `.ward` file and open it in `$EDITOR`.
 
-```sh
-ward list secrets/company/sectors/one/staging.ward
-```
+- Bare name: `ward new staging` → `.ward/vault/staging.ward`
+- Slash path: `ward new infra/prod` → `infra/prod.ward` (relative to CWD)
+- Dot-slash: `ward new ./.commons/vault/ruby/staging` → `.commons/vault/ruby/staging.ward`
 
-```
-company:
-  name: acme                                                ← secrets/company.ward:2
-  sectors:
-    one:
-      name: sector 1 override                               ← secrets/.../staging.ward:4
-      staging:
-        database_url: postgres://staging.acme.internal/app  ← secrets/.../staging.ward:6
-        redis_url:    redis://staging.acme.internal:6379    ← secrets/.../staging.ward:7
+If the file is outside the existing vaults, it is automatically added to `.ward/config.yaml`.
 
-● active  ● overrides
-```
+### `ward edit [file]`
 
-### `ward show [anchor] [--prefixed]`
+Decrypt a `.ward` file, open it in `$EDITOR`, re-encrypt on save. Defaults to the first file in the default vault.
 
-Print the env vars that would be injected by `exec`. Without an anchor, shows all vars with full path names. With an anchor, shows relative names scoped to the anchor's level.
+### `ward envs [anchor] [--prefixed]`
+
+Print the env vars that would be injected by `exec`.
 
 ```sh
-ward show secrets/company/sectors/one/staging.ward
-# NAME          = sector 1 override
+# Without anchor — flat leaf names, all vaults merged
+ward envs
 # DATABASE_URL  = postgres://staging.acme.internal/app
 # REDIS_URL     = redis://staging.acme.internal:6379
 
-ward show --prefixed
-# COMPANY_NAME                              = acme
-# COMPANY_SECTORS_ONE_STAGING_DATABASE_URL  = postgres://staging.acme.internal/app
+# With anchor — names relative to the anchor's container level
+ward envs .ward/vault/staging.ward
+# NAME          = sector 1 override
+# DATABASE_URL  = postgres://staging.acme.internal/app
+
+# Full path names with --prefixed
+ward envs --prefixed
+# MYAPP_DATABASE_URL  = postgres://staging.acme.internal/app
+# MYAPP_REDIS_URL     = redis://staging.acme.internal:6379
 ```
 
 ### `ward exec [anchor] -- <command>`
@@ -163,97 +165,117 @@ ward show --prefixed
 Merge secrets and inject as env vars, then run a command.
 
 ```sh
-ward exec secrets/company/sectors/one/staging.ward -- rails server
-ward exec secrets/company/sectors/one/staging.ward -- env | grep DATABASE
+ward exec .ward/vault/staging.ward -- rails server
+ward exec .ward/vault/staging.ward -- env | grep DATABASE
 ```
 
-### `ward init`
+### `ward list [anchor]`
 
-Generate a `ward.yaml` config and a starter `secrets.ward` file.
+Print the merged tree with source file and line for each value.
 
-### `ward edit <file>`
+```sh
+ward list .ward/vault/staging.ward
+```
 
-Decrypt a `.ward` file, open it in `$EDITOR`, re-encrypt on save.
+```
+myapp:
+  name: acme                                                ← .ward/vault/secrets.ward:2
+  staging:
+    database_url: postgres://staging.acme.internal/app     ← .ward/vault/staging.ward:4
+    redis_url:    redis://staging.acme.internal:6379        ← .ward/vault/staging.ward:5
+
+● active  ● overrides
+```
+
+### `ward get <dot.path>`
+
+Print the merged value at a dot-path.
+
+```sh
+ward get myapp.staging.database_url
+# postgres://staging.acme.internal/app
+```
+
+### `ward config`
+
+Open `.ward/config.yaml` in `$EDITOR`.
 
 ---
 
 ## Configuration
 
-`ward.yaml` lives at the project root:
+`.ward/config.yaml` is created by `ward init`:
 
 ```yaml
 encryption:
-  engine: sops+age
-  key_env: WARD_AGE_KEY      # env var holding the age private key
-  key_file: .ward.key        # or a key file (gitignored)
+  key_file: .ward.key        # age key file (gitignored); or use key_env
 
-merge: merge                 # merge | override | error
-
-sources:
-  - path: ./secrets
+vaults:
+  - path: ./.ward/vault      # directories to discover .ward files in
 ```
 
-Pass a different config file with `-c`:
+### encryption
 
-```sh
-ward -c config/ward.yaml show staging.ward
-```
-
-### Merge modes
-
-| Mode | Behaviour |
+| Field | Description |
 |---|---|
-| `merge` | Deep merge. Leaf files override ancestor values. Same-level conflicts are errors. |
-| `override` | Last (most specific) file always wins. No conflict errors. |
-| `error` | Any overlapping key between any two files is an error. |
+| `engine` | `age+armor` (default) or `sops+age` (legacy). |
+| `key_file` | Path to the age private key file. Gitignore this. |
+| `key_env` | Name of an env var holding the age private key. Takes precedence over `key_file`. |
 
----
+`age+armor` is the default engine — no external tools required. The entire file is encrypted as an opaque armored blob.
 
-## File structure
+`sops+age` is available for projects that previously used SOPS. It requires the SOPS Go library (bundled — no binary needed).
 
-`.ward` files are standard YAML documents encrypted with SOPS+age. Plain YAML is supported during development via `MockDecryptor` (no key required when running tests).
+### merge
+
+Controls what happens when multiple files define the same key at the same ancestry level.
+
+| Value | Behaviour |
+|---|---|
+| `merge` | Deep merge. Leaf files override ancestor values. Peer conflicts are errors. Default. |
+| `override` | Last (most specific) file always wins silently. |
+| `error` | Any overlapping key is an error, regardless of ancestry. |
+
+### vaults
+
+A list of directories to discover `.ward` files in. Each vault is walked recursively.
 
 ```yaml
-# secrets/company.ward
-company:
-  name: acme
-  region: us-east-1
-
-# secrets/company/sectors/one/staging.ward
-company:
-  sectors:
-    one:
-      name: sector 1 override
-      staging:
-        database_url: postgres://staging.acme.internal/app
-        redis_url: redis://staging.acme.internal:6379
+vaults:
+  - path: ./.ward/vault
+  - path: ./infra/secrets
+  - path: ../.commons/ward/vaults/ruby   # outside project root is fine
 ```
 
-### Directory anchors
+`sources:` is accepted as a legacy alias for `vaults:`.
 
-Pass a directory instead of a file to merge all `.ward` files inside it. Conflicts between siblings in the directory are always errors — ambiguous by definition.
+### default_dir
+
+Where `ward new <bare-name>` places new files. Defaults to `.ward/vault`.
+
+```yaml
+default_dir: secrets
+```
+
+### WARD_KEY
+
+`ward init` prints a `WARD_KEY=ward-<base64>` token. Set it in CI instead of mounting the key file:
 
 ```sh
-ward show secrets/company/sectors/one
-# → error if staging.ward and production.ward both define the same key
-
-ward show secrets/company/sectors/two
-# → ok if two/staging.ward is the only file there
+export WARD_KEY=ward-AAAA...
+ward exec .ward/vault/staging.ward -- deploy
 ```
 
 ---
 
 ## Env var naming
 
-Leaf keys are uppercased. Dots and nested map levels become `_`.
-
-With a file anchor, the common structural prefix is stripped:
-
-| Dot-path | Anchor | Env var |
-|---|---|---|
-| `company.sectors.one.staging.database_url` | `staging.ward` | `DATABASE_URL` |
-| `company.sectors.one.staging.database_url` | `one/` (dir) | `STAGING_DATABASE_URL` |
-| `company.sectors.one.staging.database_url` | none / `--prefixed` | `COMPANY_SECTORS_ONE_STAGING_DATABASE_URL` |
+| Scenario | Env var |
+|---|---|
+| No anchor, no `--prefixed` | Flat leaf name: `DATABASE_URL` |
+| No anchor, `--prefixed` | Full dot-path: `MYAPP_STAGING_DATABASE_URL` |
+| File anchor | Relative to anchor's container: `DATABASE_URL` |
+| Dir anchor | Relative to dir level: `STAGING_DATABASE_URL` |
 
 ---
 
