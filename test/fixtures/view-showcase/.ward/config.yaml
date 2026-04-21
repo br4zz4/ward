@@ -6,3 +6,4 @@ vaults:
   - path: .ward/vault/overrides
   - path: .ward/vault/peer-a
   - path: .ward/vault/peer-b
+  - path: .ward/vault/shared
