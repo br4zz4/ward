@@ -289,7 +289,7 @@ func printTreeWithOrigin(node *secrets.Node, indent int, conflicts map[string]se
 			padding := strings.Repeat(" ", pad)
 
 			// Status color drives arrow, file path, and line number.
-			statusClr := clrMagentaSoft // active
+			statusClr := clrGreen // active (including conflict winner)
 			if l.extra {
 				statusClr = clrGray
 			} else if l.envConflict {
