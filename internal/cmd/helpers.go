@@ -26,7 +26,17 @@ func newEngine() (*ward.Engine, error) {
 	if err != nil {
 		return nil, fmt.Errorf("loading %s: %w", configFile, err)
 	}
-	return ward.NewEngine(cfg, sops.MockDecryptor{}), nil
+	dec := decryptorFor(cfg)
+	return ward.NewEngine(cfg, dec), nil
+}
+
+// decryptorFor returns the appropriate Decryptor based on the config.
+// Falls back to MockDecryptor when no key file is configured.
+func decryptorFor(cfg *config.Config) sops.Decryptor {
+	if cfg.Encryption.KeyFile != "" {
+		return sops.SopsDecryptor{KeyFile: cfg.Encryption.KeyFile}
+	}
+	return sops.MockDecryptor{}
 }
 
 // fatal prints err to stderr and exits 1.
