@@ -31,10 +31,13 @@ func newEngine() (*ward.Engine, error) {
 }
 
 // decryptorFor returns the appropriate Decryptor based on the config.
-// Falls back to MockDecryptor when no key file is configured.
+// Uses SopsDecryptor only when a key file is configured and exists on disk.
+// Falls back to MockDecryptor otherwise (plain YAML, no decryption).
 func decryptorFor(cfg *config.Config) sops.Decryptor {
 	if cfg.Encryption.KeyFile != "" {
-		return sops.SopsDecryptor{KeyFile: cfg.Encryption.KeyFile}
+		if _, err := os.Stat(cfg.Encryption.KeyFile); err == nil {
+			return sops.SopsDecryptor{KeyFile: cfg.Encryption.KeyFile}
+		}
 	}
 	return sops.MockDecryptor{}
 }
