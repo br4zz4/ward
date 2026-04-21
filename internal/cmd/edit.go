@@ -110,9 +110,8 @@ func openEditor(path string) error {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
-		info, statErr := os.Stat(path)
-		if statErr == nil && info.IsDir() {
-			return nil // vim exits 1 when opening a dir via netrw
+		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
+			return nil // vim/neovim exit 1 for non-fatal warnings (swap files, netrw, etc)
 		}
 		return fmt.Errorf("editor exited with error: %w", err)
 	}
