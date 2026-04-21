@@ -34,15 +34,15 @@ type Node struct {
 	Children  map[string]*Node
 }
 
-// conflict holds a single key conflict between two origins.
-type conflict struct {
+// Conflict holds a single key conflict between two origins.
+type Conflict struct {
 	Key     string
 	Sources [2]Origin
 }
 
 // ConflictError is returned when one or more keys are defined in multiple files at the same level.
 type ConflictError struct {
-	Conflicts []conflict
+	Conflicts []Conflict
 }
 
 func (e *ConflictError) Error() string {
@@ -58,7 +58,7 @@ func (e *ConflictError) Error() string {
 	for _, c := range e.Conflicts {
 		fmt.Fprintf(&sb, "%s%sconflict:%s cannot merge key %s%q%s — defined in multiple files at the same level:\n",
 			colorBold, colorRed, colorReset,
-			colorBold, leafKey(c.Key), colorReset,
+			colorBold, LeafKey(c.Key), colorReset,
 		)
 		for _, s := range c.Sources {
 			if s.Line > 0 {
@@ -88,8 +88,8 @@ func (e *ConflictError) Error() string {
 	return sb.String()
 }
 
-// leafKey returns the last segment of a dot-path.
-func leafKey(dotPath string) string {
+// LeafKey returns the last segment of a dot-path.
+func LeafKey(dotPath string) string {
 	if i := strings.LastIndex(dotPath, "."); i >= 0 {
 		return dotPath[i+1:]
 	}
@@ -101,7 +101,7 @@ func leafKey(dotPath string) string {
 // A conflict is only raised when two files at the same specificity level define the same key.
 func Merge(files []ParsedFile, mode config.MergeMode) (map[string]*Node, error) {
 	result := map[string]*Node{}
-	var conflicts []conflict
+	var conflicts []Conflict
 
 	for _, pf := range files {
 		spec := specificity(pf)
@@ -114,7 +114,7 @@ func Merge(files []ParsedFile, mode config.MergeMode) (map[string]*Node, error) 
 	return result, nil
 }
 
-func mergeInto(dst map[string]*Node, src map[string]interface{}, file string, lines LineMap, rawLines []string, mode config.MergeMode, prefix string, spec int, conflicts *[]conflict) {
+func mergeInto(dst map[string]*Node, src map[string]interface{}, file string, lines LineMap, rawLines []string, mode config.MergeMode, prefix string, spec int, conflicts *[]Conflict) {
 	for k, v := range src {
 		dotPath := k
 		if prefix != "" {
@@ -126,7 +126,7 @@ func mergeInto(dst map[string]*Node, src map[string]interface{}, file string, li
 			existing, ok := dst[k]
 			if !ok || existing.Children == nil {
 				if ok && existing.Children == nil && mode == config.MergeModeError && existing.Origin.Specificity == spec {
-					*conflicts = append(*conflicts, conflict{
+					*conflicts = append(*conflicts, Conflict{
 						Key:     dotPath,
 						Sources: [2]Origin{existing.Origin, originFor(file, dotPath, lines, rawLines, spec)},
 					})
@@ -139,7 +139,7 @@ func mergeInto(dst map[string]*Node, src map[string]interface{}, file string, li
 		default:
 			existing, ok := dst[k]
 			if ok && mode == config.MergeModeError && existing.Origin.Specificity == spec {
-				*conflicts = append(*conflicts, conflict{
+				*conflicts = append(*conflicts, Conflict{
 					Key:     dotPath,
 					Sources: [2]Origin{existing.Origin, originFor(file, dotPath, lines, rawLines, spec)},
 				})

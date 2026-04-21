@@ -50,69 +50,85 @@ func loadAndMerge(cfg *config.Config, anchorPath string) (map[string]*secrets.No
 		return nil, err
 	}
 
-	var ordered []secrets.ParsedFile
-	if anchorPath != "" {
-		info, err := os.Stat(anchorPath)
-		if err != nil {
-			return nil, fmt.Errorf("anchor not found: %s", anchorPath)
-		}
+	return loadAndMergeWithMode(cfg, anchorPath, files, cfg.Merge)
+}
 
-		if info.IsDir() {
-			// Directory anchor: load all .ward files inside it, merge with their ancestors
-			dirFiles, err := secrets.Discover([]string{anchorPath})
-			if err != nil {
-				return nil, err
-			}
-			// Filter the global file list to ancestors of any file in this dir,
-			// then append the dir files themselves
-			dirSet := make(map[string]bool, len(dirFiles))
-			for _, p := range dirFiles {
-				dirSet[p] = true
-			}
-			var dirParsed []secrets.ParsedFile
-			for _, f := range files {
-				if dirSet[f.File] {
-					dirParsed = append(dirParsed, f)
-				}
-			}
-			var ancestors []secrets.ParsedFile
-			for _, df := range dirParsed {
-				for _, f := range files {
-					if !dirSet[f.File] && secrets.IsAncestorOf(f, df) && secrets.MapDepth(f.Data) < secrets.MapDepth(df.Data) {
-						ancestors = append(ancestors, f)
-					}
-				}
-			}
-			// Deduplicate and trim ancestors to the dir's scope
-			seen := map[string]bool{}
-			var uniqueAncestors []secrets.ParsedFile
-			for _, f := range ancestors {
-				if !seen[f.File] {
-					seen[f.File] = true
-					uniqueAncestors = append(uniqueAncestors, secrets.TrimToScope(f, dirParsed))
-				}
-			}
-			ordered = secrets.SortBySpecificity(append(uniqueAncestors, dirParsed...))
-			return secrets.Merge(ordered, config.MergeModeError)
-		} else {
-			// File anchor
-			var anchor secrets.ParsedFile
-			for _, f := range files {
-				if f.File == anchorPath {
-					anchor = f
-					break
-				}
-			}
-			if anchor.File == "" {
-				return nil, fmt.Errorf("anchor file not found in sources: %s", anchorPath)
-			}
-			ordered = secrets.FilterByAnchor(anchor, files)
-		}
-	} else {
-		ordered = secrets.SortBySpecificity(files)
+// loadAndMergeWithMode merges the given pre-loaded files with an explicit merge mode.
+// Used by view to run two passes: one for conflict detection, one for display.
+func loadAndMergeWithMode(cfg *config.Config, anchorPath string, files []secrets.ParsedFile, mode config.MergeMode) (map[string]*secrets.Node, error) {
+	ordered := buildOrderedFiles(cfg, anchorPath, files)
+	if ordered == nil {
+		return nil, fmt.Errorf("anchor not found: %s", anchorPath)
 	}
 
-	return secrets.Merge(ordered, cfg.Merge)
+	// Dir anchor always enforces error mode for same-level conflicts
+	if anchorPath != "" {
+		if info, err := os.Stat(anchorPath); err == nil && info.IsDir() && mode != config.MergeModeOverride {
+			mode = config.MergeModeError
+		}
+	}
+
+	return secrets.Merge(ordered, mode)
+}
+
+// buildOrderedFiles returns the sorted slice of ParsedFiles to merge for the given anchor.
+// Returns nil if the anchor path doesn't exist.
+func buildOrderedFiles(cfg *config.Config, anchorPath string, files []secrets.ParsedFile) []secrets.ParsedFile {
+	if anchorPath == "" {
+		return secrets.SortBySpecificity(files)
+	}
+
+	info, err := os.Stat(anchorPath)
+	if err != nil {
+		return nil
+	}
+
+	if info.IsDir() {
+		dirFiles, err := secrets.Discover([]string{anchorPath})
+		if err != nil {
+			return nil
+		}
+		dirSet := make(map[string]bool, len(dirFiles))
+		for _, p := range dirFiles {
+			dirSet[p] = true
+		}
+		var dirParsed []secrets.ParsedFile
+		for _, f := range files {
+			if dirSet[f.File] {
+				dirParsed = append(dirParsed, f)
+			}
+		}
+		var ancestors []secrets.ParsedFile
+		for _, df := range dirParsed {
+			for _, f := range files {
+				if !dirSet[f.File] && secrets.IsAncestorOf(f, df) && secrets.MapDepth(f.Data) < secrets.MapDepth(df.Data) {
+					ancestors = append(ancestors, f)
+				}
+			}
+		}
+		seen := map[string]bool{}
+		var uniqueAncestors []secrets.ParsedFile
+		for _, f := range ancestors {
+			if !seen[f.File] {
+				seen[f.File] = true
+				uniqueAncestors = append(uniqueAncestors, secrets.TrimToScope(f, dirParsed))
+			}
+		}
+		return secrets.SortBySpecificity(append(uniqueAncestors, dirParsed...))
+	}
+
+	// File anchor
+	var anchor secrets.ParsedFile
+	for _, f := range files {
+		if f.File == anchorPath {
+			anchor = f
+			break
+		}
+	}
+	if anchor.File == "" {
+		return nil
+	}
+	return secrets.FilterByAnchor(anchor, files)
 }
 
 // getAtPath navigates a merged tree by dot-path and returns the subtree node.
@@ -151,8 +167,9 @@ func printTree(node *secrets.Node, indent int) {
 
 // listLine holds a single rendered line for aligned origin display.
 type listLine struct {
-	text   string // "  key: value"
-	origin string // "file:line"
+	text     string // "  key: value"
+	origin   string // "file:line"
+	conflict bool   // true if this key is in conflict
 }
 
 // printTreeWithOrigin prints the merged tree with origins aligned in a column.
@@ -167,13 +184,13 @@ const (
 	clrGreen     = "\033[32m"
 )
 
-func printTreeWithOrigin(node *secrets.Node, indent int, anchorPath string) {
+func printTreeWithOrigin(node *secrets.Node, indent int, anchorPath string, conflictKeys map[string]bool) {
 	// Collect all leaf key names that come from outside the anchor scope (ancestors)
 	ancestorKeys := map[string]bool{}
 	collectAncestorKeys(node, anchorPath, ancestorKeys)
 
 	var lines []listLine
-	collectListLines(node, indent, anchorPath, ancestorKeys, &lines)
+	collectListLines(node, indent, anchorPath, ancestorKeys, conflictKeys, &lines)
 
 	// Find max visible text width for alignment (strip ANSI codes)
 	maxLen := 0
@@ -183,20 +200,35 @@ func printTreeWithOrigin(node *secrets.Node, indent int, anchorPath string) {
 		}
 	}
 
+	hasConflicts := len(conflictKeys) > 0
+
 	for _, l := range lines {
 		if l.origin != "" {
 			padding := strings.Repeat(" ", maxLen-visibleLen(l.text)+2)
-			fmt.Printf("%s%s%s←%s %s\n", l.text, padding, clrYellow, clrReset, l.origin)
+			arrowColor := clrYellow
+			if l.conflict {
+				arrowColor = clrLightRed
+			}
+			fmt.Printf("%s%s%s←%s %s\n", l.text, padding, arrowColor, clrReset, l.origin)
 		} else {
 			fmt.Println(l.text)
 		}
 	}
 
-	fmt.Printf("\n%s%s●%s active  %s●%s overrides%s\n",
-		clrGray, clrGreen, clrGray,
-		"\033[38;5;208m", clrGray,
-		clrReset,
-	)
+	if hasConflicts {
+		fmt.Printf("\n%s%s●%s active  %s●%s overrides  %s●%s conflict%s\n",
+			clrGray, clrGreen, clrGray,
+			"\033[38;5;208m", clrGray,
+			clrLightRed, clrGray,
+			clrReset,
+		)
+	} else {
+		fmt.Printf("\n%s%s●%s active  %s●%s overrides%s\n",
+			clrGray, clrGreen, clrGray,
+			"\033[38;5;208m", clrGray,
+			clrReset,
+		)
+	}
 }
 
 // visibleLen returns the length of s ignoring ANSI escape sequences.
@@ -232,7 +264,7 @@ func collectAncestorKeys(node *secrets.Node, anchorPath string, out map[string]b
 	}
 }
 
-func collectListLines(node *secrets.Node, indent int, anchorPath string, ancestorKeys map[string]bool, lines *[]listLine) {
+func collectListLines(node *secrets.Node, indent int, anchorPath string, ancestorKeys map[string]bool, conflictKeys map[string]bool, lines *[]listLine) {
 	if node.Children == nil {
 		return
 	}
@@ -253,9 +285,11 @@ func collectListLines(node *secrets.Node, indent int, anchorPath string, ancesto
 	for _, k := range leafKeys {
 		child := node.Children[k]
 		origin := ""
-		// Green = new key in anchor; orange = key also exists in an ancestor; light blue = inherited
+		// Red = conflict; green = new key in anchor; orange = overrides ancestor; light blue = inherited
 		var keyColor string
-		if !isFromAnchorScope(child.Origin.File, anchorPath) && anchorPath != "" {
+		if conflictKeys[k] {
+			keyColor = clrLightRed
+		} else if !isFromAnchorScope(child.Origin.File, anchorPath) && anchorPath != "" {
 			keyColor = clrLightBlue // inherited from ancestor
 		} else if child.Overrides || ancestorKeys[k] {
 			keyColor = "\033[38;5;208m" // orange = key also appears in ancestor
@@ -270,8 +304,9 @@ func collectListLines(node *secrets.Node, indent int, anchorPath string, ancesto
 			}
 		}
 		*lines = append(*lines, listLine{
-			text:   fmt.Sprintf("%s%s%s:%s %s%v%s", prefix, keyColor, k, clrReset, clrGray, child.Value, clrReset),
-			origin: origin,
+			text:     fmt.Sprintf("%s%s%s:%s %s%v%s", prefix, keyColor, k, clrReset, clrGray, child.Value, clrReset),
+			origin:   origin,
+			conflict: conflictKeys[k],
 		})
 	}
 
@@ -280,7 +315,7 @@ func collectListLines(node *secrets.Node, indent int, anchorPath string, ancesto
 		*lines = append(*lines, listLine{
 			text: fmt.Sprintf("%s%s%s%s:", prefix, clrBold, k, clrReset),
 		})
-		collectListLines(child, indent+1, anchorPath, ancestorKeys, lines)
+		collectListLines(child, indent+1, anchorPath, ancestorKeys, conflictKeys, lines)
 	}
 }
 
