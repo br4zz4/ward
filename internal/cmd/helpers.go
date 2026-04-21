@@ -323,14 +323,33 @@ func printTreeWithOrigin(node *secrets.Node, indent int, conflicts map[string]se
 		}
 	}
 
-	hasConflict := len(conflicts) > 0 || len(envCollisions) > 0
-	if hasConflict {
-		fmt.Printf("\n%s%s●%s active  %s●%s overrides  %s●%s conflict  %s●%s ghosted%s\n",
-			clrGray, clrGreen, clrGray, clrOrange, clrGray, clrLightRed, clrGray, clrGray, clrGray, clrReset)
-	} else {
-		fmt.Printf("\n%s%s●%s active  %s●%s overrides%s\n",
-			clrGray, clrGreen, clrGray, clrOrange, clrGray, clrReset)
+	hasOverrides, hasConflict, hasGhosted, hasEnvConflict := false, false, false, false
+	for _, l := range lines {
+		if l.overrides {
+			hasOverrides = true
+		}
+		if l.conflict && !l.extra {
+			hasConflict = true
+		}
+		if l.extra {
+			hasGhosted = true
+		}
+		if l.envConflict {
+			hasEnvConflict = true
+		}
 	}
+
+	legend := fmt.Sprintf("\n%s%s●%s active", clrGray, clrGreen, clrGray)
+	if hasOverrides {
+		legend += fmt.Sprintf("  %s●%s overrides", clrOrange, clrGray)
+	}
+	if hasConflict || hasEnvConflict {
+		legend += fmt.Sprintf("  %s●%s conflict", clrLightRed, clrGray)
+	}
+	if hasGhosted {
+		legend += fmt.Sprintf("  %s●%s ghosted", clrGray, clrGray)
+	}
+	fmt.Println(legend + clrReset)
 }
 
 // --- tree traversal ----------------------------------------------------------
@@ -403,8 +422,12 @@ func collectListLines(node *secrets.Node, indent int, conflicts map[string]secre
 			}
 			keyColor := color
 			colonColor := color
+			valueColor := clrGrayLight
+			if isOverrides {
+				valueColor = clrGray
+			}
 			*lines = append(*lines, listLine{
-				text:        fmt.Sprintf("%s%s%s%s:%s %s%v%s", indentStr, keyColor, k, colonColor, clrReset, clrGrayLight, child.Value, clrReset),
+				text:        fmt.Sprintf("%s%s%s%s:%s %s%v%s", indentStr, keyColor, k, colonColor, clrReset, valueColor, child.Value, clrReset),
 				originFile:  child.Origin.File,
 				originLine:  child.Origin.Line,
 				envConflict: isEnvConflict,
