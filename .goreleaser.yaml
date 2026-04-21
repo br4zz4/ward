@@ -1,0 +1,81 @@
+version: 2
+
+project_name: ward
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: ward
+    main: ./cmd/ward
+    binary: ward
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X main.version={{.Version}}
+
+archives:
+  - id: ward
+    name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
+    format: tar.gz
+    files:
+      - LICENSE
+      - README.md
+
+checksum:
+  name_template: "checksums.txt"
+
+nfpms:
+  - id: ward-deb
+    package_name: ward
+    vendor: oporpino
+    homepage: https://github.com/oporpino/ward
+    maintainer: oporpino
+    description: Hierarchical secrets management using SOPS+age.
+    license: MIT
+    formats:
+      - deb
+      - apk
+    contents:
+      - src: ./LICENSE
+        dst: /usr/share/doc/ward/LICENSE
+
+brews:
+  - name: ward
+    repository:
+      owner: oporpino
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    commit_author:
+      name: oporpino
+      email: oporpino@users.noreply.github.com
+    directory: Formula
+    homepage: https://github.com/oporpino/ward
+    description: Hierarchical secrets management using SOPS+age.
+    license: MIT
+    test: |
+      system "#{bin}/ward", "--version"
+
+publishers:
+  - name: packagecloud
+    ids:
+      - ward-deb
+    cmd: >
+      package_cloud push oporpino/ward/debian/bookworm
+      {{ .ArtifactPath }}
+    env:
+      - PACKAGECLOUD_TOKEN={{ .Env.PACKAGECLOUD_TOKEN }}
+
+release:
+  github:
+    owner: oporpino
+    name: ward
+  draft: false
+  prerelease: auto

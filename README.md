@@ -49,11 +49,33 @@ conflict: cannot merge key "database_url" — defined in multiple files at the s
 
 ## Installation
 
+**macOS (Homebrew)**
+
+```sh
+brew tap oporpino/tap
+brew install ward
+```
+
+**Debian / Ubuntu (APT)**
+
+```sh
+curl -s https://packagecloud.io/install/repositories/oporpino/ward/script.deb.sh | sudo bash
+sudo apt install ward
+```
+
+**Alpine Linux (APK)**
+
+```sh
+apk add ward
+```
+
+**Go**
+
 ```sh
 go install github.com/oporpino/ward/cmd/ward@latest
 ```
 
-Or build from source:
+**From source**
 
 ```sh
 git clone https://github.com/oporpino/ward
