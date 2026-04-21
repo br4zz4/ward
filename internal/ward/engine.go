@@ -146,6 +146,27 @@ func (e *Engine) SourcePaths() []string {
 	return sourcePaths(e.cfg)
 }
 
+// Decrypt returns the plain-text YAML bytes of a .ward file using the
+// configured decryptor. For plain (unencrypted) files this is a passthrough.
+func (e *Engine) Decrypt(path string) ([]byte, error) {
+	return e.dec.Decrypt(path)
+}
+
+// Encrypt writes content back to path using the configured encryptor.
+// For SopsDecryptor this calls "sops encrypt"; for MockDecryptor it writes plain.
+type Encryptor interface {
+	Encrypt(path string, plaintext []byte) error
+}
+
+// Encrypt re-encrypts plaintext and writes it to path.
+// Falls back to a plain write when no real encryptor is configured.
+func (e *Engine) Encrypt(path string, plaintext []byte) error {
+	if enc, ok := e.dec.(Encryptor); ok {
+		return enc.Encrypt(path, plaintext)
+	}
+	return os.WriteFile(path, plaintext, 0644)
+}
+
 // --- internal helpers --------------------------------------------------------
 
 func (e *Engine) load() ([]secrets.ParsedFile, error) {

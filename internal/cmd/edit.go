@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 
 	"github.com/spf13/cobra"
 )
@@ -14,42 +15,85 @@ func NewEditCmd() *cobra.Command {
 		Short: "Decrypt a .ward file, open in $EDITOR, re-encrypt on save",
 		Args:  cobra.MaximumNArgs(1),
 		Run: func(_ *cobra.Command, args []string) {
-			var path string
-			if len(args) == 1 {
-				path = args[0]
-			} else {
-				eng, err := newEngine()
-				if err != nil {
-					fatal(fmt.Errorf("no file specified and no sources configured"))
-				}
-				sources := eng.SourcePaths()
-				if len(sources) == 0 {
-					fatal(fmt.Errorf("no file specified and no sources configured"))
-				}
-				path = sources[0]
-			}
+			path := wardFilePath(args)
 
-			editor := os.Getenv("EDITOR")
-			if editor == "" {
-				editor = "vi"
-			}
-
-			// TODO: decrypt to temp file, open editor, re-encrypt
-			// For now open the file directly (plain text, pre-SOPS integration)
-			cmd := exec.Command(editor, path)
-			cmd.Stdin = os.Stdin
-			cmd.Stdout = os.Stdout
-			cmd.Stderr = os.Stderr
-
-			err := cmd.Run()
+			eng, err := newEngine()
 			if err != nil {
-				info, statErr := os.Stat(path)
-				if statErr == nil && info.IsDir() {
-					// vim exits 1 when opening a directory via netrw — not a real error
-					return
-				}
-				fatal(fmt.Errorf("editor exited with error: %w", err))
+				fatal(err)
+			}
+
+			plain, err := eng.Decrypt(path)
+			if err != nil {
+				fatal(fmt.Errorf("decrypting %s: %w", path, err))
+			}
+
+			tmp, err := writeTempFile(path, plain)
+			if err != nil {
+				fatal(err)
+			}
+			defer os.Remove(tmp)
+
+			if err := openEditor(tmp); err != nil {
+				fatal(err)
+			}
+
+			edited, err := os.ReadFile(tmp)
+			if err != nil {
+				fatal(fmt.Errorf("reading temp file: %w", err))
+			}
+
+			if err := eng.Encrypt(path, edited); err != nil {
+				fatal(fmt.Errorf("re-encrypting %s: %w", path, err))
 			}
 		},
 	}
+}
+
+func wardFilePath(args []string) string {
+	if len(args) == 1 {
+		return args[0]
+	}
+	eng, err := newEngine()
+	if err != nil {
+		fatal(fmt.Errorf("no file specified and no sources configured"))
+	}
+	sources := eng.SourcePaths()
+	if len(sources) == 0 {
+		fatal(fmt.Errorf("no file specified and no sources configured"))
+	}
+	return sources[0]
+}
+
+func writeTempFile(originalPath string, content []byte) (string, error) {
+	ext := filepath.Ext(originalPath)
+	tmp, err := os.CreateTemp("", "ward-edit-*"+ext)
+	if err != nil {
+		return "", fmt.Errorf("creating temp file: %w", err)
+	}
+	if _, err := tmp.Write(content); err != nil {
+		tmp.Close()
+		os.Remove(tmp.Name())
+		return "", fmt.Errorf("writing temp file: %w", err)
+	}
+	tmp.Close()
+	return tmp.Name(), nil
+}
+
+func openEditor(path string) error {
+	editor := os.Getenv("EDITOR")
+	if editor == "" {
+		editor = "vi"
+	}
+	cmd := exec.Command(editor, path)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		info, statErr := os.Stat(path)
+		if statErr == nil && info.IsDir() {
+			return nil // vim exits 1 when opening a dir via netrw
+		}
+		return fmt.Errorf("editor exited with error: %w", err)
+	}
+	return nil
 }
