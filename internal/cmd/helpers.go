@@ -290,28 +290,21 @@ func printTreeWithOrigin(node *secrets.Node, indent int, conflicts map[string]se
 
 			// Status color drives arrow, file path, and line number.
 			statusClr := clrMagentaSoft // active
-			lineClr := clrMagentaSoft
 			if l.extra {
 				statusClr = clrGray
-				lineClr = clrGray
-			} else if l.conflict {
-				statusClr = clrMagentaSoft // winner of file conflict is still "active"
-				lineClr = clrMagentaSoft
 			} else if l.envConflict {
 				statusClr = clrLightRed
-				lineClr = clrLightRed
 			} else if l.overrides {
 				statusClr = clrOrange
-				lineClr = clrOrange
 			}
 
 			var originStr string
 			if l.extra {
 				originStr = fmt.Sprintf("%s%s:%d%s", clrGray, l.originFile, l.originLine, clrReset)
 			} else if l.originLine > 0 {
-				originStr = fmt.Sprintf("%s%s%s:%s%d%s", clrCyan, l.originFile, clrReset, lineClr, l.originLine, clrReset)
+				originStr = fmt.Sprintf("%s%s:%d%s", statusClr, l.originFile, l.originLine, clrReset)
 			} else {
-				originStr = fmt.Sprintf("%s%s%s", clrCyan, l.originFile, clrReset)
+				originStr = fmt.Sprintf("%s%s%s", statusClr, l.originFile, clrReset)
 			}
 
 			fmt.Printf("%s%s%s←%s %s\n", l.text, padding, statusClr, clrReset, originStr)
