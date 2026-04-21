@@ -137,6 +137,78 @@ func TestMaybeAddSource_missing_config_is_noop(t *testing.T) {
 	}
 }
 
+func TestNewFileStub_internal_vault_uses_project_name(t *testing.T) {
+	// projectRoot = <dir>/qwert, vault = .ward/vault (internal)
+	// file = .ward/vault/environments/staging.ward
+	// expected root key = qwert, then subpath + stem
+	parent := t.TempDir()
+	projectDir := filepath.Join(parent, "qwert")
+	cfgPath := writeWardYAML(t, projectDir, "  - path: ./.ward/vault\n")
+	filePath := filepath.Join(projectDir, ".ward", "vault", "environments", "staging.ward")
+
+	got := newFileStub(filePath, cfgPath)
+
+	if !strings.HasPrefix(got, "qwert:\n") {
+		t.Errorf("expected root key 'qwert', got:\n%s", got)
+	}
+	if !strings.Contains(got, "environments:") {
+		t.Errorf("expected 'environments:' in stub, got:\n%s", got)
+	}
+	if !strings.Contains(got, "staging:") {
+		t.Errorf("expected 'staging:' in stub, got:\n%s", got)
+	}
+}
+
+func TestNewFileStub_internal_vault_no_subdir(t *testing.T) {
+	// file directly in vault root → qwert:\n  staging:\n    secret_1: …
+	parent := t.TempDir()
+	projectDir := filepath.Join(parent, "qwert")
+	cfgPath := writeWardYAML(t, projectDir, "  - path: ./.ward/vault\n")
+	filePath := filepath.Join(projectDir, ".ward", "vault", "staging.ward")
+
+	got := newFileStub(filePath, cfgPath)
+
+	if !strings.HasPrefix(got, "qwert:\n") {
+		t.Errorf("expected root key 'qwert', got:\n%s", got)
+	}
+	if !strings.Contains(got, "staging:") {
+		t.Errorf("expected 'staging:' in stub, got:\n%s", got)
+	}
+}
+
+func TestNewFileStub_external_vault_uses_vault_segments(t *testing.T) {
+	// vault = ../.commons/stacks/ruby (external), file = staging.ward inside it
+	// expected: commons:\n  stacks:\n    ruby:\n      staging:\n
+	parent := t.TempDir()
+	projectDir := filepath.Join(parent, "myapp")
+	externalVault := filepath.Join(parent, ".commons", "stacks", "ruby")
+
+	if err := os.MkdirAll(filepath.Join(projectDir, ".ward"), 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Write relative vault path (../.commons/stacks/ruby) in config
+	vaultRelPath, _ := filepath.Rel(projectDir, externalVault)
+	cfgPath := writeWardYAML(t, projectDir, "  - path: "+vaultRelPath+"\n")
+
+	filePath := filepath.Join(externalVault, "staging.ward")
+
+	got := newFileStub(filePath, cfgPath)
+
+	if !strings.HasPrefix(got, "commons:\n") {
+		t.Errorf("expected root key 'commons', got:\n%s", got)
+	}
+	if !strings.Contains(got, "stacks:") {
+		t.Errorf("expected 'stacks:' in stub, got:\n%s", got)
+	}
+	if !strings.Contains(got, "ruby:") {
+		t.Errorf("expected 'ruby:' in stub, got:\n%s", got)
+	}
+	if !strings.Contains(got, "staging:") {
+		t.Errorf("expected 'staging:' in stub, got:\n%s", got)
+	}
+}
+
 func TestResolveNewPath_bare_name_goes_to_default_dir(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, ".ward", "config.yaml")

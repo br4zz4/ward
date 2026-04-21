@@ -124,15 +124,113 @@ func resolveNewPath(arg, cfgPath string, cfg *config.Config) string {
 	return filepath.Join(base, name+".ward")
 }
 
-// newFileStub returns a YAML stub with the directory name as root key and
-// placeholder secrets, matching the structure the user expects.
+// newFileStub returns a YAML stub whose keys reflect the vault hierarchy.
+//
+// The path segments are derived from the vault source path that contains the
+// file, plus any subdirectory depth within that vault, plus the file stem.
+//
+// Examples (projectRoot = /app):
+//
+//	vault ".ward/vault",  file ".ward/vault/staging.ward"
+//	  → staging:\n  secret_1: …
+//
+//	vault "../.commons/stacks/ruby",  file "../.commons/stacks/ruby/staging.ward"
+//	  → commons:\n  stacks:\n    ruby:\n      staging:\n        secret_1: …
+//
+//	vault ".ward/vault",  file ".ward/vault/services/api.ward"
+//	  → services:\n  api:\n    secret_1: …
 func newFileStub(filePath, cfgPath string) string {
-	stem := strings.TrimSuffix(filepath.Base(filePath), ".ward")
-	if stem == "" || stem == "." {
-		stem = filepath.Base(filepath.Dir(filePath))
+	fileAbs, err := filepath.Abs(filePath)
+	if err != nil {
+		fileAbs = filePath
 	}
-	_ = cfgPath
-	return fmt.Sprintf("%s:\n  secret_1: <your content>\n  secret_2: <your content>\n", stem)
+
+	stem := strings.TrimSuffix(filepath.Base(fileAbs), ".ward")
+	projectRoot, _ := filepath.Abs(filepath.Dir(filepath.Dir(cfgPath)))
+	projectName := filepath.Base(projectRoot)
+
+	cfg, cfgErr := config.Load(cfgPath)
+
+	var segments []string
+
+	if cfgErr == nil {
+		for _, src := range cfg.Vaults {
+			vaultAbs, err := filepath.Abs(filepath.Join(projectRoot, src.Path))
+			if err != nil {
+				continue
+			}
+			// Check if file is inside this vault
+			rel, err := filepath.Rel(vaultAbs, filepath.Dir(fileAbs))
+			if err != nil || strings.HasPrefix(rel, "..") {
+				continue
+			}
+
+			var subParts []string
+			if rel != "." {
+				subParts = strings.Split(rel, string(filepath.Separator))
+			}
+
+			// Is this vault inside the project root?
+			vaultRelToProject, err := filepath.Rel(projectRoot, vaultAbs)
+			isExternal := err != nil || strings.HasPrefix(vaultRelToProject, "..")
+
+			if isExternal {
+				// External vault: derive root from vault path segments (no leading dots)
+				segments = append(vaultPathSegments(src.Path), subParts...)
+			} else {
+				// Internal vault: use project name as root + subpath inside vault
+				segments = append([]string{projectName}, subParts...)
+			}
+			segments = append(segments, stem)
+			break
+		}
+	}
+
+	// Fallback: project name + stem
+	if len(segments) == 0 {
+		segments = []string{projectName, stem}
+	}
+
+	return buildNestedYAML(segments)
+}
+
+// vaultPathSegments converts a vault path like "../.commons/stacks/ruby" into
+// clean segments ["commons", "stacks", "ruby"], stripping leading dots/slashes.
+func vaultPathSegments(vaultPath string) []string {
+	// Clean and split
+	clean := filepath.Clean(vaultPath)
+	parts := strings.Split(clean, string(filepath.Separator))
+	var out []string
+	for _, p := range parts {
+		if p == "." || p == ".." || p == "" {
+			continue
+		}
+		// Strip leading dot from hidden dirs (e.g. ".commons" → "commons")
+		p = strings.TrimPrefix(p, ".")
+		if p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+// buildNestedYAML turns ["a","b","c"] into:
+//
+//	a:
+//	  b:
+//	    c:
+//	      secret_1: <your content>
+//	      secret_2: <your content>
+func buildNestedYAML(segments []string) string {
+	var sb strings.Builder
+	for i, seg := range segments {
+		indent := strings.Repeat("  ", i)
+		sb.WriteString(indent + seg + ":\n")
+	}
+	leaf := strings.Repeat("  ", len(segments))
+	sb.WriteString(leaf + "secret_1: <your content>\n")
+	sb.WriteString(leaf + "secret_2: <your content>\n")
+	return sb.String()
 }
 
 // maybeAddSource appends the directory of newFile to the sources list in
