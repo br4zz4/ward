@@ -209,6 +209,29 @@ func TestResolveNewPath_slash_path_no_extension_stays_relative(t *testing.T) {
 	}
 }
 
+func TestMaybeAddSource_subfolder_of_project(t *testing.T) {
+	// CWD is project/services/api, projectRoot is project/
+	// ward new ./.commons/vault/staging → file at project/services/api/.commons/vault/staging.ward
+	// config entry must be: services/api/.commons/vault (relative to projectRoot)
+	projectDir := t.TempDir()
+	cfgPath := writeWardYAML(t, projectDir, "  - path: ./.ward/vault\n")
+
+	// newFile is inside a subfolder of projectRoot
+	newFile := filepath.Join(projectDir, "services", "api", ".commons", "vault", "staging.ward")
+	if err := maybeAddSource(cfgPath, newFile); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	sources := readSources(t, cfgPath)
+	if len(sources) != 2 {
+		t.Fatalf("expected 2 sources, got %d: %v", len(sources), sources)
+	}
+	want := "services/api/.commons/vault"
+	if sources[1] != want {
+		t.Errorf("got %q, want %q", sources[1], want)
+	}
+}
+
 func TestMaybeAddSource_outside_project_root_uses_dotdot(t *testing.T) {
 	// Simulates: projectRoot = dir, newFile is in dir/../sibling/vault/
 	// The config is at dir/.ward/config.yaml
