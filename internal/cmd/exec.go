@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/oporpino/ward/internal/secrets"
+	"github.com/oporpino/ward/internal/sops"
 	"github.com/spf13/cobra"
 )
 
@@ -35,7 +36,28 @@ func NewExecCmd() *cobra.Command {
 				fatal(err)
 			}
 
-			envVars := secrets.ToEnvVars(tree)
+			var envVars map[string]string
+			if anchorPath != "" {
+				info, _ := os.Stat(anchorPath)
+				dec := sops.MockDecryptor{}
+				if info != nil && info.IsDir() {
+					dirFiles, err := secrets.Discover([]string{anchorPath})
+					if err == nil && len(dirFiles) > 0 {
+						ref, err := secrets.Load(dirFiles[0], dec)
+						if err == nil {
+							envVars = secrets.ToEnvVarsFromAnchor(tree, ref.Data)
+						}
+					}
+				} else {
+					anchor, err := secrets.Load(anchorPath, dec)
+					if err == nil {
+						envVars = secrets.ToEnvVarsFromAnchor(tree, anchor.Data)
+					}
+				}
+			}
+			if envVars == nil {
+				envVars = secrets.ToEnvVars(tree)
+			}
 
 			cmd := exec.Command(cmdArgs[0], cmdArgs[1:]...)
 			cmd.Stdout = os.Stdout
