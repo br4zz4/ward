@@ -18,7 +18,7 @@ func NewGetCmd() *cobra.Command {
 			if len(args) == 0 {
 				fmt.Fprintf(os.Stderr, "\n  %s✗ missing dot-path%s\n\n", clrLightRed+clrBold, clrReset)
 				fmt.Fprintf(os.Stderr, "  usage: %sward get <dot.path>%s\n\n", clrCyan, clrReset)
-				fmt.Fprintf(os.Stderr, "  example: %sward get company.sectors.one.staging.database_url%s\n\n", clrGray, clrReset)
+				fmt.Fprintf(os.Stderr, "  example: %sward get project.staging.database_url%s\n\n", clrGray, clrReset)
 				os.Exit(1)
 			}
 
