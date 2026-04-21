@@ -68,7 +68,7 @@ func NewInitCmd() *cobra.Command {
 					}
 					fmt.Printf("  %s%s%s%s%s\n", clrCyan, name, clrReset, spaces(pad), desc)
 				}
-				printFileRow(".ward.key", "age key — "+clrOrange+"keep private, never commit"+clrReset)
+				printFileRow(".ward.key", "encryption key — "+clrOrange+"keep private, never commit"+clrReset)
 				printFileRow(".ward/config.yaml", "config — "+clrGreen+"commit this"+clrReset)
 				printFileRow(".ward/vault/", "encrypted secrets — "+clrGreen+"safe to commit"+clrReset)
 				fmt.Printf("\n  %sWARD_KEY%s=%s%s%s\n", clrYellow, clrReset, clrGray, token, clrReset)
