@@ -14,6 +14,7 @@ const (
 	colorCyan     = "\033[36m"
 	colorGreen    = "\033[32m"
 	colorGray     = "\033[90m"
+	colorPink     = "\033[95m"
 	colorBold     = "\033[1m"
 	colorReset    = "\033[0m"
 )
@@ -57,7 +58,7 @@ func (e *ConflictError) Error() string {
 	)
 	for _, c := range e.Conflicts {
 		// Dot-path on its own line, prominent
-		fmt.Fprintf(&sb, "%s%s%s\n", colorBold, c.Key, colorReset)
+		fmt.Fprintf(&sb, "%s%s%s%s\n", colorBold, colorPink, c.Key, colorReset)
 		for _, s := range c.Sources {
 			if s.Line > 0 {
 				fmt.Fprintf(&sb, "  %s%s%s:%s%d%s\n",
@@ -89,14 +90,22 @@ func (e *ConflictError) Error() string {
 			fmt.Fprintf(&sb, "    %s2.%s hoist it one level — define %s%s%s in a shared ancestor file\n",
 				colorGray, colorReset, colorYellow, movedPath, colorReset)
 		}
-		// Only show scope hint when the path has depth > 1 (scoping to a leaf's parent is not useful)
-		if scopePath != c.Key && grandparent != scopePath {
-			fmt.Fprintf(&sb, "    %s3.%s scope your command to skip the conflict:\n",
+		// Option 3: --on-conflict=override, optionally scoped
+		if grandparent != scopePath {
+			// deep path — also show a scoping example
+			fmt.Fprintf(&sb, "    %s3.%s allow the last file to win, scoped to avoid the conflict:\n",
 				colorGray, colorReset)
-			fmt.Fprintf(&sb, "         %sward exec %s -- <cmd>%s\n",
-				colorCyan, scopePath, colorReset)
-			fmt.Fprintf(&sb, "         %sward envs %s%s\n",
-				colorCyan, scopePath, colorReset)
+			fmt.Fprintf(&sb, "         %sward exec %s.<sibling> --on-conflict=override -- <cmd>%s\n",
+				colorCyan, grandparent, colorReset)
+			fmt.Fprintf(&sb, "         %sward envs %s.<sibling> --on-conflict=override%s\n",
+				colorCyan, grandparent, colorReset)
+		} else {
+			fmt.Fprintf(&sb, "    %s3.%s allow the last file to win:\n",
+				colorGray, colorReset)
+			fmt.Fprintf(&sb, "         %sward exec --on-conflict=override -- <cmd>%s\n",
+				colorCyan, colorReset)
+			fmt.Fprintf(&sb, "         %sward envs --on-conflict=override%s\n",
+				colorCyan, colorReset)
 		}
 		sb.WriteString("\n")
 	}
