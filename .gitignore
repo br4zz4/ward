@@ -1,0 +1,26 @@
+# Binaries
+/ward
+dist/
+
+# Go
+*.test
+*.out
+/vendor/
+
+# Keys and secrets
+*.age
+*.key
+.ward.key
+
+# Editor
+.DS_Store
+*.swp
+*.swo
+.idea/
+.vscode/
+
+# Workspace
+.workspace/
+
+# Backup files
+*.bak

@@ -1,0 +1,52 @@
+package config
+
+import (
+	"fmt"
+	"os"
+
+	"gopkg.in/yaml.v3"
+)
+
+type MergeMode string
+
+const (
+	MergeModeDeep     MergeMode = "merge"
+	MergeModeOverride MergeMode = "override"
+	MergeModeError    MergeMode = "error"
+)
+
+type Encryption struct {
+	Engine  string `yaml:"engine"`
+	KeyEnv  string `yaml:"key_env"`
+	KeyFile string `yaml:"key_file"`
+}
+
+type Source struct {
+	Path string `yaml:"path"`
+}
+
+type Config struct {
+	Encryption Encryption `yaml:"encryption"`
+	Merge      MergeMode  `yaml:"merge"`
+	Sources    []Source   `yaml:"sources"`
+}
+
+func Load(path string) (*Config, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("reading %s: %w", path, err)
+	}
+
+	cfg := &Config{
+		Merge: MergeModeDeep, // default
+	}
+	if err := yaml.Unmarshal(data, cfg); err != nil {
+		return nil, fmt.Errorf("parsing %s: %w", path, err)
+	}
+
+	if cfg.Merge == "" {
+		cfg.Merge = MergeModeDeep
+	}
+
+	return cfg, nil
+}
