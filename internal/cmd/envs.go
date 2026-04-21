@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/oporpino/ward/internal/secrets"
+	"github.com/oporpino/ward/internal/ward"
 	"github.com/spf13/cobra"
 )
 
@@ -35,7 +36,7 @@ func NewEnvsCmd() *cobra.Command {
 				fatal(err)
 			}
 
-			printEnvEntries(entries, anchorPath)
+			printEnvEntries(entries, result, anchorPath)
 		},
 	}
 
@@ -44,7 +45,7 @@ func NewEnvsCmd() *cobra.Command {
 }
 
 // printEnvEntries renders env entries with colour-coded keys and aligned values.
-func printEnvEntries(entries map[string]secrets.EnvEntry, anchorPath string) {
+func printEnvEntries(entries map[string]secrets.EnvEntry, result *ward.MergeResult, anchorPath string) {
 	keys := make([]string, 0, len(entries))
 	for k := range entries {
 		keys = append(keys, k)
@@ -64,12 +65,16 @@ func printEnvEntries(entries map[string]secrets.EnvEntry, anchorPath string) {
 		}
 	}
 
-	// Collect lowercase last-segment key names from outside the anchor scope.
+	// Collect leaf key names that exist in the full tree outside the anchor scope.
+	// This catches keys like NAME that originate from an ancestor file but are
+	// re-defined (and thus overridden) within the anchor scope.
+	rawAncestorKeys := map[string]bool{}
+	collectAncestorKeys(&secrets.Node{Children: result.Tree}, anchorPath, rawAncestorKeys)
+	// rawAncestorKeys uses the original YAML key name (e.g. "name"); map to the
+	// last segment of the env var name for comparison.
 	ancestorLeafKeys := map[string]bool{}
-	for k, e := range entries {
-		if !isFromAnchorScope(e.Origin.File, anchorPath) {
-			ancestorLeafKeys[lastSegment(k)] = true
-		}
+	for k := range rawAncestorKeys {
+		ancestorLeafKeys[strings.ToLower(k)] = true
 	}
 
 	for _, k := range keys {
