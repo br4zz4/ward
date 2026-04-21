@@ -233,14 +233,40 @@ func TestResolveNewPath_with_extension_bare_goes_to_default_dir(t *testing.T) {
 	}
 }
 
-func TestResolveNewPath_slash_path_stays_relative(t *testing.T) {
+func TestResolveNewPath_slash_path_goes_to_default_dir(t *testing.T) {
+	// "infra/prod" has a slash but no leading ./ or ../ → goes inside default vault
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, ".ward", "config.yaml")
 	cfg := &config.Config{}
 
 	got := resolveNewPath("infra/prod.ward", cfgPath, cfg)
-	if got != "infra/prod.ward" {
-		t.Errorf("got %q, want %q", got, "infra/prod.ward")
+	want := filepath.Join(dir, ".ward", "vault", "infra", "prod.ward")
+	if got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+func TestResolveNewPath_dotslash_path_stays_relative(t *testing.T) {
+	// "./infra/prod" has explicit ./ → external path, use as-is
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, ".ward", "config.yaml")
+	cfg := &config.Config{}
+
+	got := resolveNewPath("./infra/prod.ward", cfgPath, cfg)
+	if got != "./infra/prod.ward" {
+		t.Errorf("got %q, want %q", got, "./infra/prod.ward")
+	}
+}
+
+func TestResolveNewPath_dotdot_path_stays_relative(t *testing.T) {
+	// "../.commons/ruby/staging" → external path, use as-is
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, ".ward", "config.yaml")
+	cfg := &config.Config{}
+
+	got := resolveNewPath("../.commons/ruby/staging", cfgPath, cfg)
+	if got != "../.commons/ruby/staging.ward" {
+		t.Errorf("got %q, want %q", got, "../.commons/ruby/staging.ward")
 	}
 }
 

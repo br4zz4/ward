@@ -109,12 +109,14 @@ func resolveNewPath(arg, cfgPath string, cfg *config.Config) string {
 		defaultDir = ".ward/vault"
 	}
 
-	// Any path with a slash → use as-is relative to CWD (just add .ward if missing)
-	if strings.ContainsRune(arg, '/') {
+	// Paths starting with ./ or ../ or a hidden dir (e.g. ".commons/...") → explicit
+	// relative path, use as-is
+	if strings.HasPrefix(arg, "./") || strings.HasPrefix(arg, "../") || strings.HasPrefix(arg, ".") {
 		return strings.TrimSuffix(arg, ".ward") + ".ward"
 	}
 
-	// Strip .ward suffix if present before joining
+	// Everything else (bare name or bare subpath like "environments/staging")
+	// → place inside the default vault dir
 	name := strings.TrimSuffix(arg, ".ward")
 
 	// Resolve default_dir relative to the project root (parent of .ward/)
