@@ -183,3 +183,58 @@ func TestResolveNewPath_custom_default_dir(t *testing.T) {
 		t.Errorf("got %q, want %q", got, want)
 	}
 }
+
+func TestResolveNewPath_dot_slash_path_no_extension_stays_relative(t *testing.T) {
+	// ward new ./.commons/ward/vaults/ruby/staging
+	// has slash but no .ward suffix → use as-is with .ward appended, relative to CWD
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, ".ward", "config.yaml")
+	cfg := &config.Config{}
+
+	got := resolveNewPath("./.commons/ward/vaults/ruby/staging", cfgPath, cfg)
+	if got != "./.commons/ward/vaults/ruby/staging.ward" {
+		t.Errorf("got %q, want %q", got, "./.commons/ward/vaults/ruby/staging.ward")
+	}
+}
+
+func TestResolveNewPath_slash_path_no_extension_stays_relative(t *testing.T) {
+	// ward new .commons/ward/vaults/ruby/staging (without leading ./)
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, ".ward", "config.yaml")
+	cfg := &config.Config{}
+
+	got := resolveNewPath(".commons/ward/vaults/ruby/staging", cfgPath, cfg)
+	if got != ".commons/ward/vaults/ruby/staging.ward" {
+		t.Errorf("got %q, want %q", got, ".commons/ward/vaults/ruby/staging.ward")
+	}
+}
+
+func TestMaybeAddSource_outside_project_root_uses_dotdot(t *testing.T) {
+	// Simulates: projectRoot = dir, newFile is in dir/../sibling/vault/
+	// The config is at dir/.ward/config.yaml
+	// newFile dir is outside projectRoot → path in config must start with ../
+	parent := t.TempDir()
+	projectDir := filepath.Join(parent, "myapp")
+	sibling := filepath.Join(parent, ".commons", "ward", "vaults", "ruby")
+
+	if err := os.MkdirAll(filepath.Join(projectDir, ".ward"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	cfgPath := writeWardYAML(t, projectDir, "  - path: ./.ward/vault\n")
+
+	newFile := filepath.Join(sibling, "staging.ward")
+	if err := maybeAddSource(cfgPath, newFile); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	sources := readSources(t, cfgPath)
+	if len(sources) != 2 {
+		t.Fatalf("expected 2 sources, got %d: %v", len(sources), sources)
+	}
+	if !strings.HasPrefix(sources[1], "..") {
+		t.Errorf("expected path outside project root to start with '..', got %q", sources[1])
+	}
+	if strings.Contains(sources[1], "//") {
+		t.Errorf("path contains double slash: %q", sources[1])
+	}
+}

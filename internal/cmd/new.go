@@ -109,9 +109,9 @@ func resolveNewPath(arg, cfgPath string, cfg *config.Config) string {
 		defaultDir = ".ward/vault"
 	}
 
-	// If arg already has .ward extension and a slash → treat as path relative to CWD
-	if strings.HasSuffix(arg, ".ward") && strings.ContainsRune(arg, '/') {
-		return arg
+	// Any path with a slash → use as-is relative to CWD (just add .ward if missing)
+	if strings.ContainsRune(arg, '/') {
+		return strings.TrimSuffix(arg, ".ward") + ".ward"
 	}
 
 	// Strip .ward suffix if present before joining
