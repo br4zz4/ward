@@ -29,7 +29,7 @@ jobs:
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
 
       - name: push to packagecloud
-        if: ${{ secrets.PACKAGECLOUD_TOKEN != '' }}
+        if: env.PACKAGECLOUD_TOKEN != ''
         run: |
           sudo gem install package_cloud
           for f in dist/*.deb; do
