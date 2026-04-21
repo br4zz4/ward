@@ -396,8 +396,12 @@ func collectListLines(node *secrets.Node, indent int, conflicts map[string]secre
 			} else if isOverrides {
 				color = clrOrange
 			}
+			colonClr := color // colon matches key color
+			if isOverrides {
+				colonClr = clrGray
+			}
 			*lines = append(*lines, listLine{
-				text:        fmt.Sprintf("%s%s%s:%s %s%v%s", indentStr, color, k, clrReset, clrGrayLight, child.Value, clrReset),
+				text:        fmt.Sprintf("%s%s%s%s%s:%s %s%v%s", indentStr, color, k, clrReset, colonClr, clrReset, clrGrayLight, child.Value, clrReset),
 				originFile:  child.Origin.File,
 				originLine:  child.Origin.Line,
 				envConflict: isEnvConflict,
