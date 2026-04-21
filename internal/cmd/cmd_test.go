@@ -107,9 +107,12 @@ func TestCmd_exec_injects_env_vars(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("exit %d\nstdout: %s", code, out)
 	}
-	// With anchor, exec uses relative names (same as ward envs)
-	if !strings.Contains(out, "STAGING_DATABASE_URL=") {
-		t.Errorf("expected STAGING_DATABASE_URL injected, got: %q", out)
+	// With file anchor, exec strips the anchor's own level → DATABASE_URL not STAGING_DATABASE_URL
+	if !strings.Contains(out, "DATABASE_URL=") {
+		t.Errorf("expected DATABASE_URL injected, got: %q", out)
+	}
+	if strings.Contains(out, "STAGING_DATABASE_URL=") {
+		t.Errorf("unexpected STAGING_DATABASE_URL — should be relative (DATABASE_URL), got: %q", out)
 	}
 }
 

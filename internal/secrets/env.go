@@ -73,22 +73,29 @@ func anchorMapDepth(anchor map[string]interface{}) int {
 	return max
 }
 
-// descendToContainerWithAnchor descends through the tree following the anchor structure,
-// stopping when remaining depth == 1. Returns both the container node map and the
-// corresponding anchor data at that level.
+// descendToContainerWithAnchor descends through the tree following the anchor
+// structure until it reaches the deepest map level — the container whose
+// children are the actual secret values. It stops one level above the leaves
+// of the anchor's deepest branch.
 func descendToContainerWithAnchor(nodes map[string]*Node, anchor map[string]interface{}, depth int) (map[string]*Node, map[string]interface{}) {
-	if depth <= 1 {
-		return nodes, anchor
-	}
+	// Find the single map-valued key at this level to descend into.
+	// If there are zero or multiple map keys we've reached the container level.
+	var mapKey string
+	mapCount := 0
 	for k, v := range anchor {
-		if m, ok := v.(map[string]interface{}); ok {
-			node, ok := nodes[k]
-			if ok && node.Children != nil {
-				return descendToContainerWithAnchor(node.Children, m, depth-1)
-			}
+		if _, ok := v.(map[string]interface{}); ok {
+			mapKey = k
+			mapCount++
 		}
 	}
-	return nodes, anchor
+	if mapCount != 1 {
+		return nodes, anchor
+	}
+	child, ok := nodes[mapKey]
+	if !ok || child.Children == nil {
+		return nodes, anchor
+	}
+	return descendToContainerWithAnchor(child.Children, anchor[mapKey].(map[string]interface{}), depth-1)
 }
 
 // collectEnvEntriesWithAnchorScope collects all leaves from nodes.
