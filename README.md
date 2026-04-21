@@ -57,18 +57,20 @@ brew install --cask ward
 
 Shell completions are installed automatically.
 
-**Debian / Ubuntu (APT)**
+**Debian / Ubuntu**
 
 ```sh
-curl -s https://packagecloud.io/install/repositories/oporpino/ward/script.deb.sh | sudo bash
-sudo apt install ward
+curl -sL $(curl -s https://api.github.com/repos/oporpino/ward/releases/latest \
+  | grep browser_download_url | grep linux_amd64.deb | cut -d'"' -f4) -o ward.deb
+sudo dpkg -i ward.deb
 ```
 
-**Alpine Linux (APK)**
+**Alpine Linux**
 
 ```sh
-curl -s https://packagecloud.io/install/repositories/oporpino/ward/script.alpine.sh | sudo bash
-apk add ward
+curl -sL $(curl -s https://api.github.com/repos/oporpino/ward/releases/latest \
+  | grep browser_download_url | grep linux_amd64.apk | cut -d'"' -f4) -o ward.apk
+apk add --allow-untrusted ward.apk
 ```
 
 **Go**
