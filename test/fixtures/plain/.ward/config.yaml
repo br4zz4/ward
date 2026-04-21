@@ -1,5 +1,5 @@
 encryption:
-  key_file: .ward.key
+  key_file: sample.key
 
 vaults:
-  - path: ./secrets
+  - path: .ward/vault
