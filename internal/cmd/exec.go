@@ -13,13 +13,13 @@ import (
 
 func NewExecCmd() *cobra.Command {
 	c := &cobra.Command{
-		Use:                "exec [anchor.ward] -- <cmd> [args...]",
+		Use:                "exec [--prefixed] [anchor.ward] -- <cmd> [args...]",
 		Short:              "Merge secrets and inject as env vars, then run a command",
 		Args:               cobra.MinimumNArgs(1),
 		DisableFlagParsing: true,
 		Run: func(_ *cobra.Command, args []string) {
-			// Parse: optional anchor before "--", then command after "--"
-			anchorPath, cmdArgs := parseExecArgs(args)
+			// Parse: optional --prefixed flag, optional anchor before "--", then command after "--"
+			anchorPath, cmdArgs, prefixed := parseExecArgs(args)
 
 			if len(cmdArgs) == 0 {
 				fmt.Fprintln(os.Stderr, "ward: exec requires a command after --")
@@ -37,7 +37,7 @@ func NewExecCmd() *cobra.Command {
 			}
 
 			var envVars map[string]string
-			if anchorPath != "" {
+			if !prefixed && anchorPath != "" {
 				info, _ := os.Stat(anchorPath)
 				dec := sops.MockDecryptor{}
 				if info != nil && info.IsDir() {
@@ -77,20 +77,33 @@ func NewExecCmd() *cobra.Command {
 	return c
 }
 
-// parseExecArgs splits [anchor.ward] -- <cmd> [args...]
-// Returns anchor path (empty if not provided) and command args.
-func parseExecArgs(args []string) (anchor string, cmdArgs []string) {
-	for i, a := range args {
+// parseExecArgs splits [--prefixed] [anchor.ward] -- <cmd> [args...]
+// Returns anchor path, command args, and whether --prefixed was set.
+func parseExecArgs(args []string) (anchor string, cmdArgs []string, prefixed bool) {
+	rest := args
+	// Check for --prefixed before "--"
+	for i, a := range rest {
 		if a == "--" {
-			if i > 0 && strings.HasSuffix(args[0], ".ward") {
-				anchor = args[0]
+			break
+		}
+		if a == "--prefixed" {
+			prefixed = true
+			rest = append(rest[:i], rest[i+1:]...)
+			break
+		}
+	}
+
+	for i, a := range rest {
+		if a == "--" {
+			if i > 0 && strings.HasSuffix(rest[0], ".ward") {
+				anchor = rest[0]
 			}
-			cmdArgs = args[i+1:]
+			cmdArgs = rest[i+1:]
 			return
 		}
 	}
 	// No "--" found — treat all as command
-	cmdArgs = args
+	cmdArgs = rest
 	return
 }
 
