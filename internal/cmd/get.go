@@ -10,33 +10,42 @@ import (
 
 func NewGetCmd() *cobra.Command {
 	c := &cobra.Command{
-		Use:               "get [dot.path]",
+		Use:               "get <dot.path>",
 		Short:             "Return the merged value at a dot-path",
 		Args:              cobra.MaximumNArgs(1),
 		ValidArgsFunction: completeDotPaths,
 		Run: func(_ *cobra.Command, args []string) {
+			if len(args) == 0 {
+				fmt.Fprintf(os.Stderr, "\n  %s✗ missing dot-path%s\n\n", clrLightRed+clrBold, clrReset)
+				fmt.Fprintf(os.Stderr, "  usage: %sward get <dot.path>%s\n\n", clrCyan, clrReset)
+				fmt.Fprintf(os.Stderr, "  example: %sward get company.sectors.one.staging.database_url%s\n\n", clrGray, clrReset)
+				os.Exit(1)
+			}
+
+			dotPath := args[0]
+
 			eng, err := newEngine()
 			if err != nil {
 				fatal(err)
 			}
-			result, err := eng.Merge()
+			result, err := eng.MergeWithConflict("", dotPath)
 			if err != nil {
 				fatal(err)
 			}
 
-			if len(args) == 0 {
-				// No dot-path: print entire tree
-				root := &secrets.Node{Children: result.Tree}
-				printTree(root, 0)
-				return
-			}
-
-			node, err := eng.GetAtPath(result, args[0])
+			node, err := eng.GetAtPath(result, dotPath)
 			if err != nil {
 				fmt.Fprintln(os.Stderr, "ward:", err)
 				os.Exit(1)
 			}
-			printTree(node, 0)
+
+			if node.Children == nil {
+				// leaf — print raw value
+				fmt.Println(node.Value)
+				return
+			}
+			// subtree — print tree
+			printTree(&secrets.Node{Children: map[string]*secrets.Node{lastSegment(dotPath): node}}, 0)
 		},
 	}
 
