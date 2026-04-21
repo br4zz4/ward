@@ -3,6 +3,7 @@ package cmd
 import (
 	"bufio"
 	"bytes"
+	"encoding/base64"
 	"fmt"
 	"os"
 	"os/exec"
@@ -18,7 +19,7 @@ const wardYAMLTemplate = `encryption:
 merge: merge
 
 sources:
-  - path: ./secrets
+  - path: ./.secrets
 `
 
 const wardFileTemplate = `myapp:
@@ -48,20 +49,26 @@ func NewInitCmd() *cobra.Command {
 				fatal(err)
 			}
 
-			// 4. Create secrets/ and encrypt the initial .ward file
-			if err := os.MkdirAll("secrets", 0755); err != nil {
+			// 4. Create .secrets/ and encrypt the initial .ward file
+			if err := os.MkdirAll(".secrets", 0755); err != nil {
 				fatal(err)
 			}
-			if err := encryptIfAbsent("secrets/secrets.ward", wardFileTemplate, ".ward.key", pubKey); err != nil {
+			if err := encryptIfAbsent(".secrets/.ward", wardFileTemplate, ".ward.key", pubKey); err != nil {
 				fatal(err)
 			}
 
-			fmt.Printf("\n%s  ward is ready%s\n\n", clrGreen+clrBold, clrReset)
-			fmt.Printf("  %s.ward.key%s     age key — %skeep private, never commit%s\n", clrCyan, clrReset, clrOrange, clrReset)
-			fmt.Printf("  %sward.yaml%s      config — commit this\n", clrCyan, clrReset)
-			fmt.Printf("  %ssecrets/%s       encrypted secrets — safe to commit\n\n", clrCyan, clrReset)
-			fmt.Printf("  %snext:%s edit your first secrets file\n\n", clrGray, clrReset)
-			fmt.Printf("    %sward edit secrets/secrets.ward%s\n\n", clrBold, clrReset)
+			// 5. Print WARD_KEY token for CI
+			token, err := encodeWardKey(".ward.key")
+			if err == nil {
+				fmt.Printf("\n%s  ward is ready%s\n\n", clrGreen+clrBold, clrReset)
+				fmt.Printf("  %s.ward.key%s     age key — %skeep private, never commit%s\n", clrCyan, clrReset, clrOrange, clrReset)
+				fmt.Printf("  %sward.yaml%s      config — commit this\n", clrCyan, clrReset)
+				fmt.Printf("  %s.secrets/%s      encrypted secrets — safe to commit\n\n", clrCyan, clrReset)
+				fmt.Printf("  %sWARD_KEY%s=%s%s%s\n", clrYellow, clrReset, clrGray, token, clrReset)
+				fmt.Printf("  %s↑ copy this to CI / secrets manager%s\n\n", clrGray, clrReset)
+				fmt.Printf("  %snext:%s edit your first secrets file\n\n", clrGray, clrReset)
+				fmt.Printf("    %sward edit .secrets/.ward%s\n\n", clrBold, clrReset)
+			}
 		},
 	}
 }
@@ -148,6 +155,21 @@ func encryptIfAbsent(path, content, keyFile, pubKey string) error {
 	}
 	fmt.Printf("ward: created %s (encrypted)\n", path)
 	return nil
+}
+
+// encodeWardKey reads a .ward.key file and returns a portable ward-<base64url> token.
+func encodeWardKey(path string) (string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	return "ward-" + base64.URLEncoding.EncodeToString(data), nil
+}
+
+// decodeWardKey decodes a ward-<base64url> token into age key file contents.
+func decodeWardKey(token string) ([]byte, error) {
+	token = strings.TrimPrefix(token, "ward-")
+	return base64.URLEncoding.DecodeString(token)
 }
 
 func writeIfAbsent(path, content string) error {

@@ -33,6 +33,7 @@ func main() {
 		cmd.NewExecCmd(),
 		cmd.NewInitCmd(),
 		cmd.NewEditCmd(),
+		cmd.NewNewCmd(),
 		cmd.NewRawCmd(),
 		cmd.NewExportCmd(),
 		cmd.NewOverrideCmd(),

@@ -50,16 +50,61 @@ func newEngine() (*ward.Engine, error) {
 }
 
 // decryptorFor returns the appropriate Decryptor based on the config.
-// When a key_file is configured it must exist — returns an error otherwise.
-// Falls back to MockDecryptor only when no encryption is configured at all.
+// Priority: WARD_KEY env var → key_env (user-defined env var) → key_file → MockDecryptor.
 func decryptorFor(cfg *config.Config) (sops.Decryptor, error) {
+	// 1. WARD_KEY — portable base64 token, always checked first (CI-friendly)
+	if token := os.Getenv("WARD_KEY"); token != "" {
+		keyFile, err := writeTempKey(token)
+		if err != nil {
+			return nil, fmt.Errorf("decoding WARD_KEY: %w", err)
+		}
+		return sops.SopsDecryptor{KeyFile: keyFile}, nil
+	}
+
+	// 2. key_env — user-defined env var name containing raw age key content
+	if cfg.Encryption.KeyEnv != "" {
+		content := os.Getenv(cfg.Encryption.KeyEnv)
+		if content == "" {
+			return nil, fmt.Errorf("env var %q is empty or not set", cfg.Encryption.KeyEnv)
+		}
+		keyFile, err := writeTempKeyRaw([]byte(content))
+		if err != nil {
+			return nil, fmt.Errorf("writing temp key from %s: %w", cfg.Encryption.KeyEnv, err)
+		}
+		return sops.SopsDecryptor{KeyFile: keyFile}, nil
+	}
+
+	// 3. key_file
 	if cfg.Encryption.KeyFile != "" {
 		if _, err := os.Stat(cfg.Encryption.KeyFile); err != nil {
 			return nil, fmt.Errorf("key file %q not found — run `ward init` or copy your .ward.key", cfg.Encryption.KeyFile)
 		}
 		return sops.SopsDecryptor{KeyFile: cfg.Encryption.KeyFile}, nil
 	}
+
 	return sops.MockDecryptor{}, nil
+}
+
+// writeTempKey decodes a ward-<base64url> token and writes it to a temp file.
+func writeTempKey(token string) (string, error) {
+	data, err := decodeWardKey(token)
+	if err != nil {
+		return "", err
+	}
+	return writeTempKeyRaw(data)
+}
+
+// writeTempKeyRaw writes raw age key content to a temp file and returns its path.
+func writeTempKeyRaw(data []byte) (string, error) {
+	f, err := os.CreateTemp("", "ward-key-*")
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	if _, err := f.Write(data); err != nil {
+		return "", err
+	}
+	return f.Name(), nil
 }
 
 // requireWardFile returns an error if path is not an existing .ward file.
