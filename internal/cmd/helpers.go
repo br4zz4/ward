@@ -403,7 +403,7 @@ func collectListLines(node *secrets.Node, indent int, conflicts map[string]secre
 	for _, k := range mapKeys {
 		child := node.Children[k]
 		*lines = append(*lines, listLine{
-			text: fmt.Sprintf("%s%s%s%s:", indentStr, clrBold, k, clrReset),
+			text: fmt.Sprintf("%s%s%s%s%s:%s", indentStr, clrBold, clrCyan, k, clrReset, clrReset),
 		})
 		collectListLines(child, indent+1, conflicts, dotJoin(dotPrefix, k), envCollisions, lines)
 	}
