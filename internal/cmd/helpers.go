@@ -224,7 +224,7 @@ const (
 	clrBold       = "\033[1m"
 	clrDim        = "\033[2m"
 	clrGray       = "\033[90m"         // dark gray — ghosted text
-	clrGrayLight  = "\033[37m"         // light gray — normal values
+	clrGrayLight  = "\033[36m"         // cyan — normal values
 	clrCyan       = "\033[36m"         // cyan — normal file paths
 	clrCyanDim    = "\033[2;36m"       // dim cyan — ghosted file path (unused, kept for ref)
 	clrYellow     = "\033[33m"
