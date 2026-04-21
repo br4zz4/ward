@@ -266,7 +266,7 @@ func printTreeWithOrigin(node *secrets.Node, indent int, conflicts map[string]se
 
 	maxLen := 0
 	for _, l := range lines {
-		if l.origin != "" && !l.extra && visibleLen(l.text) > maxLen {
+		if l.origin != "" && visibleLen(l.text) > maxLen {
 			maxLen = visibleLen(l.text)
 		}
 	}
@@ -274,7 +274,7 @@ func printTreeWithOrigin(node *secrets.Node, indent int, conflicts map[string]se
 	for _, l := range lines {
 		if l.origin != "" {
 			vl := visibleLen(l.text)
-			pad := maxLen - vl + 2
+			pad := maxLen - vl + 6
 			if pad < 1 {
 				pad = 1
 			}
@@ -344,15 +344,16 @@ func collectListLines(node *secrets.Node, indent int, conflicts map[string]secre
 				origin:   lastOrigin,
 				conflict: true,
 			})
-			// Extra lines: all other sources that lost
+			// Extra lines: all other sources that lost — same indent, dimmed
+			clrDim := "\033[2m"
 			for _, src := range c.Sources[:len(c.Sources)-1] {
-				srcOrigin := fmt.Sprintf("%s%s%s:%s%d%s", clrCyan, src.File, clrReset, clrLightRed, src.Line, clrReset)
+				srcOrigin := fmt.Sprintf("%s%s%s%s:%s%d%s", clrDim, clrGray, src.File, clrReset, clrGray, src.Line, clrReset)
 				snippet := src.Snippet
 				if snippet == "" {
 					snippet = src.File
 				}
 				*lines = append(*lines, listLine{
-					text:     fmt.Sprintf("%s  %s%s%s", indentStr, clrGray, snippet, clrReset),
+					text:     fmt.Sprintf("%s%s%s%s", indentStr, clrDim, snippet, clrReset),
 					origin:   srcOrigin,
 					conflict: true,
 					extra:    true,
