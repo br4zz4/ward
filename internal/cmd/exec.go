@@ -10,13 +10,12 @@ import (
 )
 
 func NewExecCmd() *cobra.Command {
-	c := &cobra.Command{
+	return &cobra.Command{
 		Use:                "exec [--prefixed] [anchor.ward] -- <cmd> [args...]",
 		Short:              "Merge secrets and inject as env vars, then run a command",
 		Args:               cobra.MinimumNArgs(1),
 		DisableFlagParsing: true,
 		Run: func(_ *cobra.Command, args []string) {
-			// Parse: optional --prefixed flag, optional anchor before "--", then command after "--"
 			anchorPath, cmdArgs, prefixed := parseExecArgs(args)
 
 			if len(cmdArgs) == 0 {
@@ -24,17 +23,18 @@ func NewExecCmd() *cobra.Command {
 				os.Exit(1)
 			}
 
-			cfg, err := loadConfig()
+			eng, err := newEngine()
 			if err != nil {
 				fatal(err)
 			}
-
-			tree, err := loadAndMerge(cfg, anchorPath)
+			result, err := eng.Merge(anchorPath)
 			if err != nil {
 				fatal(err)
 			}
-
-			envVars := resolveEnvVars(tree, anchorPath, prefixed)
+			envVars, err := eng.EnvVarsMap(result, prefixed)
+			if err != nil {
+				fatal(err)
+			}
 
 			cmd := exec.Command(cmdArgs[0], cmdArgs[1:]...)
 			cmd.Stdout = os.Stdout
@@ -50,15 +50,13 @@ func NewExecCmd() *cobra.Command {
 			}
 		},
 	}
-
-	return c
 }
 
-// parseExecArgs splits [--prefixed] [anchor.ward] -- <cmd> [args...]
-// Returns anchor path, command args, and whether --prefixed was set.
+// parseExecArgs splits [--prefixed] [anchor] -- <cmd> [args...]
 func parseExecArgs(args []string) (anchor string, cmdArgs []string, prefixed bool) {
-	rest := args
-	// Check for --prefixed before "--"
+	rest := make([]string, len(args))
+	copy(rest, args)
+
 	for i, a := range rest {
 		if a == "--" {
 			break
@@ -79,27 +77,23 @@ func parseExecArgs(args []string) (anchor string, cmdArgs []string, prefixed boo
 			return
 		}
 	}
-	// No "--" found — treat all as command
 	cmdArgs = rest
 	return
 }
 
-// mergeEnv returns the current environment with ward env vars appended/overriding.
-func mergeEnv(current []string, ward map[string]string) []string {
-	wardKeys := make(map[string]bool, len(ward))
-	for k := range ward {
+// mergeEnv returns the process environment with ward vars appended/overriding.
+func mergeEnv(current []string, wardVars map[string]string) []string {
+	wardKeys := make(map[string]bool, len(wardVars))
+	for k := range wardVars {
 		wardKeys[k] = true
 	}
-
-	// Keep existing env vars that ward doesn't override
-	result := make([]string, 0, len(current)+len(ward))
+	result := make([]string, 0, len(current)+len(wardVars))
 	for _, e := range current {
-		parts := strings.SplitN(e, "=", 2)
-		if !wardKeys[parts[0]] {
+		if k, _, ok := strings.Cut(e, "="); ok && !wardKeys[k] {
 			result = append(result, e)
 		}
 	}
-	for k, v := range ward {
+	for k, v := range wardVars {
 		result = append(result, k+"="+v)
 	}
 	return result

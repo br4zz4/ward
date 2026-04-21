@@ -5,9 +5,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/oporpino/ward/internal/config"
 	"github.com/oporpino/ward/internal/secrets"
-	"github.com/oporpino/ward/internal/sops"
 	"github.com/spf13/cobra"
 )
 
@@ -22,43 +20,24 @@ func NewInspectCmd() *cobra.Command {
 				anchorPath = args[0]
 			}
 
-			cfg, err := loadConfig()
+			eng, err := newEngine()
 			if err != nil {
 				fatal(err)
 			}
 
-			dec := sops.MockDecryptor{}
-			paths, err := secrets.Discover(sourcePaths(cfg))
-			if err != nil {
-				fatal(err)
-			}
-			files, err := secrets.LoadAll(paths, dec)
-			if err != nil {
-				fatal(err)
-			}
-
-			ordered := buildOrderedFiles(cfg, anchorPath, files)
-			if ordered == nil {
-				fatal(fmt.Errorf("anchor not found: %s", anchorPath))
-			}
-
-			_, mergeErr := secrets.Merge(ordered, config.MergeModeError)
-			if mergeErr == nil {
+			if err := eng.Inspect(anchorPath); err == nil {
 				fmt.Printf("%s✓%s no conflicts found\n", clrGreen, clrReset)
 				return
+			} else if ce, ok := err.(*secrets.ConflictError); ok {
+				lines := strings.SplitN(ce.Error(), "\n", 2)
+				fmt.Fprintf(os.Stderr, "%s%s%s\n", clrLightRed, lines[0], clrReset)
+				if len(lines) > 1 {
+					fmt.Fprintln(os.Stderr, lines[1])
+				}
+				os.Exit(1)
+			} else {
+				fatal(err)
 			}
-
-			ce, ok := mergeErr.(*secrets.ConflictError)
-			if !ok {
-				fatal(mergeErr)
-			}
-
-			lines := strings.SplitN(ce.Error(), "\n", 2)
-			fmt.Fprintf(os.Stderr, "%s%s%s\n", clrLightRed, lines[0], clrReset)
-			if len(lines) > 1 {
-				fmt.Fprintln(os.Stderr, lines[1])
-			}
-			os.Exit(1)
 		},
 	}
 }

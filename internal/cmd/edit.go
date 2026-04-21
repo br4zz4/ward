@@ -18,11 +18,15 @@ func NewEditCmd() *cobra.Command {
 			if len(args) == 1 {
 				path = args[0]
 			} else {
-				cfg, err := loadConfig()
-				if err != nil || len(cfg.Sources) == 0 {
+				eng, err := newEngine()
+				if err != nil {
 					fatal(fmt.Errorf("no file specified and no sources configured"))
 				}
-				path = cfg.Sources[0].Path
+				sources := eng.SourcePaths()
+				if len(sources) == 0 {
+					fatal(fmt.Errorf("no file specified and no sources configured"))
+				}
+				path = sources[0]
 			}
 
 			editor := os.Getenv("EDITOR")
