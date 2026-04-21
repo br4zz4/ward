@@ -1,7 +1,9 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
+	"os"
 
 	"github.com/oporpino/ward/internal/secrets"
 	"github.com/spf13/cobra"
@@ -41,6 +43,18 @@ func NewViewCmd() *cobra.Command {
 				printTreeWithOrigin(node, 1, conflicts, args[0])
 			} else {
 				printTreeWithOrigin(&secrets.Node{Children: result.Tree}, 0, conflicts, "")
+			}
+
+			// Warn about env var collisions (only when no dot-path scope is given).
+			if len(args) == 0 {
+				_, envErr := eng.EnvVars(result, false)
+				if envErr != nil {
+					var ece *secrets.EnvConflictError
+					if errors.As(envErr, &ece) {
+						fmt.Fprintf(os.Stderr, "\n%s⚠ env var collisions detected%s — run %sward envs%s to see details\n",
+							clrYellow+clrBold, clrReset, clrCyan, clrReset)
+					}
+				}
 			}
 		},
 	}
