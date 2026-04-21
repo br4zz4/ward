@@ -11,21 +11,16 @@ import (
 
 func NewInspectCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "inspect [anchor.ward|dir]",
-		Short: "Detect conflicts across all files (or within an anchor scope)",
-		Args:  cobra.MaximumNArgs(1),
-		Run: func(_ *cobra.Command, args []string) {
-			anchorPath := ""
-			if len(args) == 1 {
-				anchorPath = args[0]
-			}
-
+		Use:   "inspect",
+		Short: "Detect conflicts across all files",
+		Args:  cobra.NoArgs,
+		Run: func(_ *cobra.Command, _ []string) {
 			eng, err := newEngine()
 			if err != nil {
 				fatal(err)
 			}
 
-			if err := eng.Inspect(anchorPath); err == nil {
+			if err := eng.Inspect(); err == nil {
 				fmt.Printf("%s✓%s no conflicts found\n", clrGreen, clrReset)
 				return
 			} else if ce, ok := err.(*secrets.ConflictError); ok {

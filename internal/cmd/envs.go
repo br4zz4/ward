@@ -5,32 +5,37 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/oporpino/ward/internal/config"
 	"github.com/oporpino/ward/internal/secrets"
+	"github.com/oporpino/ward/internal/ward"
 	"github.com/spf13/cobra"
 )
 
 func NewEnvsCmd() *cobra.Command {
 	var prefixed bool
+	var onConflict string
 
 	c := &cobra.Command{
-		Use:   "envs [anchor.ward]",
-		Short: "Show the env vars that would be injected by exec",
-		Args:  cobra.MaximumNArgs(1),
+		Use:               "envs [--prefixed] [--on-conflict=error|override] [dot.path]",
+		Short:             "Show the env vars that would be injected by exec",
+		Args:              cobra.MaximumNArgs(1),
+		ValidArgsFunction: completeDotPaths,
 		Run: func(_ *cobra.Command, args []string) {
-			anchorPath := ""
+			dotPath := ""
 			if len(args) == 1 {
-				anchorPath = args[0]
+				dotPath = args[0]
 			}
 
 			eng, err := newEngine()
 			if err != nil {
 				fatal(err)
 			}
-			result, err := eng.Merge(anchorPath)
+			result, err := eng.MergeWithConflict(config.OnConflict(onConflict))
 			if err != nil {
 				fatal(err)
 			}
-			entries, err := eng.EnvVars(result, prefixed)
+
+			entries, err := resolveEnvEntries(eng, result, dotPath, prefixed)
 			if err != nil {
 				fatal(err)
 			}
@@ -40,7 +45,27 @@ func NewEnvsCmd() *cobra.Command {
 	}
 
 	c.Flags().BoolVar(&prefixed, "prefixed", false, "use full path env var names")
+	c.Flags().StringVar(&onConflict, "on-conflict", "", "conflict mode: error (default) | override")
 	return c
+}
+
+// resolveEnvEntries scopes the result to dotPath (if given) and returns env entries.
+func resolveEnvEntries(eng *ward.Engine, result *ward.MergeResult, dotPath string, prefixed bool) (map[string]secrets.EnvEntry, error) {
+	if dotPath == "" {
+		return eng.EnvVars(result, prefixed)
+	}
+	node, err := eng.GetAtPath(result, dotPath)
+	if err != nil {
+		return nil, err
+	}
+	if node.Children == nil {
+		key := strings.ToUpper(lastSegment(dotPath))
+		return map[string]secrets.EnvEntry{
+			key: {Value: fmt.Sprintf("%v", node.Value)},
+		}, nil
+	}
+	scoped := &ward.MergeResult{Tree: node.Children}
+	return eng.EnvVars(scoped, prefixed)
 }
 
 // printEnvEntries renders env entries with colour-coded keys and aligned values.

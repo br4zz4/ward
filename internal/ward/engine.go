@@ -27,40 +27,40 @@ func NewEngine(cfg *config.Config, dec sops.Decryptor) *Engine {
 // MergeResult is the outcome of a load-and-merge operation.
 type MergeResult struct {
 	Tree        map[string]*secrets.Node
-	AnchorPath  string
 	ConflictErr *secrets.ConflictError // non-nil only when called via MergeForView
 }
 
-// Merge loads all .ward files for the given anchor (empty = all sources) and
-// merges them using the mode from the configuration.
-func (e *Engine) Merge(anchorPath string) (*MergeResult, error) {
+// Merge loads all .ward files from all vaults and merges them using the
+// on_conflict mode from the configuration.
+func (e *Engine) Merge() (*MergeResult, error) {
+	return e.MergeWithConflict("")
+}
+
+// MergeWithConflict is like Merge but allows overriding the on_conflict behaviour
+// via the CLI flag. An empty onConflict falls back to the config value.
+func (e *Engine) MergeWithConflict(onConflict config.OnConflict) (*MergeResult, error) {
 	files, err := e.load()
 	if err != nil {
 		return nil, err
 	}
-	ordered, err := e.order(anchorPath, files)
+	ordered := secrets.SortBySpecificity(files)
+	mode := e.conflictMode(onConflict)
+	tree, err := secrets.Merge(ordered, mode)
 	if err != nil {
 		return nil, err
 	}
-	tree, err := secrets.Merge(ordered, e.mergeMode(anchorPath))
-	if err != nil {
-		return nil, err
-	}
-	return &MergeResult{Tree: tree, AnchorPath: anchorPath}, nil
+	return &MergeResult{Tree: tree}, nil
 }
 
 // MergeForView is like Merge but always produces a complete tree even when
 // conflicts exist. Conflict information is attached to the result so the
 // presentation layer can highlight conflicting keys.
-func (e *Engine) MergeForView(anchorPath string) (*MergeResult, error) {
+func (e *Engine) MergeForView() (*MergeResult, error) {
 	files, err := e.load()
 	if err != nil {
 		return nil, err
 	}
-	ordered, err := e.order(anchorPath, files)
-	if err != nil {
-		return nil, err
-	}
+	ordered := secrets.SortBySpecificity(files)
 
 	// First pass: detect conflicts without blocking.
 	var conflictErr *secrets.ConflictError
@@ -77,43 +77,28 @@ func (e *Engine) MergeForView(anchorPath string) (*MergeResult, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &MergeResult{Tree: tree, AnchorPath: anchorPath, ConflictErr: conflictErr}, nil
+	return &MergeResult{Tree: tree, ConflictErr: conflictErr}, nil
 }
 
 // Inspect runs a conflict-only merge and returns a ConflictError if any conflicts
 // exist, or nil when the set of files is clean.
-func (e *Engine) Inspect(anchorPath string) error {
+func (e *Engine) Inspect() error {
 	files, err := e.load()
 	if err != nil {
 		return err
 	}
-	ordered, err := e.order(anchorPath, files)
-	if err != nil {
-		return err
-	}
+	ordered := secrets.SortBySpecificity(files)
 	_, mergeErr := secrets.Merge(ordered, config.MergeModeError)
 	return mergeErr
 }
 
-// EnvVars resolves the env vars for a merged result.
 // EnvVars resolves env vars from the merged result.
-// Without anchor: flat leaf names (DATABASE_URL), or full path if --prefixed.
-// With anchor: names relative to the anchor's container level.
+// Flat leaf names (DATABASE_URL), or full path if --prefixed.
 func (e *Engine) EnvVars(r *MergeResult, prefixed bool) (map[string]secrets.EnvEntry, error) {
-	if r.AnchorPath == "" {
-		if prefixed {
-			return secrets.ToEnvEntries(r.Tree), nil
-		}
-		return secrets.ToFlatEnvEntries(r.Tree), nil
-	}
 	if prefixed {
 		return secrets.ToEnvEntries(r.Tree), nil
 	}
-	anchorData, err := e.anchorData(r.AnchorPath)
-	if err != nil {
-		return nil, err
-	}
-	return secrets.ToEnvEntriesFromAnchor(r.Tree, anchorData), nil
+	return secrets.ToFlatEnvEntries(r.Tree), nil
 }
 
 // EnvVarsMap is like EnvVars but returns plain string values (for injection into
@@ -188,101 +173,17 @@ func (e *Engine) load() ([]secrets.ParsedFile, error) {
 	return files, nil
 }
 
-func (e *Engine) order(anchorPath string, files []secrets.ParsedFile) ([]secrets.ParsedFile, error) {
-	if anchorPath == "" {
-		return secrets.SortBySpecificity(files), nil
+// conflictMode maps the CLI on_conflict flag to a MergeMode.
+// The flag takes precedence over the config value.
+func (e *Engine) conflictMode(onConflict config.OnConflict) config.MergeMode {
+	effective := e.cfg.OnConflict
+	if onConflict != "" {
+		effective = onConflict
 	}
-	info, err := os.Stat(anchorPath)
-	if err != nil {
-		return nil, fmt.Errorf("anchor not found: %s", anchorPath)
+	if effective == config.OnConflictOverride {
+		return config.MergeModeOverride
 	}
-	if info.IsDir() {
-		return e.orderForDirAnchor(anchorPath, files)
-	}
-	return e.orderForFileAnchor(anchorPath, files)
-}
-
-func (e *Engine) orderForFileAnchor(anchorPath string, files []secrets.ParsedFile) ([]secrets.ParsedFile, error) {
-	var anchor secrets.ParsedFile
-	for _, f := range files {
-		if f.File == anchorPath {
-			anchor = f
-			break
-		}
-	}
-	if anchor.File == "" {
-		return nil, fmt.Errorf("anchor file not in sources: %s", anchorPath)
-	}
-	return secrets.FilterByAnchor(anchor, files), nil
-}
-
-func (e *Engine) orderForDirAnchor(anchorPath string, files []secrets.ParsedFile) ([]secrets.ParsedFile, error) {
-	dirPaths, err := secrets.Discover([]string{anchorPath})
-	if err != nil {
-		return nil, err
-	}
-	dirSet := make(map[string]bool, len(dirPaths))
-	for _, p := range dirPaths {
-		dirSet[p] = true
-	}
-
-	var dirFiles []secrets.ParsedFile
-	for _, f := range files {
-		if dirSet[f.File] {
-			dirFiles = append(dirFiles, f)
-		}
-	}
-
-	seen := map[string]bool{}
-	var ancestors []secrets.ParsedFile
-	for _, df := range dirFiles {
-		for _, f := range files {
-			if dirSet[f.File] || seen[f.File] {
-				continue
-			}
-			if secrets.IsAncestorOf(f, df) && secrets.MapDepth(f.Data) < secrets.MapDepth(df.Data) {
-				seen[f.File] = true
-				ancestors = append(ancestors, secrets.TrimToScope(f, dirFiles))
-			}
-		}
-	}
-
-	return secrets.SortBySpecificity(append(ancestors, dirFiles...)), nil
-}
-
-// mergeMode returns the effective merge mode for a given anchor.
-// Dir anchors always use MergeModeError — sibling conflicts are always ambiguous.
-// File anchors and no-anchor use the configured mode.
-func (e *Engine) mergeMode(anchorPath string) config.MergeMode {
-	if anchorPath == "" {
-		return e.cfg.Merge
-	}
-	if info, err := os.Stat(anchorPath); err == nil && info.IsDir() {
-		return config.MergeModeError
-	}
-	return e.cfg.Merge
-}
-
-// anchorData loads the YAML structure from an anchor path (file or first file in
-// dir). Used to determine the container level for relative env var naming.
-func (e *Engine) anchorData(anchorPath string) (map[string]interface{}, error) {
-	info, err := os.Stat(anchorPath)
-	if err != nil {
-		return nil, fmt.Errorf("anchor not found: %s", anchorPath)
-	}
-	target := anchorPath
-	if info.IsDir() {
-		paths, err := secrets.Discover([]string{anchorPath})
-		if err != nil || len(paths) == 0 {
-			return nil, fmt.Errorf("no .ward files in anchor dir: %s", anchorPath)
-		}
-		target = paths[0]
-	}
-	pf, err := secrets.Load(target, e.dec)
-	if err != nil {
-		return nil, err
-	}
-	return pf.Data, nil
+	return config.MergeModeError
 }
 
 func sourcePaths(cfg *config.Config) []string {

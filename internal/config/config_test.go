@@ -32,22 +32,35 @@ sources:
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if cfg.Merge != MergeModeDeep {
-		t.Errorf("expected default merge=merge, got %q", cfg.Merge)
+	// Default: no merge field → OnConflictError
+	if cfg.OnConflict != OnConflictError {
+		t.Errorf("expected default on_conflict=error, got %q", cfg.OnConflict)
 	}
 	if cfg.Encryption.Engine != "sops+age" {
 		t.Errorf("unexpected engine: %q", cfg.Encryption.Engine)
 	}
 }
 
-func TestLoad_explicit_merge(t *testing.T) {
+func TestLoad_explicit_merge_override(t *testing.T) {
 	path := writeTemp(t, `merge: override`)
 	cfg, err := Load(path)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if cfg.Merge != MergeModeOverride {
-		t.Errorf("expected override, got %q", cfg.Merge)
+	// Legacy merge: override → on_conflict: override
+	if cfg.OnConflict != OnConflictOverride {
+		t.Errorf("expected on_conflict=override, got %q", cfg.OnConflict)
+	}
+}
+
+func TestLoad_explicit_on_conflict(t *testing.T) {
+	path := writeTemp(t, `on_conflict: override`)
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.OnConflict != OnConflictOverride {
+		t.Errorf("expected on_conflict=override, got %q", cfg.OnConflict)
 	}
 }
 

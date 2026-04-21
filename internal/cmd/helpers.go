@@ -259,9 +259,9 @@ type listLine struct {
 
 // printTreeWithOrigin renders the merged tree with colour-coded leaf origins.
 // conflictKeys is the set of leaf key names in conflict (may be nil).
-func printTreeWithOrigin(node *secrets.Node, indent int, anchorPath string, conflictKeys map[string]bool) {
+func printTreeWithOrigin(node *secrets.Node, indent int, conflictKeys map[string]bool) {
 	var lines []listLine
-	collectListLines(node, indent, anchorPath, conflictKeys, &lines)
+	collectListLines(node, indent, conflictKeys, &lines)
 
 	maxLen := 0
 	for _, l := range lines {
@@ -294,7 +294,7 @@ func printTreeWithOrigin(node *secrets.Node, indent int, anchorPath string, conf
 
 // --- tree traversal ----------------------------------------------------------
 
-func collectListLines(node *secrets.Node, indent int, anchorPath string, conflictKeys map[string]bool, lines *[]listLine) {
+func collectListLines(node *secrets.Node, indent int, conflictKeys map[string]bool, lines *[]listLine) {
 	if node.Children == nil {
 		return
 	}
@@ -332,7 +332,7 @@ func collectListLines(node *secrets.Node, indent int, anchorPath string, conflic
 		*lines = append(*lines, listLine{
 			text: fmt.Sprintf("%s%s%s%s:", prefix, clrBold, k, clrReset),
 		})
-		collectListLines(child, indent+1, anchorPath, conflictKeys, lines)
+		collectListLines(child, indent+1, conflictKeys, lines)
 	}
 }
 
