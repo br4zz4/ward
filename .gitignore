@@ -22,5 +22,8 @@ dist/
 # Workspace
 .workspace/
 
+# Generated completions
+completions/
+
 # Backup files
 *.bak
