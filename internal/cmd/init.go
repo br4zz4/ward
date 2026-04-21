@@ -99,6 +99,8 @@ func NewInitCmd() *cobra.Command {
 					{"ward edit", "", "edit a secrets file"},
 					{"ward new", "<name>", "create a new secrets file"},
 					{"ward get", "<key>", "read a value"},
+					{"ward envs", "", "list all secrets as env vars"},
+					{"ward view", "", "view merged secrets tree"},
 					{"ward exec", "-- <cmd>", "run a command with secrets injected"},
 					{"ward config", "", "open config in editor"},
 				}
