@@ -25,11 +25,11 @@ func buildBin(t *testing.T) string {
 	return bin
 }
 
-// run executes ward with the given args from the testdata directory.
+// run executes ward with the given args from the case1_unencrypted testdata directory.
 func run(t *testing.T, bin string, args ...string) (stdout, stderr string, code int) {
 	t.Helper()
 	_, file, _, _ := runtime.Caller(0)
-	testdata := filepath.Join(filepath.Dir(file), "..", "..", "testdata")
+	testdata := filepath.Join(filepath.Dir(file), "..", "..", "testdata", "case1_unencrypted")
 
 	cmd := exec.Command(bin, args...)
 	cmd.Dir = testdata
@@ -107,8 +107,9 @@ func TestCmd_exec_injects_env_vars(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("exit %d\nstdout: %s", code, out)
 	}
-	if !strings.Contains(out, "COMPANY_SECTORS_ONE_STAGING_DATABASE_URL=") {
-		t.Errorf("expected env var injected, got: %q", out)
+	// With anchor, exec uses relative names (same as ward envs)
+	if !strings.Contains(out, "STAGING_DATABASE_URL=") {
+		t.Errorf("expected STAGING_DATABASE_URL injected, got: %q", out)
 	}
 }
 
@@ -123,7 +124,7 @@ func TestCmd_exec_no_production_leakage(t *testing.T) {
 	}
 	// Ensure production vars are not present in staging exec
 	for _, line := range strings.Split(out, "\n") {
-		if strings.HasPrefix(line, "COMPANY_SECTORS_ONE_PRODUCTION_") {
+		if strings.HasPrefix(line, "PRODUCTION_") {
 			t.Errorf("production var leaked into staging exec: %s", line)
 		}
 	}
@@ -202,6 +203,79 @@ func TestCmd_infra_available_with_infra_anchor(t *testing.T) {
 	}
 	if !strings.Contains(out, "us-east-1") {
 		t.Errorf("expected us-east-1, got: %q", out)
+	}
+}
+
+func TestCmd_exec_envs_equivalence(t *testing.T) {
+	bin := buildBin(t)
+	anchor := "secrets/company/sectors/one/staging.ward"
+
+	// ward exec -- print-envs.sh: captures the injected env as KEY=value lines
+	execOut, _, code := run(t, bin, "exec", anchor, "--", "./print-envs.sh")
+	if code != 0 {
+		t.Fatalf("exec exit %d\nstdout: %s", code, execOut)
+	}
+
+	// ward envs <anchor>: strip ANSI codes and parse KEY = value lines
+	envsOut, _, code := run(t, bin, "envs", anchor)
+	if code != 0 {
+		t.Fatalf("envs exit %d\nstdout: %s", code, envsOut)
+	}
+
+	// Build set of KEY=value from exec output (only WARD-injected vars — uppercase, no PATH etc.)
+	execVars := map[string]string{}
+	for _, line := range strings.Split(execOut, "\n") {
+		if idx := strings.IndexByte(line, '='); idx > 0 {
+			k := line[:idx]
+			if strings.ToUpper(k) == k && strings.ContainsAny(k, "ABCDEFGHIJKLMNOPQRSTUVWXYZ") {
+				execVars[k] = line[idx+1:]
+			}
+		}
+	}
+
+	// Parse ward envs output: strip ANSI, split on " = "
+	ansiStrip := func(s string) string {
+		var out []byte
+		inEsc := false
+		for i := 0; i < len(s); i++ {
+			if s[i] == '\033' {
+				inEsc = true
+			}
+			if inEsc {
+				if s[i] == 'm' {
+					inEsc = false
+				}
+				continue
+			}
+			out = append(out, s[i])
+		}
+		return string(out)
+	}
+
+	envsVars := map[string]string{}
+	for _, line := range strings.Split(envsOut, "\n") {
+		clean := strings.TrimSpace(ansiStrip(line))
+		if idx := strings.Index(clean, "  =  "); idx > 0 {
+			k := strings.TrimSpace(clean[:idx])
+			v := strings.TrimSpace(clean[idx+5:])
+			envsVars[k] = v
+		}
+	}
+
+	if len(envsVars) == 0 {
+		t.Fatal("ward envs returned no vars")
+	}
+
+	// Every key from ward envs must appear in exec output with the same value
+	for k, v := range envsVars {
+		got, ok := execVars[k]
+		if !ok {
+			t.Errorf("key %s from ward envs not found in exec environment", k)
+			continue
+		}
+		if got != v {
+			t.Errorf("key %s: envs=%q exec=%q", k, v, got)
+		}
 	}
 }
 
