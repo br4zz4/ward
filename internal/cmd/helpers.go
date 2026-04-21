@@ -302,7 +302,7 @@ func printTreeWithOrigin(node *secrets.Node, indent int, conflicts map[string]se
 			lineClr := clrMagentaSoft // magenta for active/conflict/envConflict
 			if l.extra || l.overrides {
 				fileClr = clrGray
-				lineClr = clrGrayLight
+				lineClr = clrGray
 			}
 
 			var originStr string
