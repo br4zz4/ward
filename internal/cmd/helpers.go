@@ -44,7 +44,6 @@ const (
 	clrCyan      = "\033[36m"
 	clrYellow    = "\033[33m"
 	clrLightRed  = "\033[91m"
-	clrLightBlue = "\033[94m"
 	clrGreen     = "\033[32m"
 	clrOrange    = "\033[38;5;208m"
 )
@@ -79,11 +78,8 @@ type listLine struct {
 // printTreeWithOrigin renders the merged tree with colour-coded leaf origins.
 // conflictKeys is the set of leaf key names in conflict (may be nil).
 func printTreeWithOrigin(node *secrets.Node, indent int, anchorPath string, conflictKeys map[string]bool) {
-	ancestorKeys := map[string]bool{}
-	collectAncestorKeys(node, anchorPath, ancestorKeys)
-
 	var lines []listLine
-	collectListLines(node, indent, anchorPath, ancestorKeys, conflictKeys, &lines)
+	collectListLines(node, indent, anchorPath, conflictKeys, &lines)
 
 	maxLen := 0
 	for _, l := range lines {
@@ -116,20 +112,7 @@ func printTreeWithOrigin(node *secrets.Node, indent int, anchorPath string, conf
 
 // --- tree traversal ----------------------------------------------------------
 
-func collectAncestorKeys(node *secrets.Node, anchorPath string, out map[string]bool) {
-	if node.Children == nil {
-		return
-	}
-	for k, child := range node.Children {
-		if child.Children != nil {
-			collectAncestorKeys(child, anchorPath, out)
-		} else if !isFromAnchorScope(child.Origin.File, anchorPath) {
-			out[k] = true
-		}
-	}
-}
-
-func collectListLines(node *secrets.Node, indent int, anchorPath string, ancestorKeys, conflictKeys map[string]bool, lines *[]listLine) {
+func collectListLines(node *secrets.Node, indent int, anchorPath string, conflictKeys map[string]bool, lines *[]listLine) {
 	if node.Children == nil {
 		return
 	}
@@ -143,12 +126,19 @@ func collectListLines(node *secrets.Node, indent int, anchorPath string, ancesto
 			leafKeys = append(leafKeys, k)
 		}
 	}
-	sort.Strings(leafKeys)
+	sort.Slice(leafKeys, func(i, j int) bool {
+		ci, cj := node.Children[leafKeys[i]], node.Children[leafKeys[j]]
+		pi, pj := leafPriority(ci, leafKeys[i], conflictKeys), leafPriority(cj, leafKeys[j], conflictKeys)
+		if pi != pj {
+			return pi < pj
+		}
+		return leafKeys[i] < leafKeys[j]
+	})
 	sort.Strings(mapKeys)
 
 	for _, k := range leafKeys {
 		child := node.Children[k]
-		color := leafColor(child, k, anchorPath, ancestorKeys, conflictKeys)
+		color := leafColor(child, k, conflictKeys)
 		*lines = append(*lines, listLine{
 			text:     fmt.Sprintf("%s%s%s:%s %s%v%s", prefix, color, k, clrReset, clrGray, child.Value, clrReset),
 			origin:   formatOrigin(child.Origin),
@@ -160,17 +150,27 @@ func collectListLines(node *secrets.Node, indent int, anchorPath string, ancesto
 		*lines = append(*lines, listLine{
 			text: fmt.Sprintf("%s%s%s%s:", prefix, clrBold, k, clrReset),
 		})
-		collectListLines(child, indent+1, anchorPath, ancestorKeys, conflictKeys, lines)
+		collectListLines(child, indent+1, anchorPath, conflictKeys, lines)
 	}
 }
 
-func leafColor(child *secrets.Node, k, anchorPath string, ancestorKeys, conflictKeys map[string]bool) string {
+// leafPriority returns sort order: 0=conflict, 1=override, 2=active.
+func leafPriority(child *secrets.Node, k string, conflictKeys map[string]bool) int {
+	switch {
+	case conflictKeys[k]:
+		return 0
+	case child.Overrides:
+		return 1
+	default:
+		return 2
+	}
+}
+
+func leafColor(child *secrets.Node, k string, conflictKeys map[string]bool) string {
 	switch {
 	case conflictKeys[k]:
 		return clrLightRed
-	case !isFromAnchorScope(child.Origin.File, anchorPath) && anchorPath != "":
-		return clrLightBlue
-	case child.Overrides || ancestorKeys[k]:
+	case child.Overrides:
 		return clrOrange
 	default:
 		return clrGreen
@@ -188,25 +188,6 @@ func formatOrigin(o secrets.Origin) string {
 }
 
 // --- utilities ---------------------------------------------------------------
-
-// isFromAnchorScope reports whether originFile is within the anchor's scope.
-func isFromAnchorScope(originFile, anchorPath string) bool {
-	if originFile == "" || anchorPath == "" {
-		return false
-	}
-	info, err := os.Stat(anchorPath)
-	if err != nil {
-		return originFile == anchorPath
-	}
-	if info.IsDir() {
-		dir := anchorPath
-		if !strings.HasSuffix(dir, "/") {
-			dir += "/"
-		}
-		return strings.HasPrefix(originFile, dir)
-	}
-	return originFile == anchorPath
-}
 
 // visibleLen returns the visible (non-ANSI) length of s.
 func visibleLen(s string) int {

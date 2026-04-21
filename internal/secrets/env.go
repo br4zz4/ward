@@ -67,11 +67,7 @@ func collectEnvEntriesDescending(nodes map[string]*Node, anchor map[string]inter
 		if node.Children != nil {
 			continue
 		}
-		_, inAnchor := anchor[k]
 		e := EnvEntry{Value: fmt.Sprintf("%v", node.Value), Origin: node.Origin, Overrides: node.Overrides}
-		if !inAnchor {
-			e.Overrides = true
-		}
 		key := k
 		if prefix != "" {
 			key = prefix + "_" + k
@@ -119,17 +115,12 @@ func collectEnvEntriesDescending(nodes map[string]*Node, anchor map[string]inter
 	collectEnvEntriesDescending(child.Children, anchor[mapKey].(map[string]interface{}), prefix, out)
 }
 
-// collectEnvEntriesWithAnchorScope collects all leaves from nodes.
-// Keys not present in anchorScope are marked Overrides=true (inherited from ancestor).
+// collectEnvEntriesWithAnchorScope collects all leaves from nodes using node.Overrides directly.
 func collectEnvEntriesWithAnchorScope(nodes map[string]*Node, anchorScope map[string]interface{}, prefix string, out map[string]EnvEntry) {
 	for k, node := range nodes {
 		key := k
 		if prefix != "" {
 			key = prefix + "_" + k
-		}
-		inAnchor := anchorScope != nil
-		if inAnchor {
-			_, inAnchor = anchorScope[k]
 		}
 		if node.Children != nil {
 			var childScope map[string]interface{}
@@ -140,11 +131,7 @@ func collectEnvEntriesWithAnchorScope(nodes map[string]*Node, anchorScope map[st
 			}
 			collectEnvEntriesWithAnchorScope(node.Children, childScope, key, out)
 		} else {
-			e := EnvEntry{Value: fmt.Sprintf("%v", node.Value), Origin: node.Origin, Overrides: node.Overrides}
-			if !inAnchor {
-				e.Overrides = true // inherited from ancestor, not defined in anchor
-			}
-			out[strings.ToUpper(key)] = e
+			out[strings.ToUpper(key)] = EnvEntry{Value: fmt.Sprintf("%v", node.Value), Origin: node.Origin, Overrides: node.Overrides}
 		}
 	}
 }
