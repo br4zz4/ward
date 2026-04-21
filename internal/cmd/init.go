@@ -74,7 +74,7 @@ func NewInitCmd() *cobra.Command {
 				fmt.Printf("\n  %s✓ ward is ready%s\n", clrGreen+clrBold, clrReset)
 
 				// — setup section —
-				fmt.Printf("\n  %s%ssetup%s%s%s\n",
+				fmt.Printf("\n  %s%sSETUP%s%s%s\n",
 					clrCyanDark+clrBold, "", clrReset+clrGray, strings.Repeat("─", 46), clrReset)
 				col := 22
 				printFileRow := func(name, desc string) {
@@ -95,7 +95,7 @@ func NewInitCmd() *cobra.Command {
 				fmt.Printf("  %s↑ copy this to CI / secrets manager%s\n", clrGray, clrReset)
 
 				// — useful commands section —
-				fmt.Printf("\n  %s%suseful commands%s%s%s\n\n",
+				fmt.Printf("\n  %s%sUSEFUL COMMANDS%s%s%s\n\n",
 					clrOrange+clrBold, "", clrReset+clrGray, strings.Repeat("─", 36), clrReset)
 				type cmdRow struct{ cmd, args, desc string }
 				rows := []cmdRow{
