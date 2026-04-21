@@ -67,6 +67,14 @@ homebrew_casks:
     dependencies:
       - formula: sops
       - formula: age
+    generate_completions_from_executable:
+      args:
+        - completion
+      shell_parameter_format: none
+      shells:
+        - zsh
+        - bash
+        - fish
 
 release:
   github:

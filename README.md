@@ -56,18 +56,7 @@ brew tap oporpino/tap
 brew install --cask ward
 ```
 
-Shell completion after install:
-
-```sh
-# zsh
-ward completion zsh > $(brew --prefix)/share/zsh/site-functions/_ward
-
-# bash
-ward completion bash > $(brew --prefix)/etc/bash_completion.d/ward
-
-# fish
-ward completion fish > ~/.config/fish/completions/ward.fish
-```
+Shell completions are installed automatically.
 
 **Debian / Ubuntu (APT)**
 
