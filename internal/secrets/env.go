@@ -119,17 +119,16 @@ func ToFlatEnvEntries(tree map[string]*Node, preferPrefix string) (map[string]En
 		}
 		winner, _, isCollision := resolveShadow(entries)
 		if isCollision {
-			// If a preferPrefix is given, pick the entry under that prefix.
+			// If preferPrefix uniquely selects one entry, use it to resolve.
 			if preferPrefix != "" {
-				var preferred *leafRef
-				for i, e := range entries {
+				var matched []leafRef
+				for _, e := range entries {
 					if strings.HasPrefix(e.dotPath, preferPrefix+".") || e.dotPath == preferPrefix {
-						preferred = &entries[i]
-						break
+						matched = append(matched, e)
 					}
 				}
-				if preferred != nil {
-					out[envKey] = EnvEntry{Value: fmt.Sprintf("%v", preferred.node.Value), Origin: preferred.node.Origin, Overrides: preferred.node.Overrides}
+				if len(matched) == 1 {
+					out[envKey] = EnvEntry{Value: fmt.Sprintf("%v", matched[0].node.Value), Origin: matched[0].node.Origin, Overrides: matched[0].node.Overrides}
 					continue
 				}
 			}
