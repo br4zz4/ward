@@ -34,10 +34,10 @@ type Node struct {
 	Children  map[string]*Node
 }
 
-// Conflict holds a single key conflict between two origins.
+// Conflict holds a single key conflict between two or more origins.
 type Conflict struct {
 	Key     string
-	Sources [2]Origin
+	Sources []Origin
 }
 
 // ConflictError is returned when one or more keys are defined in multiple files at the same level.
@@ -77,24 +77,27 @@ func (e *ConflictError) Error() string {
 		leafKey := LeafKey(c.Key)
 		scopePath := parentKey(c.Key) // e.g. company.sectors.one.staging
 		fmt.Fprintf(&sb, "\n  %sto resolve:%s\n", colorBold, colorReset)
-		fmt.Fprintf(&sb, "    %s1.%s remove %s%s%s from one of the files above\n",
+		fmt.Fprintf(&sb, "    %s1.%s keep %s%s%s in only one of the files above\n",
 			colorGray, colorReset, colorYellow, leafKey, colorReset)
 		grandparent := parentKey(scopePath)
 		if grandparent == scopePath {
-			// already at root level — no meaningful "one level up"
-			fmt.Fprintf(&sb, "    %s2.%s move it to a shared ancestor vault that both sources include\n",
+			// at root level — the only shared ancestor would be a new base vault
+			fmt.Fprintf(&sb, "    %s2.%s move it to a shared base vault that all conflicting files include\n",
 				colorGray, colorReset)
 		} else {
 			movedPath := grandparent + "." + leafKey // e.g. company.sectors.one.database_url
-			fmt.Fprintf(&sb, "    %s2.%s move it one level up — define %s%s%s in a shared ancestor file\n",
+			fmt.Fprintf(&sb, "    %s2.%s hoist it one level — define %s%s%s in a shared ancestor file\n",
 				colorGray, colorReset, colorYellow, movedPath, colorReset)
 		}
-		fmt.Fprintf(&sb, "    %s3.%s scope your command to a specific path:\n",
-			colorGray, colorReset)
-		fmt.Fprintf(&sb, "         %sward exec %s -- <cmd>%s\n",
-			colorCyan, scopePath, colorReset)
-		fmt.Fprintf(&sb, "         %sward envs %s%s\n",
-			colorCyan, scopePath, colorReset)
+		// Only show scope hint when the path has depth > 1 (scoping to a leaf's parent is not useful)
+		if scopePath != c.Key && grandparent != scopePath {
+			fmt.Fprintf(&sb, "    %s3.%s scope your command to skip the conflict:\n",
+				colorGray, colorReset)
+			fmt.Fprintf(&sb, "         %sward exec %s -- <cmd>%s\n",
+				colorCyan, scopePath, colorReset)
+			fmt.Fprintf(&sb, "         %sward envs %s%s\n",
+				colorCyan, scopePath, colorReset)
+		}
 		sb.WriteString("\n")
 	}
 	fmt.Fprintf(&sb, "  %s→ read more:%s https://github.com/oporpino/ward/blob/main/docs/conflicts.md\n",
@@ -148,10 +151,7 @@ func mergeInto(dst map[string]*Node, src map[string]interface{}, file string, li
 			existing, ok := dst[k]
 			if !ok || existing.Children == nil {
 				if ok && existing.Children == nil && mode == config.MergeModeError && existing.Origin.Specificity == spec {
-					*conflicts = append(*conflicts, Conflict{
-						Key:     dotPath,
-						Sources: [2]Origin{existing.Origin, originFor(file, dotPath, lines, rawLines, spec)},
-					})
+					appendConflict(conflicts, dotPath, existing.Origin, originFor(file, dotPath, lines, rawLines, spec))
 					continue
 				}
 				dst[k] = &Node{Children: map[string]*Node{}}
@@ -161,16 +161,27 @@ func mergeInto(dst map[string]*Node, src map[string]interface{}, file string, li
 		default:
 			existing, ok := dst[k]
 			if ok && mode == config.MergeModeError && existing.Origin.Specificity == spec {
-				*conflicts = append(*conflicts, Conflict{
-					Key:     dotPath,
-					Sources: [2]Origin{existing.Origin, originFor(file, dotPath, lines, rawLines, spec)},
-				})
+				appendConflict(conflicts, dotPath, existing.Origin, originFor(file, dotPath, lines, rawLines, spec))
 				continue
 			}
 			overrides := ok // replacing an existing value from a less-specific file
 			dst[k] = &Node{Value: val, Origin: originFor(file, dotPath, lines, rawLines, spec), Overrides: overrides}
 		}
 	}
+}
+
+// appendConflict adds newOrigin to an existing conflict for dotPath, or creates a new one.
+func appendConflict(conflicts *[]Conflict, dotPath string, existingOrigin, newOrigin Origin) {
+	for i, c := range *conflicts {
+		if c.Key == dotPath {
+			(*conflicts)[i].Sources = append((*conflicts)[i].Sources, newOrigin)
+			return
+		}
+	}
+	*conflicts = append(*conflicts, Conflict{
+		Key:     dotPath,
+		Sources: []Origin{existingOrigin, newOrigin},
+	})
 }
 
 func originFor(file, dotPath string, lines LineMap, rawLines []string, spec int) Origin {
