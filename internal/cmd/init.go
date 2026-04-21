@@ -28,6 +28,15 @@ func NewInitCmd() *cobra.Command {
 		Short: "Initialize ward in the current directory",
 		Args:  cobra.NoArgs,
 		Run: func(_ *cobra.Command, _ []string) {
+			// 0. Guard: refuse if .ward/ already exists
+			if _, err := os.Stat(".ward"); err == nil {
+				fmt.Fprintf(os.Stderr, "\n  %s✗ ward already initialised%s\n\n", clrLightRed+clrBold, clrReset)
+				fmt.Fprintf(os.Stderr, "  A %s.ward/%s directory already exists here.\n", clrCyan, clrReset)
+				fmt.Fprintf(os.Stderr, "  Remove it first before running %sward init%s again:\n\n", clrCyan, clrReset)
+				fmt.Fprintf(os.Stderr, "    %srm -rf .ward .ward.key%s\n\n", clrYellow, clrReset)
+				os.Exit(1)
+			}
+
 			// 1. Generate age key
 			if err := wardage.GenerateKey(".ward.key"); err != nil {
 				fatal(err)
