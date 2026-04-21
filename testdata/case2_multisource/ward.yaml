@@ -1,0 +1,10 @@
+encryption:
+  engine: sops+age
+  key_env: WARD_AGE_KEY
+  key_file: .ward.key
+
+merge: merge
+
+sources:
+  - path: ./shared
+  - path: ./secrets
