@@ -298,13 +298,18 @@ func printTreeWithOrigin(node *secrets.Node, indent int, conflicts map[string]se
 				statusClr = clrOrange
 			}
 
+			fileClr := clrGrayLight  // white for active/conflict/envConflict
+			lineClr := clrMagentaSoft // magenta for active/conflict/envConflict
+			if l.extra || l.overrides {
+				fileClr = clrGray
+				lineClr = clrGrayLight
+			}
+
 			var originStr string
-			if l.extra {
-				originStr = fmt.Sprintf("%s%s:%d%s", clrGray, l.originFile, l.originLine, clrReset)
-			} else if l.originLine > 0 {
-				originStr = fmt.Sprintf("%s%s:%d%s", statusClr, l.originFile, l.originLine, clrReset)
+			if l.originLine > 0 {
+				originStr = fmt.Sprintf("%s%s%s:%s%d%s", fileClr, l.originFile, clrReset, lineClr, l.originLine, clrReset)
 			} else {
-				originStr = fmt.Sprintf("%s%s%s", statusClr, l.originFile, clrReset)
+				originStr = fmt.Sprintf("%s%s%s", fileClr, l.originFile, clrReset)
 			}
 
 			fmt.Printf("%s%s%s←%s %s\n", l.text, padding, statusClr, clrReset, originStr)
@@ -403,7 +408,7 @@ func collectListLines(node *secrets.Node, indent int, conflicts map[string]secre
 	for _, k := range mapKeys {
 		child := node.Children[k]
 		*lines = append(*lines, listLine{
-			text: fmt.Sprintf("%s%s%s%s:", indentStr, clrCyan, k, clrReset),
+			text: fmt.Sprintf("%s%s%s%s:", indentStr, clrGrayLight, k, clrReset),
 		})
 		collectListLines(child, indent+1, conflicts, dotJoin(dotPrefix, k), envCollisions, lines)
 	}
