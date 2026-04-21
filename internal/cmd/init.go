@@ -75,21 +75,24 @@ func NewInitCmd() *cobra.Command {
 				fmt.Printf("  %s↑ copy this to CI / secrets manager%s\n", clrGray, clrReset)
 				fmt.Printf("\n  %s─────────────────────────────────────%s\n\n", clrGray, clrReset)
 
-				// Two-column command table
-				cmdCol := 26
-				printCmdRow := func(left, right string) {
-					pad := cmdCol - len(left)
-					if pad < 2 {
-						pad = 2
-					}
-					fmt.Printf("  %s%s%s%s%s\n", clrCyan, left, clrReset, spaces(pad), right)
+				// Command table: cyan command, gray args, reset description
+				type cmdRow struct{ cmd, args, desc string }
+				rows := []cmdRow{
+					{"ward edit", "", "edit a secrets file"},
+					{"ward new", "<name>", "create a new secrets file"},
+					{"ward get", "<key>", "read a value"},
+					{"ward exec", "-- <cmd>", "run a command with secrets injected"},
+					{"ward config", "", "open config in editor"},
 				}
-				fmt.Printf("  %smanage secrets%s%s%smanage config%s\n",
-					clrBold, clrReset, spaces(cmdCol-14), clrBold, clrReset)
-				printCmdRow("ward edit", clrCyan+"ward config"+clrReset)
-				printCmdRow("ward new <name>", "")
-				printCmdRow("ward get <key>", "")
-				printCmdRow("ward exec -- <cmd>", "")
+				cmdW, argW := 12, 10
+				fmt.Printf("  %s%-*s  %-*s  %s%s\n", clrBold, cmdW, "command", argW, "args", "description", clrReset)
+				fmt.Printf("  %s%s%s\n", clrGray, strings.Repeat("─", 50), clrReset)
+				for _, r := range rows {
+					fmt.Printf("  %s%-*s%s  %s%-*s%s  %s\n",
+						clrCyan, cmdW, r.cmd, clrReset,
+						clrGray, argW, r.args, clrReset,
+						r.desc)
+				}
 				fmt.Println()
 			}
 		},
