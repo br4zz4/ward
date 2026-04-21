@@ -75,14 +75,20 @@ func (e *ConflictError) Error() string {
 		}
 		// Per-conflict resolution hints with dot-path examples
 		leafKey := LeafKey(c.Key)
-		grandparentPath := parentKey(parentKey(c.Key)) // two levels up from leaf
-		movedPath := grandparentPath + "." + leafKey   // e.g. company.sectors.one.database_url
-		scopePath := parentKey(c.Key)                  // e.g. company.sectors.one.staging
+		scopePath := parentKey(c.Key) // e.g. company.sectors.one.staging
 		fmt.Fprintf(&sb, "\n  %sto resolve:%s\n", colorBold, colorReset)
 		fmt.Fprintf(&sb, "    %s1.%s remove %s%s%s from one of the files above\n",
 			colorGray, colorReset, colorYellow, leafKey, colorReset)
-		fmt.Fprintf(&sb, "    %s2.%s move it one level up — define %s%s%s in a shared ancestor file\n",
-			colorGray, colorReset, colorYellow, movedPath, colorReset)
+		grandparent := parentKey(scopePath)
+		if grandparent == scopePath {
+			// already at root level — no meaningful "one level up"
+			fmt.Fprintf(&sb, "    %s2.%s move it to a shared ancestor vault that both sources include\n",
+				colorGray, colorReset)
+		} else {
+			movedPath := grandparent + "." + leafKey // e.g. company.sectors.one.database_url
+			fmt.Fprintf(&sb, "    %s2.%s move it one level up — define %s%s%s in a shared ancestor file\n",
+				colorGray, colorReset, colorYellow, movedPath, colorReset)
+		}
 		fmt.Fprintf(&sb, "    %s3.%s scope your command to a specific path:\n",
 			colorGray, colorReset)
 		fmt.Fprintf(&sb, "         %sward exec %s -- <cmd>%s\n",
