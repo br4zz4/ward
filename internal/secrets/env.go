@@ -62,17 +62,22 @@ func collectEnvEntriesFromData(nodes map[string]*Node, anchor map[string]interfa
 // level it passes through. When it reaches the container level (mapCount != 1), it collects
 // all remaining leaves from the full subtree at that point.
 func collectEnvEntriesDescending(nodes map[string]*Node, anchor map[string]interface{}, prefix string, out map[string]EnvEntry) {
-	// Collect any leaf nodes at this level (e.g. "name" alongside a "staging:" map)
+	// Collect any leaf nodes at this level (e.g. "name" alongside a "staging:" map).
+	// More specific (deeper) entries overwrite less specific ones, but Overrides=true
+	// is preserved if any level in the chain had an override.
 	for k, node := range nodes {
 		if node.Children != nil {
 			continue
 		}
-		e := EnvEntry{Value: fmt.Sprintf("%v", node.Value), Origin: node.Origin, Overrides: node.Overrides}
-		key := k
+		key := strings.ToUpper(k)
 		if prefix != "" {
-			key = prefix + "_" + k
+			key = strings.ToUpper(prefix + "_" + k)
 		}
-		out[strings.ToUpper(key)] = e
+		overrides := node.Overrides
+		if prev, exists := out[key]; exists && prev.Overrides {
+			overrides = true
+		}
+		out[key] = EnvEntry{Value: fmt.Sprintf("%v", node.Value), Origin: node.Origin, Overrides: overrides}
 	}
 
 	// Find the single map key to descend into; if not exactly one, we're at the container level.
