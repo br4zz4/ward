@@ -6,8 +6,6 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/oporpino/ward/internal/secrets"
-	"github.com/oporpino/ward/internal/sops"
 	"github.com/spf13/cobra"
 )
 
@@ -36,28 +34,7 @@ func NewExecCmd() *cobra.Command {
 				fatal(err)
 			}
 
-			var envVars map[string]string
-			if !prefixed && anchorPath != "" {
-				info, _ := os.Stat(anchorPath)
-				dec := sops.MockDecryptor{}
-				if info != nil && info.IsDir() {
-					dirFiles, err := secrets.Discover([]string{anchorPath})
-					if err == nil && len(dirFiles) > 0 {
-						ref, err := secrets.Load(dirFiles[0], dec)
-						if err == nil {
-							envVars = secrets.ToEnvVarsFromAnchor(tree, ref.Data)
-						}
-					}
-				} else {
-					anchor, err := secrets.Load(anchorPath, dec)
-					if err == nil {
-						envVars = secrets.ToEnvVarsFromAnchor(tree, anchor.Data)
-					}
-				}
-			}
-			if envVars == nil {
-				envVars = secrets.ToEnvVars(tree)
-			}
+			envVars := resolveEnvVars(tree, anchorPath, prefixed)
 
 			cmd := exec.Command(cmdArgs[0], cmdArgs[1:]...)
 			cmd.Stdout = os.Stdout
@@ -95,7 +72,7 @@ func parseExecArgs(args []string) (anchor string, cmdArgs []string, prefixed boo
 
 	for i, a := range rest {
 		if a == "--" {
-			if i > 0 && strings.HasSuffix(rest[0], ".ward") {
+			if i > 0 {
 				anchor = rest[0]
 			}
 			cmdArgs = rest[i+1:]

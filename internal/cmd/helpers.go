@@ -131,6 +131,36 @@ func buildOrderedFiles(cfg *config.Config, anchorPath string, files []secrets.Pa
 	return secrets.FilterByAnchor(anchor, files)
 }
 
+// resolveEnvVars returns env vars from a merged tree.
+// With an anchor and prefixed=false, uses relative names (same as ward envs).
+// Otherwise uses full path names.
+func resolveEnvVars(tree map[string]*secrets.Node, anchorPath string, prefixed bool) map[string]string {
+	if prefixed || anchorPath == "" {
+		return secrets.ToEnvVars(tree)
+	}
+	dec := sops.MockDecryptor{}
+	info, err := os.Stat(anchorPath)
+	if err != nil {
+		return secrets.ToEnvVars(tree)
+	}
+	if info.IsDir() {
+		dirFiles, err := secrets.Discover([]string{anchorPath})
+		if err != nil || len(dirFiles) == 0 {
+			return secrets.ToEnvVars(tree)
+		}
+		ref, err := secrets.Load(dirFiles[0], dec)
+		if err != nil {
+			return secrets.ToEnvVars(tree)
+		}
+		return secrets.ToEnvVarsFromAnchor(tree, ref.Data)
+	}
+	anchor, err := secrets.Load(anchorPath, dec)
+	if err != nil {
+		return secrets.ToEnvVars(tree)
+	}
+	return secrets.ToEnvVarsFromAnchor(tree, anchor.Data)
+}
+
 // getAtPath navigates a merged tree by dot-path and returns the subtree node.
 func getAtPath(tree map[string]*secrets.Node, dotPath string) (*secrets.Node, error) {
 	parts := strings.Split(dotPath, ".")
