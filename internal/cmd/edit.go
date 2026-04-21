@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 
+	"github.com/oporpino/ward/internal/secrets"
 	"github.com/spf13/cobra"
 )
 
@@ -50,18 +51,38 @@ func NewEditCmd() *cobra.Command {
 }
 
 func wardFilePath(args []string) string {
+	var path string
 	if len(args) == 1 {
-		return args[0]
+		path = args[0]
+	} else {
+		eng, err := newEngine()
+		if err != nil {
+			fatal(fmt.Errorf("no file specified and no sources configured"))
+		}
+		sources := eng.SourcePaths()
+		if len(sources) == 0 {
+			fatal(fmt.Errorf("no file specified and no sources configured"))
+		}
+		path = sources[0]
 	}
-	eng, err := newEngine()
+	// If path is a directory, resolve to the first .ward file inside it.
+	info, err := os.Stat(path)
 	if err != nil {
-		fatal(fmt.Errorf("no file specified and no sources configured"))
+		return path // let Decrypt report the error
 	}
-	sources := eng.SourcePaths()
-	if len(sources) == 0 {
-		fatal(fmt.Errorf("no file specified and no sources configured"))
+	if info.IsDir() {
+		return firstWardFile(path)
 	}
-	return sources[0]
+	return path
+}
+
+// firstWardFile returns the first .ward file found (recursively) under dir.
+func firstWardFile(dir string) string {
+	files, err := secrets.Discover([]string{dir})
+	if err != nil || len(files) == 0 {
+		fatal(fmt.Errorf("no .ward files found in %s", dir))
+	}
+	return files[0]
 }
 
 func writeTempFile(originalPath string, content []byte) (string, error) {
