@@ -68,14 +68,16 @@ func NewInitCmd() *cobra.Command {
 			// 5. Print summary and WARD_KEY token
 			token, err := encodeWardKey(".ward.key")
 			if err == nil {
-				// cyan dark = \033[36m (regular cyan, darker than bright)
 				clrCyanDark := "\033[36m"
+				ruler := func(label, clr string) {
+					dashes := 52 - len(label) - 1
+					fmt.Printf("\n  %s%s%s%s%s\n",
+						clr+clrBold, label, clrReset+clrGray, strings.Repeat("─", dashes), clrReset)
+				}
 
-				fmt.Printf("\n  %s✓ ward is ready%s\n", clrGreen+clrBold, clrReset)
-
-				// — setup section —
-				fmt.Printf("\n  %s%sSETUP%s%s%s\n",
-					clrCyanDark+clrBold, "", clrReset+clrGray, strings.Repeat("─", 46), clrReset)
+				// — SETUP section —
+				ruler("SETUP", clrCyanDark)
+				fmt.Printf("  %s  ✓ ward is ready%s\n\n", clrGreen+clrBold, clrReset)
 				col := 22
 				printFileRow := func(name, desc string) {
 					pad := col - len(name)
@@ -87,16 +89,16 @@ func NewInitCmd() *cobra.Command {
 				printFileRow(".ward.key", "encryption key — "+clrOrange+"keep private, never commit"+clrReset)
 				printFileRow(".ward/config.yaml", "config — "+clrGreen+"commit this"+clrReset)
 				printFileRow(".ward/vault/", "encrypted secrets — "+clrGreen+"safe to commit"+clrReset)
+				fmt.Println()
 
 				// — WARD_KEY section —
-				fmt.Printf("\n  %s%sWARD_KEY%s%s%s\n",
-					clrYellow+clrBold, "", clrReset+clrGray, strings.Repeat("─", 44), clrReset)
+				ruler("WARD_KEY", clrYellow)
 				fmt.Printf("  %s%s%s\n\n", clrGray, token, clrReset)
-				fmt.Printf("  %s↑ copy this to CI / secrets manager%s\n", clrGray, clrReset)
+				fmt.Printf("  %s↑ copy this to CI / secrets manager%s\n\n", clrGray, clrReset)
 
-				// — useful commands section —
-				fmt.Printf("\n  %s%sUSEFUL COMMANDS%s%s%s\n\n",
-					clrOrange+clrBold, "", clrReset+clrGray, strings.Repeat("─", 36), clrReset)
+				// — USEFUL COMMANDS section —
+				ruler("USEFUL COMMANDS", clrOrange)
+				fmt.Println()
 				type cmdRow struct{ cmd, args, desc string }
 				rows := []cmdRow{
 					{"ward edit", "", "edit a secrets file"},
