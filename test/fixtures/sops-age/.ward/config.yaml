@@ -1,0 +1,6 @@
+encryption:
+  engine: sops+age
+  key_file: sample.key
+
+vaults:
+  - path: ./secrets

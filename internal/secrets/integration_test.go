@@ -69,7 +69,7 @@ company:
 		t.Fatalf("expected 2 files in ancestor line, got %d", len(ordered))
 	}
 
-	tree, err := secrets.Merge(ordered, config.MergeModeDeep)
+	tree, err := secrets.Merge(ordered, config.MergeModeDeep, "")
 	if err != nil {
 		t.Fatalf("merge: %v", err)
 	}
@@ -161,7 +161,7 @@ company:
 	files, _ := secrets.LoadAll(paths, dec)
 	sorted := secrets.SortBySpecificity(files)
 
-	_, err := secrets.Merge(sorted, config.MergeModeError)
+	_, err := secrets.Merge(sorted, config.MergeModeError, "")
 	if err == nil {
 		t.Fatal("expected conflict error for duplicate key company.env")
 	}
@@ -183,7 +183,7 @@ func TestIntegration_conflict_same_level(t *testing.T) {
 	files, _ := secrets.LoadAll(paths, dec)
 	sorted := secrets.SortBySpecificity(files)
 
-	_, err := secrets.Merge(sorted, config.MergeModeError)
+	_, err := secrets.Merge(sorted, config.MergeModeError, "")
 	if err == nil {
 		t.Fatal("expected conflict error for same-level duplicate key")
 	}
@@ -204,7 +204,7 @@ func TestIntegration_leaf_origin_tracked(t *testing.T) {
 	files, _ := secrets.LoadAll(paths, dec)
 	sorted := secrets.SortBySpecificity(files)
 
-	tree, err := secrets.Merge(sorted, config.MergeModeDeep)
+	tree, err := secrets.Merge(sorted, config.MergeModeDeep, "")
 	if err != nil {
 		t.Fatalf("merge: %v", err)
 	}

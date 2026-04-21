@@ -9,7 +9,7 @@ encryption:
   key_file: .ward.key        # path to encryption key file (gitignored)
   key_env: WARD_KEY          # or: name of env var holding the encryption key
 
-merge: merge                 # merge | override | error
+on_conflict: error           # error (default) | override
 
 default_dir: .ward/vault     # where ward new <name> places files
 
@@ -32,21 +32,22 @@ If both `key_env` and `key_file` are set, `key_env` takes precedence.
 
 ---
 
-### merge
+### on_conflict
 
-Controls what happens when multiple files define the same key at the same ancestry level.
+Controls what happens when multiple files define the same key at the same level (peer files, not ancestor/descendant).
 
 | Value | Behaviour |
 |---|---|
-| `merge` | Deep merge. Leaf files override ancestor values. Peer conflicts are errors. Default. |
-| `override` | Last (most specific) file always wins silently. |
-| `error` | Any overlapping key is an error, regardless of ancestry. |
+| `error` | Peer conflicts are errors. Default. |
+| `override` | Last vault in config wins silently. |
+
+The CLI flags `--on-conflict=error` and `--on-conflict=override` on `exec` and `envs` take precedence over this setting.
 
 ---
 
 ### vaults
 
-A list of directories to discover `.ward` files in. Each vault is walked recursively.
+A list of directories to discover `.ward` files in. Each vault is walked recursively. All vaults are always merged — the merge scope is controlled by dot-path arguments, not by specifying individual files.
 
 `sources:` is accepted as a legacy alias — it is automatically migrated to `vaults:` on load.
 
@@ -84,7 +85,7 @@ Set it in CI instead of mounting a key file:
 
 ```sh
 export WARD_KEY=ward-AAAA...
-ward exec .ward/vault/staging.ward -- deploy
+ward exec qwert.environments.staging -- deploy
 ```
 
 ### Gitignore
@@ -104,3 +105,10 @@ All commands accept:
 | Flag | Description |
 |---|---|
 | `-c, --config <path>` | Path to config file. Default: `.ward/config.yaml`. |
+
+`exec` and `envs` also accept:
+
+| Flag | Description |
+|---|---|
+| `--on-conflict=error\|override` | Override `on_conflict` from config for this invocation. |
+| `--prefixed` | Use full dot-path as env var name instead of flat leaf name. |

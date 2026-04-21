@@ -1,4 +1,0 @@
-company:
-  name: acme
-  region: us-east-1
-  log_level: info

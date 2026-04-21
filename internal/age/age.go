@@ -25,7 +25,7 @@ func (d AgeArmorDecryptor) Decrypt(path string) ([]byte, error) {
 		return nil, fmt.Errorf("reading %s: %w", path, err)
 	}
 	if !isArmored(data) {
-		return data, nil
+		return nil, fmt.Errorf("%s is not encrypted — run 'ward edit %s' to encrypt it", path, path)
 	}
 	identity, err := loadIdentity(d.KeyFile)
 	if err != nil {

@@ -6,17 +6,20 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/oporpino/ward/internal/config"
+	"github.com/oporpino/ward/internal/ward"
 	"github.com/spf13/cobra"
 )
 
 func NewExecCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:                "exec [--prefixed] [anchor.ward] -- <cmd> [args...]",
+		Use:                "exec [--prefixed] [--on-conflict=error|override] [dot.path] -- <cmd> [args...]",
 		Short:              "Merge secrets and inject as env vars, then run a command",
 		Args:               cobra.MinimumNArgs(1),
 		DisableFlagParsing: true,
+		ValidArgsFunction:  completeDotPaths,
 		Run: func(_ *cobra.Command, args []string) {
-			anchorPath, cmdArgs, prefixed := parseExecArgs(args)
+			dotPath, cmdArgs, prefixed, onConflict := parseExecArgs(args)
 
 			if len(cmdArgs) == 0 {
 				fmt.Fprintln(os.Stderr, "ward: exec requires a command after --")
@@ -27,11 +30,12 @@ func NewExecCmd() *cobra.Command {
 			if err != nil {
 				fatal(err)
 			}
-			result, err := eng.Merge(anchorPath)
+			result, err := eng.MergeWithConflict(config.OnConflict(onConflict), dotPath)
 			if err != nil {
 				fatal(err)
 			}
-			envVars, err := eng.EnvVarsMap(result, prefixed)
+
+			envVars, err := resolveEnvVars(eng, result, dotPath, prefixed)
 			if err != nil {
 				fatal(err)
 			}
@@ -52,33 +56,61 @@ func NewExecCmd() *cobra.Command {
 	}
 }
 
-// parseExecArgs splits [--prefixed] [anchor] -- <cmd> [args...]
-func parseExecArgs(args []string) (anchor string, cmdArgs []string, prefixed bool) {
-	rest := make([]string, len(args))
-	copy(rest, args)
+// resolveEnvVars returns env vars from the full merged tree.
+// dotPath is used as a preference hint to resolve env var collisions.
+func resolveEnvVars(eng *ward.Engine, result *ward.MergeResult, dotPath string, prefixed bool) (map[string]string, error) {
+	entries, err := eng.EnvVarsPrefer(result, prefixed, dotPath)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[string]string, len(entries))
+	for k, e := range entries {
+		out[k] = e.Value
+	}
+	return out, nil
+}
 
-	for i, a := range rest {
-		if a == "--" {
-			break
-		}
+// parseExecArgs parses: [--prefixed] [--on-conflict=X] [dot.path] -- <cmd> [args...]
+func parseExecArgs(args []string) (dotPath string, cmdArgs []string, prefixed bool, onConflict string) {
+	rest := make([]string, 0, len(args))
+	for i := 0; i < len(args); i++ {
+		a := args[i]
 		if a == "--prefixed" {
 			prefixed = true
-			rest = append(rest[:i], rest[i+1:]...)
-			break
+			continue
 		}
+		if strings.HasPrefix(a, "--on-conflict=") {
+			onConflict = strings.TrimPrefix(a, "--on-conflict=")
+			continue
+		}
+		if a == "--on-conflict" && i+1 < len(args) {
+			i++
+			onConflict = args[i]
+			continue
+		}
+		rest = append(rest, a)
 	}
 
 	for i, a := range rest {
 		if a == "--" {
 			if i > 0 {
-				anchor = rest[0]
+				dotPath = rest[0]
 			}
 			cmdArgs = rest[i+1:]
 			return
 		}
 	}
+	// No "--" found — everything is cmd args
 	cmdArgs = rest
 	return
+}
+
+// lastSegment returns the last dot-separated segment of a path.
+func lastSegment(dotPath string) string {
+	if i := strings.LastIndexByte(dotPath, '.'); i >= 0 {
+		return dotPath[i+1:]
+	}
+	return dotPath
 }
 
 // mergeEnv returns the process environment with ward vars appended/overriding.

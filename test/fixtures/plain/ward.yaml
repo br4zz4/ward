@@ -1,7 +1,0 @@
-encryption:
-  engine: sops+age
-
-merge: merge
-
-vaults:
-  - path: ./secrets

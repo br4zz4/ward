@@ -1,9 +1,9 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"os"
-	"strings"
 
 	"github.com/oporpino/ward/internal/secrets"
 	"github.com/spf13/cobra"
@@ -11,56 +11,60 @@ import (
 
 func NewViewCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "view [anchor.ward|dot.path]",
-		Short: "Show the merged tree with source file and line for each value",
-		Args:  cobra.MaximumNArgs(1),
+		Use:               "view [dot.path]",
+		Short:             "Show the merged tree with source file and line for each value",
+		Args:              cobra.MaximumNArgs(1),
+		ValidArgsFunction: completeDotPaths,
 		Run: func(_ *cobra.Command, args []string) {
 			eng, err := newEngine()
 			if err != nil {
 				fatal(err)
 			}
 
-			anchorPath, dotPath := parseAnchorArg(args)
-
-			result, err := eng.MergeForView(anchorPath)
+			result, err := eng.MergeForView()
 			if err != nil {
 				fatal(err)
 			}
 
-			// Build conflict key set for highlighting.
-			conflictKeys := map[string]bool{}
+			// Build conflict map: dot-path → Conflict (for full source info).
+			conflicts := map[string]secrets.Conflict{}
 			if result.ConflictErr != nil {
 				for _, c := range result.ConflictErr.Conflicts {
-					conflictKeys[secrets.LeafKey(c.Key)] = true
+					conflicts[c.Key] = c
 				}
 			}
 
-			if dotPath != "" {
-				node, err := eng.GetAtPath(result, dotPath)
+			// Detect env var collisions to highlight affected leafs.
+			var envCollisions map[string]bool // dot-path → true
+			if len(args) == 0 {
+				_, envErr := eng.EnvVars(result, false)
+				if envErr != nil {
+					var ece *secrets.EnvConflictError
+					if errors.As(envErr, &ece) {
+						envCollisions = make(map[string]bool, len(ece.Conflicts)*2)
+						for _, c := range ece.Conflicts {
+							envCollisions[c.DotPaths[0]] = true
+							envCollisions[c.DotPaths[1]] = true
+						}
+					}
+				}
+			}
+
+			if len(args) == 1 {
+				node, err := eng.GetAtPath(result, args[0])
 				if err != nil {
 					fatal(err)
 				}
-				fmt.Println(dotPath)
-				printTreeWithOrigin(node, 1, anchorPath, conflictKeys)
+				fmt.Println(args[0])
+				printTreeWithOrigin(node, 1, conflicts, args[0], envCollisions)
 			} else {
-				printTreeWithOrigin(&secrets.Node{Children: result.Tree}, 0, anchorPath, conflictKeys)
+				printTreeWithOrigin(&secrets.Node{Children: result.Tree}, 0, conflicts, "", envCollisions)
+			}
+
+			if len(envCollisions) > 0 {
+				fmt.Fprintf(os.Stderr, "\n%s⚠ env var collisions detected%s\n",
+					clrLightRed+clrBold, clrReset)
 			}
 		},
 	}
-}
-
-// parseAnchorArg classifies a single optional argument as either an anchor path
-// (ends in .ward or exists on disk) or a dot-path expression.
-func parseAnchorArg(args []string) (anchorPath, dotPath string) {
-	if len(args) == 0 {
-		return "", ""
-	}
-	arg := args[0]
-	if strings.HasSuffix(arg, ".ward") {
-		return arg, ""
-	}
-	if _, err := os.Stat(arg); err == nil {
-		return arg, ""
-	}
-	return "", arg
 }

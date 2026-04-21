@@ -9,7 +9,7 @@ import (
 	"github.com/oporpino/ward/internal/age"
 )
 
-func TestAgeArmorDecryptor_plaintext_passthrough(t *testing.T) {
+func TestAgeArmorDecryptor_plain_file_errors(t *testing.T) {
 	dir := t.TempDir()
 	plain := []byte("myapp:\n  secret: hello\n")
 	path := filepath.Join(dir, "test.ward")
@@ -18,12 +18,12 @@ func TestAgeArmorDecryptor_plaintext_passthrough(t *testing.T) {
 	}
 
 	dec := age.AgeArmorDecryptor{KeyFile: "unused"}
-	got, err := dec.Decrypt(path)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	_, err := dec.Decrypt(path)
+	if err == nil {
+		t.Fatal("expected error decrypting plain file, got nil")
 	}
-	if string(got) != string(plain) {
-		t.Fatalf("want %q got %q", plain, got)
+	if !strings.Contains(err.Error(), "not encrypted") {
+		t.Fatalf("expected 'not encrypted' in error, got: %v", err)
 	}
 }
 

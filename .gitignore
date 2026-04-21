@@ -1,5 +1,6 @@
 # Binaries
 /ward
+/build/
 dist/
 
 # Go

@@ -65,11 +65,10 @@ func TestCmd_get_leaf(t *testing.T) {
 	}
 }
 
-func TestCmd_get_with_anchor_staging(t *testing.T) {
+func TestCmd_get_staging_database_url(t *testing.T) {
 	bin := buildBin(t)
 	out, _, code := run(t, bin,
 		"get", "company.sectors.one.staging.database_url",
-		"--anchor", "secrets/company/sectors/one/staging.ward",
 	)
 	if code != 0 {
 		t.Fatalf("exit %d", code)
@@ -79,21 +78,10 @@ func TestCmd_get_with_anchor_staging(t *testing.T) {
 	}
 }
 
-func TestCmd_get_staging_key_not_in_production(t *testing.T) {
-	bin := buildBin(t)
-	_, _, code := run(t, bin,
-		"get", "company.sectors.one.staging",
-		"--anchor", "secrets/company/sectors/one/production.ward",
-	)
-	if code == 0 {
-		t.Error("expected non-zero exit: staging key should not exist under production anchor")
-	}
-}
-
-func TestCmd_view_subtree_with_origin(t *testing.T) {
+func TestCmd_view_subtree(t *testing.T) {
 	bin := buildBin(t)
 	out, _, code := run(t, bin,
-		"view", "secrets/company/sectors/one/staging.ward",
+		"view", "company.sectors.one.staging",
 	)
 	if code != 0 {
 		t.Fatalf("exit %d", code)
@@ -109,31 +97,26 @@ func TestCmd_view_subtree_with_origin(t *testing.T) {
 func TestCmd_exec_injects_env_vars(t *testing.T) {
 	bin := buildBin(t)
 	out, _, code := run(t, bin,
-		"exec", "secrets/company/sectors/one/staging.ward",
+		"exec", "company.sectors.one.staging",
 		"--", "env",
 	)
 	if code != 0 {
 		t.Fatalf("exit %d\nstdout: %s", code, out)
 	}
-	// With file anchor, exec strips the anchor's own level → DATABASE_URL not STAGING_DATABASE_URL
 	if !strings.Contains(out, "DATABASE_URL=") {
 		t.Errorf("expected DATABASE_URL injected, got: %q", out)
-	}
-	if strings.Contains(out, "STAGING_DATABASE_URL=") {
-		t.Errorf("unexpected STAGING_DATABASE_URL — should be relative (DATABASE_URL), got: %q", out)
 	}
 }
 
 func TestCmd_exec_no_production_leakage(t *testing.T) {
 	bin := buildBin(t)
 	out, _, code := run(t, bin,
-		"exec", "secrets/company/sectors/one/staging.ward",
+		"exec", "company.sectors.one.staging",
 		"--", "env",
 	)
 	if code != 0 {
 		t.Fatalf("exit %d", code)
 	}
-	// Ensure production vars are not present in staging exec
 	for _, line := range strings.Split(out, "\n") {
 		if strings.HasPrefix(line, "PRODUCTION_") {
 			t.Errorf("production var leaked into staging exec: %s", line)
@@ -143,10 +126,8 @@ func TestCmd_exec_no_production_leakage(t *testing.T) {
 
 func TestCmd_get_ancestor_value(t *testing.T) {
 	bin := buildBin(t)
-	// company.name is defined in company.ward (ancestor) — should be visible with anchor
 	out, _, code := run(t, bin,
 		"get", "company.name",
-		"--anchor", "secrets/company/sectors/one/staging.ward",
 	)
 	if code != 0 {
 		t.Fatalf("exit %d", code)
@@ -156,11 +137,10 @@ func TestCmd_get_ancestor_value(t *testing.T) {
 	}
 }
 
-func TestCmd_get_sector_two_with_anchor(t *testing.T) {
+func TestCmd_get_sector_two_staging(t *testing.T) {
 	bin := buildBin(t)
 	out, _, code := run(t, bin,
 		"get", "company.sectors.two.staging.database_url",
-		"--anchor", "secrets/company/sectors/two/staging.ward",
 	)
 	if code != 0 {
 		t.Fatalf("exit %d", code)
@@ -173,41 +153,23 @@ func TestCmd_get_sector_two_with_anchor(t *testing.T) {
 func TestCmd_sector_one_does_not_leak_into_sector_two(t *testing.T) {
 	bin := buildBin(t)
 	out, _, code := run(t, bin,
-		"exec", "secrets/company/sectors/two/staging.ward",
+		"exec", "company.sectors.two.staging",
 		"--", "env",
 	)
 	if code != 0 {
 		t.Fatalf("exit %d", code)
 	}
 	for _, line := range strings.Split(out, "\n") {
-		if strings.HasPrefix(line, "COMPANY_SECTORS_ONE_") {
+		if strings.HasPrefix(line, "ONE_") {
 			t.Errorf("sector one var leaked into sector two exec: %s", line)
 		}
 	}
 }
 
-func TestCmd_infra_excluded_from_company_anchor(t *testing.T) {
-	bin := buildBin(t)
-	out, _, code := run(t, bin,
-		"exec", "secrets/company/sectors/one/staging.ward",
-		"--", "env",
-	)
-	if code != 0 {
-		t.Fatalf("exit %d", code)
-	}
-	// infra.ward has a different root key — should not appear
-	for _, line := range strings.Split(out, "\n") {
-		if strings.HasPrefix(line, "INFRA_") {
-			t.Errorf("infra var should not appear in company anchor exec: %s", line)
-		}
-	}
-}
-
-func TestCmd_infra_available_with_infra_anchor(t *testing.T) {
+func TestCmd_infra_available(t *testing.T) {
 	bin := buildBin(t)
 	out, _, code := run(t, bin,
 		"get", "infra.region",
-		"--anchor", "secrets/infra.ward",
 	)
 	if code != 0 {
 		t.Fatalf("exit %d", code)
@@ -219,21 +181,18 @@ func TestCmd_infra_available_with_infra_anchor(t *testing.T) {
 
 func TestCmd_exec_envs_equivalence(t *testing.T) {
 	bin := buildBin(t)
-	anchor := "secrets/company/sectors/one/staging.ward"
+	dotPath := "company.sectors.one.staging"
 
-	// ward exec -- print-envs.sh: captures the injected env as KEY=value lines
-	execOut, _, code := run(t, bin, "exec", anchor, "--", "./print-envs.sh")
+	execOut, _, code := run(t, bin, "exec", dotPath, "--", "./print-envs.sh")
 	if code != 0 {
 		t.Fatalf("exec exit %d\nstdout: %s", code, execOut)
 	}
 
-	// ward envs <anchor>: strip ANSI codes and parse KEY = value lines
-	envsOut, _, code := run(t, bin, "envs", anchor)
+	envsOut, _, code := run(t, bin, "envs", dotPath)
 	if code != 0 {
 		t.Fatalf("envs exit %d\nstdout: %s", code, envsOut)
 	}
 
-	// Build set of KEY=value from exec output (only WARD-injected vars — uppercase, no PATH etc.)
 	execVars := map[string]string{}
 	for _, line := range strings.Split(execOut, "\n") {
 		if idx := strings.IndexByte(line, '='); idx > 0 {
@@ -244,7 +203,6 @@ func TestCmd_exec_envs_equivalence(t *testing.T) {
 		}
 	}
 
-	// Parse ward envs output: strip ANSI, split on " = "
 	ansiStrip := func(s string) string {
 		var out []byte
 		inEsc := false
@@ -268,8 +226,13 @@ func TestCmd_exec_envs_equivalence(t *testing.T) {
 		clean := strings.TrimSpace(ansiStrip(line))
 		if idx := strings.Index(clean, "  =  "); idx > 0 {
 			k := strings.TrimSpace(clean[:idx])
-			v := strings.TrimSpace(clean[idx+5:])
-			envsVars[k] = v
+			rest := strings.TrimSpace(clean[idx+5:])
+			// value is the first whitespace-separated token (file:line follows after spaces)
+			fields := strings.Fields(rest)
+			if len(fields) == 0 {
+				continue
+			}
+			envsVars[k] = fields[0]
 		}
 	}
 
@@ -277,7 +240,6 @@ func TestCmd_exec_envs_equivalence(t *testing.T) {
 		t.Fatal("ward envs returned no vars")
 	}
 
-	// Every key from ward envs must appear in exec output with the same value
 	for k, v := range envsVars {
 		got, ok := execVars[k]
 		if !ok {

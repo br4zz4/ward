@@ -1,0 +1,6 @@
+encryption:
+  key_file: sample.key
+
+vaults:
+  - path: .ward/vault/shared
+  - path: .ward/vault/secrets

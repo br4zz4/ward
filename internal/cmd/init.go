@@ -13,13 +13,24 @@ import (
 	wardage "github.com/oporpino/ward/internal/age"
 )
 
-// wardConfigTemplate is the minimal config written by ward init.
-// merge is intentionally omitted — the default (deep merge) is used automatically.
-const wardConfigTemplate = `encryption:
-  key_file: .ward.key
+// wardConfigTemplate is the config written by ward init.
+// All optional fields are shown as comments with their defaults.
+// docs: https://github.com/oporpino/ward/blob/main/docs/configuration.md
+const wardConfigTemplate = `# ward configuration — https://github.com/oporpino/ward/blob/main/docs/configuration.md
+
+# encryption:
+#   key_file: .ward.key   # path to encryption key — add to .gitignore
+#   key_env: WARD_KEY     # or: env var holding the key (takes precedence)
+
+# on_conflict: error      # error (default) | override
+
+# vaults:
+#   default_dir: .ward/vault   # where 'ward new <name>' creates files
+#   sources:
+#     - path: .ward/vault      # add more vaults here
 
 vaults:
-  - path: ./.ward/vault
+  - path: .ward/vault
 `
 
 func NewInitCmd() *cobra.Command {

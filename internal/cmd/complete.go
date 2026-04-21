@@ -34,7 +34,7 @@ func completeDotPaths(_ *cobra.Command, _ []string, toComplete string) ([]string
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
-	result, err := eng.Merge("")
+	result, err := eng.Merge()
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
