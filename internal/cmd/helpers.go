@@ -26,15 +26,19 @@ func newEngine() (*ward.Engine, error) {
 	cfg, err := config.Load(configFile)
 	if err != nil {
 		if os.IsNotExist(err) || isNotExistWrapped(err) {
-			return nil, fmt.Errorf(
-				"this doesn't look like a ward project — %s not found\n\n"+
-					"ward organises secrets in layers using encrypted .ward files.\n"+
+			fmt.Fprintf(os.Stderr,
+				"\n%s✗ not a ward project%s — %s not found\n\n"+
+					"%sward%s organises secrets in layers using encrypted %s.ward%s files.\n"+
 					"to get started, run:\n\n"+
-					"  ward init\n\n"+
+					"  %sward init%s\n\n"+
 					"this will create ward.yaml and a starter secrets file.\n"+
-					"see https://github.com/oporpino/ward for more.",
-				configFile,
+					"%ssee https://github.com/oporpino/ward%s\n\n",
+				clrLightRed, clrReset, configFile,
+				clrBold, clrReset, clrCyan, clrReset,
+				clrBold, clrReset,
+				clrGray, clrReset,
 			)
+			os.Exit(1)
 		}
 		return nil, fmt.Errorf("loading %s: %w", configFile, err)
 	}
