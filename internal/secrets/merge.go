@@ -121,13 +121,15 @@ func parentKey(dotPath string) string {
 // Merge merges a sequence of ParsedFiles in order (index 0 = most ancestral, last = leaf).
 // Files must be pre-sorted from least specific to most specific (SortBySpecificity).
 // A conflict is only raised when two files at the same specificity level define the same key.
-func Merge(files []ParsedFile, mode config.MergeMode) (map[string]*Node, error) {
+// When scopePrefix is non-empty, conflicts outside that dot-path prefix are silently overridden
+// instead of blocking — allowing scoped commands to work even when other paths conflict.
+func Merge(files []ParsedFile, mode config.MergeMode, scopePrefix string) (map[string]*Node, error) {
 	result := map[string]*Node{}
 	var conflicts []Conflict
 
 	for _, pf := range files {
 		spec := specificity(pf)
-		mergeInto(result, pf.Data, pf.File, pf.Lines, pf.RawLines, mode, "", spec, &conflicts)
+		mergeInto(result, pf.Data, pf.File, pf.Lines, pf.RawLines, mode, "", spec, scopePrefix, &conflicts)
 	}
 
 	if len(conflicts) > 0 {
@@ -136,35 +138,62 @@ func Merge(files []ParsedFile, mode config.MergeMode) (map[string]*Node, error) 
 	return result, nil
 }
 
-func mergeInto(dst map[string]*Node, src map[string]interface{}, file string, lines LineMap, rawLines []string, mode config.MergeMode, prefix string, spec int, conflicts *[]Conflict) {
+func mergeInto(dst map[string]*Node, src map[string]interface{}, file string, lines LineMap, rawLines []string, mode config.MergeMode, prefix string, spec int, scopePrefix string, conflicts *[]Conflict) {
 	for k, v := range src {
 		dotPath := k
 		if prefix != "" {
 			dotPath = prefix + "." + k
 		}
 
+		// When a scope is active, only raise conflicts for keys inside (or above) that scope.
+		// Keys outside the scope are merged with override semantics to avoid false blocks.
+		effectiveMode := mode
+		if scopePrefix != "" && mode == config.MergeModeError && !isUnderOrEqual(dotPath, scopePrefix) {
+			effectiveMode = config.MergeModeOverride
+		}
+
 		switch val := v.(type) {
 		case map[string]interface{}:
 			existing, ok := dst[k]
 			if !ok || existing.Children == nil {
-				if ok && existing.Children == nil && mode == config.MergeModeError && existing.Origin.Specificity == spec {
+				if ok && existing.Children == nil && effectiveMode == config.MergeModeError && existing.Origin.Specificity == spec {
 					appendConflict(conflicts, dotPath, existing.Origin, originFor(file, dotPath, lines, rawLines, spec))
 					continue
 				}
 				dst[k] = &Node{Children: map[string]*Node{}}
 			}
-			mergeInto(dst[k].Children, val, file, lines, rawLines, mode, dotPath, spec, conflicts)
+			mergeInto(dst[k].Children, val, file, lines, rawLines, effectiveMode, dotPath, spec, scopePrefix, conflicts)
 
 		default:
 			existing, ok := dst[k]
-			if ok && mode == config.MergeModeError && existing.Origin.Specificity == spec {
+			if ok && effectiveMode == config.MergeModeError && existing.Origin.Specificity == spec {
 				appendConflict(conflicts, dotPath, existing.Origin, originFor(file, dotPath, lines, rawLines, spec))
 				continue
 			}
-			overrides := ok // replacing an existing value from a less-specific file
+			overrides := ok
 			dst[k] = &Node{Value: val, Origin: originFor(file, dotPath, lines, rawLines, spec), Overrides: overrides}
 		}
 	}
+}
+
+// isUnderOrEqual returns true when dotPath is equal to or a descendant of prefix.
+// e.g. prefix="services.api.production", dotPath="services.api.production.database_url" → true
+//
+//	prefix="services.api.production", dotPath="services.api.staging.database_url" → false
+//	prefix="services.api.production", dotPath="services" → true (ancestor — keep strict)
+func isUnderOrEqual(dotPath, prefix string) bool {
+	if dotPath == prefix {
+		return true
+	}
+	// dotPath is a descendant of prefix
+	if strings.HasPrefix(dotPath, prefix+".") {
+		return true
+	}
+	// dotPath is an ancestor of prefix — conflicts here affect the scoped path too
+	if strings.HasPrefix(prefix, dotPath+".") {
+		return true
+	}
+	return false
 }
 
 // appendConflict adds newOrigin to an existing conflict for dotPath, or creates a new one.

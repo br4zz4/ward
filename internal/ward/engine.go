@@ -33,19 +33,20 @@ type MergeResult struct {
 // Merge loads all .ward files from all vaults and merges them using the
 // on_conflict mode from the configuration.
 func (e *Engine) Merge() (*MergeResult, error) {
-	return e.MergeWithConflict("")
+	return e.MergeWithConflict("", "")
 }
 
 // MergeWithConflict is like Merge but allows overriding the on_conflict behaviour
-// via the CLI flag. An empty onConflict falls back to the config value.
-func (e *Engine) MergeWithConflict(onConflict config.OnConflict) (*MergeResult, error) {
+// and scoping conflict detection to a dot-path prefix.
+// When scopePrefix is non-empty, conflicts outside that prefix are silently overridden.
+func (e *Engine) MergeWithConflict(onConflict config.OnConflict, scopePrefix string) (*MergeResult, error) {
 	files, err := e.load()
 	if err != nil {
 		return nil, err
 	}
 	ordered := secrets.SortBySpecificity(files)
 	mode := e.conflictMode(onConflict)
-	tree, err := secrets.Merge(ordered, mode)
+	tree, err := secrets.Merge(ordered, mode, scopePrefix)
 	if err != nil {
 		return nil, err
 	}
@@ -64,7 +65,7 @@ func (e *Engine) MergeForView() (*MergeResult, error) {
 
 	// First pass: detect conflicts without blocking.
 	var conflictErr *secrets.ConflictError
-	if _, cerr := secrets.Merge(ordered, config.MergeModeError); cerr != nil {
+	if _, cerr := secrets.Merge(ordered, config.MergeModeError, ""); cerr != nil {
 		if ce, ok := cerr.(*secrets.ConflictError); ok {
 			conflictErr = ce
 		} else {
@@ -73,7 +74,7 @@ func (e *Engine) MergeForView() (*MergeResult, error) {
 	}
 
 	// Second pass: override mode so we always get a full tree.
-	tree, err := secrets.Merge(ordered, config.MergeModeOverride)
+	tree, err := secrets.Merge(ordered, config.MergeModeOverride, "")
 	if err != nil {
 		return nil, err
 	}
@@ -88,7 +89,7 @@ func (e *Engine) Inspect() error {
 		return err
 	}
 	ordered := secrets.SortBySpecificity(files)
-	_, mergeErr := secrets.Merge(ordered, config.MergeModeError)
+	_, mergeErr := secrets.Merge(ordered, config.MergeModeError, "")
 	return mergeErr
 }
 

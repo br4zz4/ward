@@ -45,7 +45,7 @@ func TestMerge_deep_merge(t *testing.T) {
 		},
 	}
 
-	tree, err := Merge(files, config.MergeModeDeep)
+	tree, err := Merge(files, config.MergeModeDeep, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -71,7 +71,7 @@ func TestMerge_leaf_wins_over_ancestor(t *testing.T) {
 		{File: "base.ward", Data: map[string]interface{}{"key": "base"}},
 		{File: "leaf.ward", Data: map[string]interface{}{"key": "leaf"}},
 	}
-	tree, err := Merge(files, config.MergeModeDeep)
+	tree, err := Merge(files, config.MergeModeDeep, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -117,7 +117,7 @@ func TestMerge_conflict_same_level(t *testing.T) {
 		},
 	}
 
-	_, err := Merge(files, config.MergeModeError)
+	_, err := Merge(files, config.MergeModeError, "")
 	if err == nil {
 		t.Fatal("expected conflict error")
 	}
@@ -138,7 +138,7 @@ func TestMerge_override_mode(t *testing.T) {
 		{File: "a.ward", Data: map[string]interface{}{"key": "first"}},
 		{File: "b.ward", Data: map[string]interface{}{"key": "second"}},
 	}
-	tree, err := Merge(files, config.MergeModeOverride)
+	tree, err := Merge(files, config.MergeModeOverride, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -152,7 +152,7 @@ func TestMerge_error_mode_conflict(t *testing.T) {
 		{File: "a.ward", Data: map[string]interface{}{"key": "x"}},
 		{File: "b.ward", Data: map[string]interface{}{"key": "y"}},
 	}
-	_, err := Merge(files, config.MergeModeError)
+	_, err := Merge(files, config.MergeModeError, "")
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -163,7 +163,7 @@ func TestMerge_error_mode_conflict(t *testing.T) {
 }
 
 func TestMerge_no_files(t *testing.T) {
-	tree, err := Merge(nil, config.MergeModeDeep)
+	tree, err := Merge(nil, config.MergeModeDeep, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -176,7 +176,7 @@ func TestMerge_origin_tracked(t *testing.T) {
 	files := []ParsedFile{
 		{File: "base.ward", Data: map[string]interface{}{"x": "1"}},
 	}
-	tree, err := Merge(files, config.MergeModeDeep)
+	tree, err := Merge(files, config.MergeModeDeep, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

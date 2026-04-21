@@ -30,7 +30,7 @@ func NewEnvsCmd() *cobra.Command {
 			if err != nil {
 				fatal(err)
 			}
-			result, err := eng.MergeWithConflict(config.OnConflict(onConflict))
+			result, err := eng.MergeWithConflict(config.OnConflict(onConflict), dotPath)
 			if err != nil {
 				fatal(err)
 			}
