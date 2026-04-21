@@ -290,12 +290,10 @@ func printTreeWithOrigin(node *secrets.Node, indent int, conflicts map[string]se
 
 			// Status color drives arrow, file path, and line number.
 			statusClr := clrGreen // active (including conflict winner)
-			if l.extra {
+			if l.extra || l.overrides {
 				statusClr = clrGray
 			} else if l.envConflict {
 				statusClr = clrLightRed
-			} else if l.overrides {
-				statusClr = clrOrange
 			}
 
 			fileClr := clrGrayLight  // white for active/conflict/envConflict
@@ -310,6 +308,9 @@ func printTreeWithOrigin(node *secrets.Node, indent int, conflicts map[string]se
 				originStr = fmt.Sprintf("%s%s%s%s:%d%s", fileClr, l.originFile, clrReset, lineClr, l.originLine, clrReset)
 			} else {
 				originStr = fmt.Sprintf("%s%s%s", fileClr, l.originFile, clrReset)
+			}
+			if l.overrides {
+				originStr += fmt.Sprintf(" %s(overridden)%s", clrOrange, clrReset)
 			}
 
 			fmt.Printf("%s%s%s←%s %s\n", l.text, padding, statusClr, clrReset, originStr)
@@ -394,13 +395,10 @@ func collectListLines(node *secrets.Node, indent int, conflicts map[string]secre
 			if isEnvConflict {
 				color = clrLightRed
 			} else if isOverrides {
-				color = clrOrange
+				color = clrGray
 			}
 			keyColor := color
 			colonColor := color
-			if isOverrides {
-				colonColor = clrGray
-			}
 			*lines = append(*lines, listLine{
 				text:        fmt.Sprintf("%s%s%s%s:%s %s%v%s", indentStr, keyColor, k, colonColor, clrReset, clrGrayLight, child.Value, clrReset),
 				originFile:  child.Origin.File,
