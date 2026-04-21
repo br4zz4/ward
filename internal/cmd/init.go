@@ -108,7 +108,7 @@ func NewInitCmd() *cobra.Command {
 						clrGray, argW, r.args, clrReset,
 						r.desc)
 				}
-				fmt.Println()
+				fmt.Printf("  %srun ward --help for all commands%s\n\n", clrGray, clrReset)
 			}
 		},
 	}
