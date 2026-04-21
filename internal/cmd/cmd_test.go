@@ -10,26 +10,34 @@ import (
 	"testing"
 )
 
-// buildBin compiles the ward binary once and returns its path.
-func buildBin(t *testing.T) string {
-	t.Helper()
+var testBin string
+
+func TestMain(m *testing.M) {
 	_, file, _, _ := runtime.Caller(0)
 	root := filepath.Join(filepath.Dir(file), "..", "..")
-	bin := filepath.Join(t.TempDir(), "ward")
+	bin := filepath.Join(os.TempDir(), "ward-test")
 	cmd := exec.Command("go", "build", "-o", bin, "./cmd/ward")
 	cmd.Dir = root
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("build failed: %s\n%s", err, out)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		panic("build failed: " + err.Error() + "\n" + string(out))
 	}
-	return bin
+	testBin = bin
+	code := m.Run()
+	os.Remove(bin)
+	os.Exit(code)
 }
 
-// run executes ward with the given args from the case1_unencrypted testdata directory.
+// buildBin returns the pre-built ward binary path (built once in TestMain).
+func buildBin(t *testing.T) string {
+	t.Helper()
+	return testBin
+}
+
+// run executes ward with the given args from the test/fixtures/plain directory.
 func run(t *testing.T, bin string, args ...string) (stdout, stderr string, code int) {
 	t.Helper()
 	_, file, _, _ := runtime.Caller(0)
-	testdata := filepath.Join(filepath.Dir(file), "..", "..", "testdata", "case1_unencrypted")
+	testdata := filepath.Join(filepath.Dir(file), "..", "..", "test", "fixtures", "plain")
 
 	cmd := exec.Command(bin, args...)
 	cmd.Dir = testdata

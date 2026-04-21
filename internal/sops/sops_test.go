@@ -10,14 +10,14 @@ import (
 	"github.com/oporpino/ward/internal/sops"
 )
 
-// testdataDir returns the path to testdata/case3_encrypted relative to this file.
+// testdataDir returns the path to test/fixtures/sops-age relative to this file.
 func testdataDir(t *testing.T) string {
 	t.Helper()
 	_, file, _, ok := runtime.Caller(0)
 	if !ok {
 		t.Fatal("cannot determine test file location")
 	}
-	return filepath.Join(filepath.Dir(file), "..", "..", "testdata", "case3_encrypted")
+	return filepath.Join(filepath.Dir(file), "..", "..", "test", "fixtures", "sops-age")
 }
 
 func TestSopsDecryptor_decrypt_existing_file(t *testing.T) {
