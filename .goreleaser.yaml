@@ -73,7 +73,10 @@ homebrew_casks:
     description: Hierarchical secrets management using SOPS+age.
     license: MIT
     custom_block: |
-      disable_quarantine true
+      postflight do
+        system_command "/usr/bin/xattr",
+                       args: ["-dr", "com.apple.quarantine", staged_path.to_s]
+      end
     completions:
       zsh: completions/ward.zsh
       bash: completions/ward.bash
