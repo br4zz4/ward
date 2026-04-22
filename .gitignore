@@ -20,9 +20,6 @@ dist/
 .idea/
 .vscode/
 
-# Workspace
-.workspace/
-
 # Generated completions
 completions/
 

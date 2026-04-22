@@ -1,0 +1,28 @@
+# Contributor: oporpino
+# Maintainer: oporpino
+pkgname=ward
+pkgver=0.1.0
+pkgrel=0
+pkgdesc="Hierarchical secrets management using SOPS+age"
+url="https://github.com/oporpino/ward"
+arch="all"
+license="MIT"
+depends="sops age"
+makedepends="go"
+source="$pkgname-$pkgver.tar.gz::https://github.com/oporpino/ward/archive/refs/tags/v$pkgver.tar.gz"
+builddir="$srcdir/$pkgname-$pkgver"
+
+build() {
+	cd "$builddir"
+	go build -o ward ./cmd/ward
+}
+
+check() {
+	cd "$builddir"
+	go test ./...
+}
+
+package() {
+	install -Dm755 "$builddir/ward" "$pkgdir/usr/bin/ward"
+	install -Dm644 "$builddir/LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

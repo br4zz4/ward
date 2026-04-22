@@ -38,6 +38,7 @@ func main() {
 		cmd.NewRawCmd(),
 		cmd.NewExportCmd(),
 		cmd.NewOverrideCmd(),
+		cmd.NewVaultsCmd(),
 	)
 
 	root.CompletionOptions.DisableDefaultCmd = false
