@@ -43,7 +43,7 @@ nfpms:
     package_name: ward
     vendor: brazza-tech
     homepage: https://github.com/brazza-tech/ward
-    maintainer: oporpino
+    maintainer: brazza-tech
     description: Hierarchical secrets management with zero external dependencies.
     license: MIT
     formats:
@@ -62,7 +62,7 @@ nfpms:
     package_name: ward
     vendor: brazza-tech
     homepage: https://github.com/brazza-tech/ward
-    maintainer: oporpino
+    maintainer: brazza-tech
     description: Hierarchical secrets management with zero external dependencies.
     license: MIT
     formats:
@@ -88,8 +88,8 @@ homebrew_casks:
       name: homebrew-tap
       token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
     commit_author:
-      name: oporpino
-      email: oporpino@users.noreply.github.com
+      name: brazza-tech
+      email: brazza-tech@users.noreply.github.com
     directory: Casks
     homepage: https://github.com/brazza-tech/ward
     description: Hierarchical secrets management with zero external dependencies.
