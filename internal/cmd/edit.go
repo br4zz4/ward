@@ -58,6 +58,13 @@ func wardFilePath(args []string) string {
 	var path string
 	if len(args) == 1 {
 		path = args[0]
+		// Resolve user-supplied path relative to the original CWD (before
+		// FindConfigFile changed directory to the project root).
+		if !filepath.IsAbs(path) {
+			if orig := OriginalDir(); orig != "" {
+				path = filepath.Join(orig, path)
+			}
+		}
 	} else {
 		eng, err := newEngine()
 		if err != nil {
@@ -73,7 +80,7 @@ func wardFilePath(args []string) string {
 	info, err := os.Stat(path)
 	if err != nil {
 		// Path doesn't exist — try to find it inside the vaults.
-		if found := findInVaults(path); found != "" {
+		if found := findInVaults(filepath.Base(path)); found != "" {
 			return found
 		}
 		return path // let Decrypt report the original error

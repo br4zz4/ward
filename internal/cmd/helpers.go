@@ -20,9 +20,17 @@ var configFile = ""
 // resolvedConfig caches the config path after first resolution.
 var resolvedConfig = ""
 
+// originalDir is the working directory at startup, before any chdir from FindConfigFile.
+var originalDir = ""
+
 func SetConfigFile(path string) {
 	configFile = path
 	resolvedConfig = "" // reset cache
+}
+
+// OriginalDir returns the working directory before ward changed to the project root.
+func OriginalDir() string {
+	return originalDir
 }
 
 // resolvedConfigFile returns the config file path to use: explicit flag or auto-detected.
@@ -35,11 +43,12 @@ func resolvedConfigFile() (string, error) {
 		resolvedConfig = configFile
 		return resolvedConfig, nil
 	}
-	found, err := config.FindConfigFile()
+	found, origDir, err := config.FindConfigFile()
 	if err != nil {
 		return "", err
 	}
 	resolvedConfig = found
+	originalDir = origDir
 	return resolvedConfig, nil
 }
 

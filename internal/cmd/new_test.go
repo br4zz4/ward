@@ -12,7 +12,7 @@ import (
 
 func writeWardYAML(t *testing.T, dir, vaults string) string {
 	t.Helper()
-	content := "encryption:\n  key_file: .ward.key\nvaults:\n" + vaults
+	content := "encryption:\n  key_file: .ward/.key\nvaults:\n" + vaults
 	if err := os.MkdirAll(filepath.Join(dir, ".ward"), 0755); err != nil {
 		t.Fatal(err)
 	}

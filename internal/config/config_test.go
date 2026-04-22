@@ -19,10 +19,31 @@ func writeTemp(t *testing.T, content string) string {
 	return f.Name()
 }
 
-func TestLoad_default_key_file_when_exists(t *testing.T) {
+func TestLoad_default_key_file_ward_dir(t *testing.T) {
 	dir := t.TempDir()
-	keyPath := filepath.Join(dir, ".ward.key")
-	if err := os.WriteFile(keyPath, []byte("AGE-SECRET-KEY-1FAKE"), 0600); err != nil {
+	if err := os.MkdirAll(filepath.Join(dir, ".ward"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, ".ward", ".key"), []byte("AGE-SECRET-KEY-1FAKE"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	orig, _ := os.Getwd()
+	t.Cleanup(func() { os.Chdir(orig) })
+	os.Chdir(dir)
+
+	path := writeTemp(t, `vaults: []`)
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.Encryption.KeyFile != ".ward/.key" {
+		t.Errorf("expected .ward/.key, got %q", cfg.Encryption.KeyFile)
+	}
+}
+
+func TestLoad_default_key_file_root_fallback(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, ".ward.key"), []byte("AGE-SECRET-KEY-1FAKE"), 0600); err != nil {
 		t.Fatal(err)
 	}
 	orig, _ := os.Getwd()
@@ -35,11 +56,11 @@ func TestLoad_default_key_file_when_exists(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if cfg.Encryption.KeyFile != ".ward.key" {
-		t.Errorf("expected default key_file .ward.key, got %q", cfg.Encryption.KeyFile)
+		t.Errorf("expected .ward.key fallback, got %q", cfg.Encryption.KeyFile)
 	}
 }
 
-func TestLoad_no_default_key_file_when_missing(t *testing.T) {
+func TestLoad_no_key_file_when_missing(t *testing.T) {
 	dir := t.TempDir()
 	orig, _ := os.Getwd()
 	t.Cleanup(func() { os.Chdir(orig) })
@@ -51,7 +72,7 @@ func TestLoad_no_default_key_file_when_missing(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if cfg.Encryption.KeyFile != "" {
-		t.Errorf("expected empty key_file when .ward.key missing, got %q", cfg.Encryption.KeyFile)
+		t.Errorf("expected empty key_file when no key file exists, got %q", cfg.Encryption.KeyFile)
 	}
 }
 
@@ -130,6 +151,74 @@ vaults:
 	}
 	if cfg.Vaults[0].Path != "../commons/secrets" {
 		t.Errorf("unexpected vault path: %q", cfg.Vaults[0].Path)
+	}
+}
+
+func TestFindConfigFile_currentDir(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, ".ward"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, ".ward", "config.yaml"), []byte("vaults: []"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	orig, _ := os.Getwd()
+	t.Cleanup(func() { os.Chdir(orig) })
+	os.Chdir(root)
+
+	got, _, err := FindConfigFile()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != ".ward/config.yaml" {
+		t.Errorf("got %q, want .ward/config.yaml", got)
+	}
+}
+
+func TestFindConfigFile_parentDir(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, ".ward"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, ".ward", "config.yaml"), []byte("vaults: []"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	sub := filepath.Join(root, ".ward", "vault", "deep")
+	if err := os.MkdirAll(sub, 0755); err != nil {
+		t.Fatal(err)
+	}
+	orig, _ := os.Getwd()
+	t.Cleanup(func() { os.Chdir(orig) })
+	os.Chdir(sub)
+
+	got, origDir, err := FindConfigFile()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != ".ward/config.yaml" {
+		t.Errorf("got %q, want .ward/config.yaml", got)
+	}
+	realOrig, _ := filepath.EvalSymlinks(origDir)
+	realSub, _ := filepath.EvalSymlinks(sub)
+	if realOrig != realSub {
+		t.Errorf("originalDir wrong: got %q, want %q", realOrig, realSub)
+	}
+	wd, _ := os.Getwd()
+	realWd, _ := filepath.EvalSymlinks(wd)
+	realRoot, _ := filepath.EvalSymlinks(root)
+	if realWd != realRoot {
+		t.Errorf("cwd should be project root: got %q, want %q", realWd, realRoot)
+	}
+}
+
+func TestFindConfigFile_notFound(t *testing.T) {
+	orig, _ := os.Getwd()
+	t.Cleanup(func() { os.Chdir(orig) })
+	os.Chdir(t.TempDir())
+
+	_, _, err := FindConfigFile()
+	if err == nil {
+		t.Fatal("expected error, got nil")
 	}
 }
 

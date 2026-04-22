@@ -33,7 +33,7 @@ func TestInit_creates_ward_dir(t *testing.T) {
 		filepath.Join(dir, ".ward"),
 		filepath.Join(dir, ".ward", "config.yaml"),
 		filepath.Join(dir, ".ward", "vault"),
-		filepath.Join(dir, ".ward.key"),
+		filepath.Join(dir, ".ward", ".key"),
 	} {
 		if _, err := os.Stat(path); os.IsNotExist(err) {
 			t.Errorf("expected %s to exist after init", path)

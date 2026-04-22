@@ -18,8 +18,10 @@ const (
 
 	// DefaultConfigFile is the canonical config path for new projects.
 	DefaultConfigFile = ".ward/config.yaml"
-	// DefaultKeyFile is the default age key file used when none is configured.
-	DefaultKeyFile = ".ward.key"
+	// DefaultKeyFile is the default age key file inside .ward/.
+	DefaultKeyFile = ".ward/.key"
+	// FallbackKeyFile is the fallback key file at the project root.
+	FallbackKeyFile = ".ward.key"
 )
 
 type Encryption struct {
@@ -54,8 +56,10 @@ func Save(path string, cfg *Config) error {
 // FindConfigFile walks up the directory tree from cwd until it finds a ward
 // config file or reaches the filesystem root. When found, it changes the
 // working directory to the project root so that relative paths in the config
-// remain valid. Returns an error wrapping os.ErrNotExist if none are found.
-func FindConfigFile() (string, error) {
+// remain valid. Returns the config path and the original working directory
+// (before chdir) so callers can resolve user-supplied paths against it.
+// Returns an error wrapping os.ErrNotExist if none are found.
+func FindConfigFile() (cfgPath, originalDir string, err error) {
 	candidates := []string{
 		".ward/config.yaml",
 		".ward/config.yml",
@@ -65,17 +69,18 @@ func FindConfigFile() (string, error) {
 
 	dir, err := os.Getwd()
 	if err != nil {
-		return "", fmt.Errorf("getwd: %w", err)
+		return "", "", fmt.Errorf("getwd: %w", err)
 	}
+	originalDir = dir
 
 	for {
 		for _, c := range candidates {
 			path := filepath.Join(dir, c)
 			if _, err := os.Stat(path); err == nil {
 				if err := os.Chdir(dir); err != nil {
-					return "", fmt.Errorf("chdir %s: %w", dir, err)
+					return "", "", fmt.Errorf("chdir %s: %w", dir, err)
 				}
-				return c, nil
+				return c, originalDir, nil
 			}
 		}
 		parent := filepath.Dir(dir)
@@ -85,7 +90,7 @@ func FindConfigFile() (string, error) {
 		dir = parent
 	}
 
-	return "", fmt.Errorf("reading %s: %w", DefaultConfigFile, os.ErrNotExist)
+	return "", "", fmt.Errorf("reading %s: %w", DefaultConfigFile, os.ErrNotExist)
 }
 
 func Load(path string) (*Config, error) {
@@ -107,6 +112,8 @@ func Load(path string) (*Config, error) {
 	if cfg.Encryption.KeyFile == "" && cfg.Encryption.KeyEnv == "" {
 		if _, err := os.Stat(DefaultKeyFile); err == nil {
 			cfg.Encryption.KeyFile = DefaultKeyFile
+		} else if _, err := os.Stat(FallbackKeyFile); err == nil {
+			cfg.Encryption.KeyFile = FallbackKeyFile
 		}
 	}
 	if len(cfg.Vaults) == 0 && len(cfg.Sources) > 0 {

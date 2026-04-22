@@ -19,7 +19,7 @@ import (
 const wardConfigTemplate = `# ward configuration — https://github.com/oporpino/ward/blob/main/docs/configuration.md
 
 # encryption:
-#   key_file: .ward.key   # path to encryption key — add to .gitignore
+#   key_file: .ward/.key   # path to encryption key — add to .gitignore
 #   key_env: WARD_KEY     # or: env var holding the key (takes precedence)
 
 
@@ -43,25 +43,25 @@ func NewInitCmd() *cobra.Command {
 				fmt.Fprintf(os.Stderr, "\n  %s✗ ward already initialised%s\n\n", clrLightRed+clrBold, clrReset)
 				fmt.Fprintf(os.Stderr, "  A %s.ward/%s directory already exists here.\n", clrCyan, clrReset)
 				fmt.Fprintf(os.Stderr, "  Remove it first before running %sward init%s again:\n\n", clrCyan, clrReset)
-				fmt.Fprintf(os.Stderr, "    %srm -rf .ward .ward.key%s\n\n", clrYellow, clrReset)
+				fmt.Fprintf(os.Stderr, "    %srm -rf .ward .ward/.key%s\n\n", clrYellow, clrReset)
 				os.Exit(1)
 			}
 
-			// 1. Generate age key
-			if err := wardage.GenerateKey(".ward.key"); err != nil {
-				fatal(err)
-			}
-
-			// 2. Create .ward/ directory and config
+			// 1. Create .ward/ directory and config
 			if err := os.MkdirAll(".ward", 0755); err != nil {
 				fatal(fmt.Errorf("creating .ward/: %w", err))
+			}
+
+			// 2. Generate age key
+			if err := wardage.GenerateKey(".ward/.key"); err != nil {
+				fatal(err)
 			}
 			if err := writeIfAbsent(".ward/config.yaml", wardConfigTemplate); err != nil {
 				fatal(err)
 			}
 
-			// 3. Add .ward.key to .gitignore
-			if err := ensureGitignore(".ward.key"); err != nil {
+			// 3. Add .ward/.key to .gitignore
+			if err := ensureGitignore(".ward/.key"); err != nil {
 				fatal(err)
 			}
 
@@ -71,12 +71,12 @@ func NewInitCmd() *cobra.Command {
 			}
 			dirName := currentDirName()
 			stub := initSecretsStub(dirName)
-			if err := encryptIfAbsent(".ward/vault/secrets.ward", stub, ".ward.key"); err != nil {
+			if err := encryptIfAbsent(".ward/vault/secrets.ward", stub, ".ward/.key"); err != nil {
 				fatal(err)
 			}
 
 			// 5. Print summary and WARD_KEY token
-			token, err := encodeWardKey(".ward.key")
+			token, err := encodeWardKey(".ward/.key")
 			if err == nil {
 				clrCyanDark := "\033[36m"
 				ruler := func(label, clr string) {
@@ -96,7 +96,7 @@ func NewInitCmd() *cobra.Command {
 					}
 					fmt.Printf("      %s%s%s%s%s\n", clrCyan, name, clrReset, spaces(pad), desc)
 				}
-				printFileRow(".ward.key", "encryption key — "+clrOrange+"keep private, never commit"+clrReset)
+				printFileRow(".ward/.key", "encryption key — "+clrOrange+"keep private, never commit"+clrReset)
 				printFileRow(".ward/config.yaml", "config — "+clrGreen+"commit this"+clrReset)
 				printFileRow(".ward/vault/", "encrypted secrets — "+clrGreen+"safe to commit"+clrReset)
 				fmt.Println()
@@ -193,7 +193,7 @@ func encryptIfAbsent(path, content, keyFile string) error {
 	return wardage.AgeArmorDecryptor{KeyFile: keyFile}.Encrypt(path, []byte(content))
 }
 
-// encodeWardKey reads a .ward.key file and returns a portable ward-<base64url> token.
+// encodeWardKey reads a .ward/.key file and returns a portable ward-<base64url> token.
 func encodeWardKey(path string) (string, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
