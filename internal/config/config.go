@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"gopkg.in/yaml.v3"
 )
@@ -48,8 +49,10 @@ func Save(path string, cfg *Config) error {
 	return nil
 }
 
-// FindConfigFile returns the path to the ward config file by trying candidates
-// in order. Returns an error wrapping os.ErrNotExist if none are found.
+// FindConfigFile walks up the directory tree from cwd until it finds a ward
+// config file or reaches the filesystem root. When found, it changes the
+// working directory to the project root so that relative paths in the config
+// remain valid. Returns an error wrapping os.ErrNotExist if none are found.
 func FindConfigFile() (string, error) {
 	candidates := []string{
 		".ward/config.yaml",
@@ -57,11 +60,29 @@ func FindConfigFile() (string, error) {
 		"ward.yaml",
 		"ward.yml",
 	}
-	for _, c := range candidates {
-		if _, err := os.Stat(c); err == nil {
-			return c, nil
-		}
+
+	dir, err := os.Getwd()
+	if err != nil {
+		return "", fmt.Errorf("getwd: %w", err)
 	}
+
+	for {
+		for _, c := range candidates {
+			path := filepath.Join(dir, c)
+			if _, err := os.Stat(path); err == nil {
+				if err := os.Chdir(dir); err != nil {
+					return "", fmt.Errorf("chdir %s: %w", dir, err)
+				}
+				return c, nil
+			}
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			break
+		}
+		dir = parent
+	}
+
 	return "", fmt.Errorf("reading %s: %w", DefaultConfigFile, os.ErrNotExist)
 }
 
