@@ -18,6 +18,8 @@ const (
 
 	// DefaultConfigFile is the canonical config path for new projects.
 	DefaultConfigFile = ".ward/config.yaml"
+	// DefaultKeyFile is the default age key file used when none is configured.
+	DefaultKeyFile = ".ward.key"
 )
 
 type Encryption struct {
@@ -103,7 +105,9 @@ func Load(path string) (*Config, error) {
 		cfg.Encryption.Engine = "age+armor"
 	}
 	if cfg.Encryption.KeyFile == "" && cfg.Encryption.KeyEnv == "" {
-		cfg.Encryption.KeyFile = ".ward.key"
+		if _, err := os.Stat(DefaultKeyFile); err == nil {
+			cfg.Encryption.KeyFile = DefaultKeyFile
+		}
 	}
 	if len(cfg.Vaults) == 0 && len(cfg.Sources) > 0 {
 		cfg.Vaults = cfg.Sources

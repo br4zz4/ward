@@ -19,7 +19,16 @@ func writeTemp(t *testing.T, content string) string {
 	return f.Name()
 }
 
-func TestLoad_default_key_file(t *testing.T) {
+func TestLoad_default_key_file_when_exists(t *testing.T) {
+	dir := t.TempDir()
+	keyPath := filepath.Join(dir, ".ward.key")
+	if err := os.WriteFile(keyPath, []byte("AGE-SECRET-KEY-1FAKE"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	orig, _ := os.Getwd()
+	t.Cleanup(func() { os.Chdir(orig) })
+	os.Chdir(dir)
+
 	path := writeTemp(t, `vaults: []`)
 	cfg, err := Load(path)
 	if err != nil {
@@ -27,6 +36,22 @@ func TestLoad_default_key_file(t *testing.T) {
 	}
 	if cfg.Encryption.KeyFile != ".ward.key" {
 		t.Errorf("expected default key_file .ward.key, got %q", cfg.Encryption.KeyFile)
+	}
+}
+
+func TestLoad_no_default_key_file_when_missing(t *testing.T) {
+	dir := t.TempDir()
+	orig, _ := os.Getwd()
+	t.Cleanup(func() { os.Chdir(orig) })
+	os.Chdir(dir)
+
+	path := writeTemp(t, `vaults: []`)
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.Encryption.KeyFile != "" {
+		t.Errorf("expected empty key_file when .ward.key missing, got %q", cfg.Encryption.KeyFile)
 	}
 }
 
