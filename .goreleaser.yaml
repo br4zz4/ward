@@ -41,8 +41,8 @@ checksum:
 nfpms:
   - id: ward-deb
     package_name: ward
-    vendor: oporpino
-    homepage: https://github.com/oporpino/ward
+    vendor: brazza-tech
+    homepage: https://github.com/brazza-tech/ward
     maintainer: oporpino
     description: Hierarchical secrets management with zero external dependencies.
     license: MIT
@@ -60,8 +60,8 @@ nfpms:
 
   - id: ward-apk
     package_name: ward
-    vendor: oporpino
-    homepage: https://github.com/oporpino/ward
+    vendor: brazza-tech
+    homepage: https://github.com/brazza-tech/ward
     maintainer: oporpino
     description: Hierarchical secrets management with zero external dependencies.
     license: MIT
@@ -84,14 +84,14 @@ nfpms:
 homebrew_casks:
   - name: ward
     repository:
-      owner: oporpino
+      owner: brazza-tech
       name: homebrew-tap
       token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
     commit_author:
       name: oporpino
       email: oporpino@users.noreply.github.com
     directory: Casks
-    homepage: https://github.com/oporpino/ward
+    homepage: https://github.com/brazza-tech/ward
     description: Hierarchical secrets management with zero external dependencies.
     license: MIT
     custom_block: |
@@ -106,7 +106,7 @@ homebrew_casks:
 
 release:
   github:
-    owner: oporpino
+    owner: brazza-tech
     name: ward
   draft: false
   prerelease: auto

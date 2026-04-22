@@ -3,7 +3,7 @@ package cmd
 import (
 	"strings"
 
-	"github.com/oporpino/ward/internal/secrets"
+	"github.com/brazza-tech/ward/internal/secrets"
 	"github.com/spf13/cobra"
 )
 

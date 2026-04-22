@@ -5,8 +5,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/oporpino/ward/internal/secrets"
-	"github.com/oporpino/ward/internal/ward"
+	"github.com/brazza-tech/ward/internal/secrets"
+	"github.com/brazza-tech/ward/internal/ward"
 	"github.com/spf13/cobra"
 )
 

@@ -8,10 +8,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/oporpino/ward/internal/config"
-	"github.com/oporpino/ward/internal/secrets"
-	"github.com/oporpino/ward/internal/sops"
-	"github.com/oporpino/ward/internal/ward"
+	"github.com/brazza-tech/ward/internal/config"
+	"github.com/brazza-tech/ward/internal/secrets"
+	"github.com/brazza-tech/ward/internal/sops"
+	"github.com/brazza-tech/ward/internal/ward"
 )
 
 // ── helpers ───────────────────────────────────────────────────────────────────

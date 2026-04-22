@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/oporpino/ward/test/e2e/testutil"
+	"github.com/brazza-tech/ward/test/e2e/testutil"
 )
 
 var bin string

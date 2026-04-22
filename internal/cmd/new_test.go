@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/oporpino/ward/internal/config"
+	"github.com/brazza-tech/ward/internal/config"
 	"gopkg.in/yaml.v3"
 )
 

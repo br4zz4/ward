@@ -94,7 +94,7 @@ jobs:
             curl -sf -X POST \
               -H "Authorization: Bearer $BUILDKITE_PACKAGE_TOKEN" \
               -F "file=@$f" \
-              "https://api.buildkite.com/v2/packages/organizations/oporpino/registries/ward-debian/packages"
+              "https://api.buildkite.com/v2/packages/organizations/brazza-tech/registries/ward-debian/packages"
           done
         env:
           BUILDKITE_PACKAGE_TOKEN: ${{ secrets.BUILDKITE_PACKAGE_TOKEN }}
@@ -115,7 +115,7 @@ jobs:
             resp=$(curl -s -w "\nHTTP:%{http_code}" -X POST \
               -H "Authorization: Bearer $BUILDKITE_PACKAGE_TOKEN" \
               -F "file=@$f" \
-              "https://api.buildkite.com/v2/packages/organizations/oporpino/registries/ward-alpine/packages")
+              "https://api.buildkite.com/v2/packages/organizations/brazza-tech/registries/ward-alpine/packages")
             http_code=$(echo "$resp" | grep "HTTP:" | cut -d: -f2)
             body=$(echo "$resp" | grep -v "HTTP:")
             echo "APK upload $f → HTTP $http_code"

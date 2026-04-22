@@ -10,13 +10,13 @@ import (
 
 	"github.com/spf13/cobra"
 
-	wardage "github.com/oporpino/ward/internal/age"
+	wardage "github.com/brazza-tech/ward/internal/age"
 )
 
 // wardConfigTemplate is the config written by ward init.
 // All optional fields are shown as comments with their defaults.
-// docs: https://github.com/oporpino/ward/blob/main/docs/configuration.md
-const wardConfigTemplate = `# ward configuration — https://github.com/oporpino/ward/blob/main/docs/configuration.md
+// docs: https://github.com/brazza-tech/ward/blob/main/docs/configuration.md
+const wardConfigTemplate = `# ward configuration — https://github.com/brazza-tech/ward/blob/main/docs/configuration.md
 
 # encryption:
 #   key_file: .ward/.key   # path to encryption key — add to .gitignore

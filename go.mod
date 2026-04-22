@@ -1,4 +1,4 @@
-module github.com/oporpino/ward
+module github.com/brazza-tech/ward
 
 go 1.26.2
 

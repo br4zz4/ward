@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/oporpino/ward/internal/config"
+	"github.com/brazza-tech/ward/internal/config"
 	"github.com/spf13/cobra"
 )
 

@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/oporpino/ward/internal/config"
+	"github.com/brazza-tech/ward/internal/config"
 )
 
 func strVal(n *Node) string {

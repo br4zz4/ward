@@ -51,7 +51,7 @@ conflict: cannot merge key "database_url" — defined in multiple files at the s
 **macOS (Homebrew)**
 
 ```sh
-brew tap oporpino/tap
+brew tap brazza-tech/tap
 brew install --cask ward
 ```
 
@@ -60,7 +60,7 @@ Shell completions are installed automatically.
 **Debian / Ubuntu**
 
 ```sh
-curl -sL $(curl -s https://api.github.com/repos/oporpino/ward/releases/latest \
+curl -sL $(curl -s https://api.github.com/repos/brazza-tech/ward/releases/latest \
   | grep browser_download_url | grep linux_amd64.deb | cut -d'"' -f4) -o ward.deb
 sudo dpkg -i ward.deb
 ```
@@ -68,7 +68,7 @@ sudo dpkg -i ward.deb
 **Alpine Linux**
 
 ```sh
-curl -sL $(curl -s https://api.github.com/repos/oporpino/ward/releases/latest \
+curl -sL $(curl -s https://api.github.com/repos/brazza-tech/ward/releases/latest \
   | grep browser_download_url | grep linux_amd64.apk | cut -d'"' -f4) -o ward.apk
 apk add --allow-untrusted ward.apk
 ```
@@ -76,13 +76,13 @@ apk add --allow-untrusted ward.apk
 **Go**
 
 ```sh
-go install github.com/oporpino/ward/cmd/ward@latest
+go install github.com/brazza-tech/ward/cmd/ward@latest
 ```
 
 **From source**
 
 ```sh
-git clone https://github.com/oporpino/ward
+git clone https://github.com/brazza-tech/ward
 cd ward
 go build -o ~/.local/bin/ward ./cmd/ward
 ```
