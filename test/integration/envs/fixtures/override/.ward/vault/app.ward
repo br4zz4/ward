@@ -1,0 +1,5 @@
+app:
+  log_level: info
+  config:
+    log_level: debug
+    max_retries: "5"

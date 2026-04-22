@@ -1,0 +1,4 @@
+app:
+  production:
+    token: production-token
+    db_url: postgres://production/app

@@ -1,0 +1,4 @@
+app:
+  production:
+    secret_key: production-secret
+    db_url: postgres://production/app

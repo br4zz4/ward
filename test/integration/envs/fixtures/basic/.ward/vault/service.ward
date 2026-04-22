@@ -1,0 +1,4 @@
+service:
+  secret_key: abc123
+  api_url: https://api.example.com
+  timeout: "30"

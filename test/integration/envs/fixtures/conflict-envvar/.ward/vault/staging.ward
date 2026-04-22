@@ -1,0 +1,4 @@
+app:
+  staging:
+    secret_key: staging-secret
+    db_url: postgres://staging/app

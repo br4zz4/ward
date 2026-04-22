@@ -1,0 +1,7 @@
+app:
+  staging:
+    api_key: staging-key
+    region: us-east-1
+  production:
+    api_key: prod-key
+    region: us-west-2

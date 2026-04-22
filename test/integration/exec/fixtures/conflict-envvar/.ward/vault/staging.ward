@@ -1,0 +1,4 @@
+app:
+  staging:
+    token: staging-token
+    db_url: postgres://staging/app

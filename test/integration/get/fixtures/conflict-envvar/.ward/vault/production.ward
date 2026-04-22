@@ -1,0 +1,3 @@
+app:
+  production:
+    token: production-token

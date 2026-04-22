@@ -1,0 +1,3 @@
+infra:
+  db_host: db.vault-b.internal
+  port: "5433"
