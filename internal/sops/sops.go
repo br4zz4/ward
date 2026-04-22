@@ -12,7 +12,7 @@ import (
 	"github.com/getsops/sops/v3/cmd/sops/formats"
 	"github.com/getsops/sops/v3/config"
 	"github.com/getsops/sops/v3/decrypt"
-	"github.com/brazza-tech/ward/internal/age"
+	"github.com/br4zz4/ward/internal/age"
 )
 
 // SopsDecryptor decrypts and re-encrypts sops+age .ward files using the sops Go library.

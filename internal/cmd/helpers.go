@@ -7,11 +7,11 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/brazza-tech/ward/internal/config"
-	wardage "github.com/brazza-tech/ward/internal/age"
-	"github.com/brazza-tech/ward/internal/secrets"
-	"github.com/brazza-tech/ward/internal/sops"
-	"github.com/brazza-tech/ward/internal/ward"
+	"github.com/br4zz4/ward/internal/config"
+	wardage "github.com/br4zz4/ward/internal/age"
+	"github.com/br4zz4/ward/internal/secrets"
+	"github.com/br4zz4/ward/internal/sops"
+	"github.com/br4zz4/ward/internal/ward"
 )
 
 // configFile holds the explicit --config flag value; empty means auto-detect.
@@ -63,7 +63,7 @@ func newEngine() (*ward.Engine, error) {
 					"to get started, run:\n\n"+
 					"  %sward init%s\n\n"+
 					"this will create %s.ward/config.yaml%s and a starter secrets file.\n"+
-					"%ssee https://github.com/brazza-tech/ward%s\n\n",
+					"%ssee https://github.com/br4zz4/ward%s\n\n",
 				clrLightRed, clrReset, config.DefaultConfigFile,
 				clrBold, clrReset, clrCyan, clrReset,
 				clrBold, clrReset,

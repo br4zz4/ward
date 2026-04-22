@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/brazza-tech/ward/internal/config"
-	"github.com/brazza-tech/ward/internal/secrets"
-	"github.com/brazza-tech/ward/internal/sops"
+	"github.com/br4zz4/ward/internal/config"
+	"github.com/br4zz4/ward/internal/secrets"
+	"github.com/br4zz4/ward/internal/sops"
 )
 
 // Engine orchestrates secret discovery, loading, merging and env-var resolution.

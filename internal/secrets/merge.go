@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/brazza-tech/ward/internal/config"
+	"github.com/br4zz4/ward/internal/config"
 )
 
 const (
@@ -90,7 +90,7 @@ func (e *ConflictError) Error() string {
 		}
 		sb.WriteString("\n")
 	}
-	fmt.Fprintf(&sb, "  %s→ read more:%s https://github.com/brazza-tech/ward/blob/main/docs/conflicts-and-collisions.md\n",
+	fmt.Fprintf(&sb, "  %s→ read more:%s https://github.com/br4zz4/ward/blob/main/docs/conflicts-and-collisions.md\n",
 		colorGray, colorReset)
 	return sb.String()
 }

@@ -6,7 +6,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/brazza-tech/ward/internal/ward"
+	"github.com/br4zz4/ward/internal/ward"
 	"github.com/spf13/cobra"
 )
 

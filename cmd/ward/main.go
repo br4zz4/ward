@@ -6,7 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/brazza-tech/ward/internal/cmd"
+	"github.com/br4zz4/ward/internal/cmd"
 )
 
 var version = "dev"

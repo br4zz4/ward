@@ -1,4 +1,4 @@
-module github.com/brazza-tech/ward
+module github.com/br4zz4/ward
 
 go 1.26.2
 

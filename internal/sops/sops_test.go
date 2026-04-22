@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/brazza-tech/ward/internal/sops"
+	"github.com/br4zz4/ward/internal/sops"
 )
 
 // testdataDir returns the path to test/fixtures/sops-age relative to this file.

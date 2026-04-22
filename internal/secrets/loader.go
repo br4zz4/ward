@@ -6,7 +6,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/brazza-tech/ward/internal/sops"
+	"github.com/br4zz4/ward/internal/sops"
 )
 
 // LineMap maps dot-path → line number in the source file.

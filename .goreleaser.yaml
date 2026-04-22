@@ -41,9 +41,9 @@ checksum:
 nfpms:
   - id: ward-deb
     package_name: ward
-    vendor: brazza-tech
-    homepage: https://github.com/brazza-tech/ward
-    maintainer: brazza-tech
+    vendor: br4zz4
+    homepage: https://github.com/br4zz4/ward
+    maintainer: br4zz4
     description: Hierarchical secrets management with zero external dependencies.
     license: MIT
     formats:
@@ -60,9 +60,9 @@ nfpms:
 
   - id: ward-apk
     package_name: ward
-    vendor: brazza-tech
-    homepage: https://github.com/brazza-tech/ward
-    maintainer: brazza-tech
+    vendor: br4zz4
+    homepage: https://github.com/br4zz4/ward
+    maintainer: br4zz4
     description: Hierarchical secrets management with zero external dependencies.
     license: MIT
     formats:
@@ -84,14 +84,14 @@ nfpms:
 homebrew_casks:
   - name: ward
     repository:
-      owner: brazza-tech
+      owner: br4zz4
       name: homebrew-tap
       token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
     commit_author:
-      name: brazza-tech
-      email: brazza-tech@users.noreply.github.com
+      name: br4zz4
+      email: br4zz4@users.noreply.github.com
     directory: Casks
-    homepage: https://github.com/brazza-tech/ward
+    homepage: https://github.com/br4zz4/ward
     description: Hierarchical secrets management with zero external dependencies.
     license: MIT
     custom_block: |
@@ -106,7 +106,7 @@ homebrew_casks:
 
 release:
   github:
-    owner: brazza-tech
+    owner: br4zz4
     name: ward
   draft: false
   prerelease: auto

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/brazza-tech/ward/internal/secrets"
+	"github.com/br4zz4/ward/internal/secrets"
 	"github.com/spf13/cobra"
 )
 

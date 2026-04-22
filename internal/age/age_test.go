@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/brazza-tech/ward/internal/age"
+	"github.com/br4zz4/ward/internal/age"
 )
 
 func TestAgeArmorDecryptor_plain_file_errors(t *testing.T) {
