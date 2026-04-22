@@ -90,7 +90,7 @@ func (e *ConflictError) Error() string {
 		}
 		sb.WriteString("\n")
 	}
-	fmt.Fprintf(&sb, "  %s→ read more:%s https://github.com/oporpino/ward/blob/main/docs/conflicts.md\n",
+	fmt.Fprintf(&sb, "  %s→ read more:%s https://github.com/oporpino/ward/blob/main/docs/conflicts-and-collisions.md\n",
 		colorGray, colorReset)
 	return sb.String()
 }
