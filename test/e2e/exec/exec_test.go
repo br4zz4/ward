@@ -1,4 +1,4 @@
-//go:build integration
+//go:build e2e
 
 package exec_test
 
@@ -6,7 +6,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/oporpino/ward/test/integration/testutil"
+	"github.com/oporpino/ward/test/e2e/testutil"
 )
 
 var bin string

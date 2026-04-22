@@ -1,6 +1,6 @@
-//go:build integration
+//go:build e2e
 
-// Package testutil provides shared helpers for integration tests.
+// Package testutil provides shared helpers for e2e tests.
 package testutil
 
 import (
@@ -17,13 +17,13 @@ import (
 // ProjectRoot returns the absolute path to the repository root.
 func ProjectRoot() string {
 	_, file, _, _ := runtime.Caller(0)
-	// file is .../test/integration/testutil/testutil.go — go up 3 levels
+	// file is .../test/e2e/testutil/testutil.go — go up 3 levels
 	return filepath.Join(filepath.Dir(file), "..", "..", "..")
 }
 
-// FixtureDir returns the absolute path to test/integration/<cmd>/fixtures/<name>.
+// FixtureDir returns the absolute path to test/e2e/<cmd>/fixtures/<name>.
 func FixtureDir(cmd, name string) string {
-	return filepath.Join(ProjectRoot(), "test", "integration", cmd, "fixtures", name)
+	return filepath.Join(ProjectRoot(), "test", "e2e", cmd, "fixtures", name)
 }
 
 // Run executes the ward binary with the given working directory and args.
@@ -51,7 +51,7 @@ func Run(t *testing.T, bin, dir string, args ...string) (stdout, stderr string, 
 // BuildBin builds the ward binary and returns its path.
 // The binary is written to a temp file; the caller must remove it when done.
 func BuildBin() (string, error) {
-	bin, err := os.CreateTemp("", "ward-integration-*")
+	bin, err := os.CreateTemp("", "ward-e2e-*")
 	if err != nil {
 		return "", err
 	}

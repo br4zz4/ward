@@ -1,4 +1,4 @@
-//go:build integration
+//go:build e2e
 
 package init_test
 
@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/oporpino/ward/test/integration/testutil"
+	"github.com/oporpino/ward/test/e2e/testutil"
 )
 
 var bin string
