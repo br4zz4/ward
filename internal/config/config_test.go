@@ -19,6 +19,31 @@ func writeTemp(t *testing.T, content string) string {
 	return f.Name()
 }
 
+func TestLoad_default_key_file(t *testing.T) {
+	path := writeTemp(t, `vaults: []`)
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.Encryption.KeyFile != ".ward.key" {
+		t.Errorf("expected default key_file .ward.key, got %q", cfg.Encryption.KeyFile)
+	}
+}
+
+func TestLoad_no_default_key_file_when_key_env_set(t *testing.T) {
+	path := writeTemp(t, `
+encryption:
+  key_env: MY_KEY
+`)
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.Encryption.KeyFile != "" {
+		t.Errorf("expected empty key_file when key_env set, got %q", cfg.Encryption.KeyFile)
+	}
+}
+
 func TestLoad_defaults(t *testing.T) {
 	path := writeTemp(t, `
 encryption:

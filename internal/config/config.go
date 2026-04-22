@@ -102,6 +102,9 @@ func Load(path string) (*Config, error) {
 	if cfg.Encryption.Engine == "" {
 		cfg.Encryption.Engine = "age+armor"
 	}
+	if cfg.Encryption.KeyFile == "" && cfg.Encryption.KeyEnv == "" {
+		cfg.Encryption.KeyFile = ".ward.key"
+	}
 	if len(cfg.Vaults) == 0 && len(cfg.Sources) > 0 {
 		cfg.Vaults = cfg.Sources
 	}
