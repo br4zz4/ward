@@ -22,7 +22,6 @@ const wardConfigTemplate = `# ward configuration — https://github.com/oporpino
 #   key_file: .ward.key   # path to encryption key — add to .gitignore
 #   key_env: WARD_KEY     # or: env var holding the key (takes precedence)
 
-# on_conflict: error      # error (default) | override
 
 # vaults:
 #   default_dir: .ward/vault   # where 'ward new <name>' creates files

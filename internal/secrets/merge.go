@@ -88,12 +88,6 @@ func (e *ConflictError) Error() string {
 			fmt.Fprintf(&sb, "    %s2.%s define %s%s%s in a shared ancestor file instead\n",
 				colorGray, colorReset, colorYellow, movedPath, colorReset)
 		}
-		// Option 3: --on-conflict=override
-		fmt.Fprintf(&sb, "    %s3.%s let the last file win:\n", colorGray, colorReset)
-		fmt.Fprintf(&sb, "         %sward exec --on-conflict=override -- <cmd>%s\n",
-			colorCyan, colorReset)
-		fmt.Fprintf(&sb, "         %sward envs --on-conflict=override%s\n",
-			colorCyan, colorReset)
 		sb.WriteString("\n")
 	}
 	fmt.Fprintf(&sb, "  %s→ read more:%s https://github.com/oporpino/ward/blob/main/docs/conflicts.md\n",

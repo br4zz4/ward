@@ -6,20 +6,19 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/oporpino/ward/internal/config"
 	"github.com/oporpino/ward/internal/ward"
 	"github.com/spf13/cobra"
 )
 
 func NewExecCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:                "exec [--prefixed] [--on-conflict=error|override] [dot.path] -- <cmd> [args...]",
+		Use:                "exec [--prefixed] [dot.path] -- <cmd> [args...]",
 		Short:              "Merge secrets and inject as env vars, then run a command",
 		Args:               cobra.MinimumNArgs(1),
 		DisableFlagParsing: true,
 		ValidArgsFunction:  completeDotPaths,
 		Run: func(_ *cobra.Command, args []string) {
-			dotPath, cmdArgs, prefixed, onConflict := parseExecArgs(args)
+			dotPath, cmdArgs, prefixed := parseExecArgs(args)
 
 			if len(cmdArgs) == 0 {
 				fmt.Fprintln(os.Stderr, "ward: exec requires a command after --")
@@ -30,7 +29,7 @@ func NewExecCmd() *cobra.Command {
 			if err != nil {
 				fatal(err)
 			}
-			result, err := eng.MergeWithConflict(config.OnConflict(onConflict), dotPath)
+			result, err := eng.MergeScoped(dotPath)
 			if err != nil {
 				fatal(err)
 			}
@@ -70,22 +69,13 @@ func resolveEnvVars(eng *ward.Engine, result *ward.MergeResult, dotPath string, 
 	return out, nil
 }
 
-// parseExecArgs parses: [--prefixed] [--on-conflict=X] [dot.path] -- <cmd> [args...]
-func parseExecArgs(args []string) (dotPath string, cmdArgs []string, prefixed bool, onConflict string) {
+// parseExecArgs parses: [--prefixed] [dot.path] -- <cmd> [args...]
+func parseExecArgs(args []string) (dotPath string, cmdArgs []string, prefixed bool) {
 	rest := make([]string, 0, len(args))
 	for i := 0; i < len(args); i++ {
 		a := args[i]
 		if a == "--prefixed" {
 			prefixed = true
-			continue
-		}
-		if strings.HasPrefix(a, "--on-conflict=") {
-			onConflict = strings.TrimPrefix(a, "--on-conflict=")
-			continue
-		}
-		if a == "--on-conflict" && i+1 < len(args) {
-			i++
-			onConflict = args[i]
 			continue
 		}
 		rest = append(rest, a)
@@ -100,7 +90,6 @@ func parseExecArgs(args []string) (dotPath string, cmdArgs []string, prefixed bo
 			return
 		}
 	}
-	// No "--" found — everything is cmd args
 	cmdArgs = rest
 	return
 }

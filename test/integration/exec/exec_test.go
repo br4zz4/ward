@@ -84,14 +84,14 @@ func TestExec_conflict_file_blocked(t *testing.T) {
 	}
 }
 
-func TestExec_conflict_file_override_runs(t *testing.T) {
-	out, _, code := testutil.Run(t, bin, fix("conflict-file"), "exec", "--on-conflict=override", "--", "env")
-	if code != 0 {
-		t.Fatalf("exit %d", code)
+func TestExec_conflict_file_always_errors(t *testing.T) {
+	// File conflict always errors — there is no override mode
+	_, stderr, code := testutil.Run(t, bin, fix("conflict-file"), "exec", "--", "env")
+	if code == 0 {
+		t.Fatal("expected non-zero exit — conflict has no automatic resolution")
 	}
-	// Last vault wins
-	if !testutil.Contains(out, "SECRET_KEY=key-from-b") {
-		t.Errorf("expected vault-b value, got: %q", out)
+	if !testutil.Contains(testutil.StripANSI(stderr), "to resolve") {
+		t.Errorf("expected resolution hints, got: %q", stderr)
 	}
 }
 

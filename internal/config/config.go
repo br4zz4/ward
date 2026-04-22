@@ -7,23 +7,16 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// MergeMode is used internally by the merge engine.
+// MergeModeOverride is only used by MergeForView to produce a complete tree for display.
 type MergeMode string
 
 const (
-	MergeModeDeep     MergeMode = "merge"
-	MergeModeOverride MergeMode = "override"
-	MergeModeError    MergeMode = "error"
+	MergeModeOverride MergeMode = "override" // internal: used by view only
+	MergeModeError    MergeMode = "error"    // always the user-facing mode
 
 	// DefaultConfigFile is the canonical config path for new projects.
 	DefaultConfigFile = ".ward/config.yaml"
-)
-
-// OnConflict controls peer-conflict behaviour across vaults.
-type OnConflict string
-
-const (
-	OnConflictError    OnConflict = "error"    // default: peer conflicts are errors
-	OnConflictOverride OnConflict = "override" // last vault in config wins silently
 )
 
 type Encryption struct {
@@ -38,8 +31,6 @@ type Source struct {
 
 type Config struct {
 	Encryption Encryption `yaml:"encryption,omitempty"`
-	OnConflict OnConflict `yaml:"on_conflict,omitempty"`
-	Merge      MergeMode  `yaml:"merge,omitempty"`      // legacy: migrated to OnConflict on load
 	DefaultDir string     `yaml:"default_dir,omitempty"`
 	Vaults     []Source   `yaml:"vaults"`
 	Sources    []Source   `yaml:"sources,omitempty"` // legacy: migrated to Vaults on load
@@ -90,17 +81,6 @@ func Load(path string) (*Config, error) {
 	if cfg.Encryption.Engine == "" {
 		cfg.Encryption.Engine = "age+armor"
 	}
-	// Migrate legacy merge field to on_conflict
-	if cfg.OnConflict == "" {
-		switch cfg.Merge {
-		case MergeModeOverride:
-			cfg.OnConflict = OnConflictOverride
-		default:
-			cfg.OnConflict = OnConflictError
-		}
-	}
-	cfg.Merge = "" // clear legacy field
-
 	if len(cfg.Vaults) == 0 && len(cfg.Sources) > 0 {
 		cfg.Vaults = cfg.Sources
 	}

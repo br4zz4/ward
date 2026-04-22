@@ -32,20 +32,20 @@ type MergeResult struct {
 
 // Merge loads all .ward files from all vaults and merges them using the
 // on_conflict mode from the configuration.
+// Merge loads all vaults and merges them. Any conflict is an error.
 func (e *Engine) Merge() (*MergeResult, error) {
-	return e.MergeWithConflict("", "")
+	return e.MergeScoped("")
 }
 
-// MergeWithConflict is like Merge but allows overriding the on_conflict behaviour
-// and scoping conflict detection to a dot-path prefix.
-// When scopePrefix is non-empty, conflicts outside that prefix are silently overridden.
-func (e *Engine) MergeWithConflict(onConflict config.OnConflict, scopePrefix string) (*MergeResult, error) {
+// MergeScoped is like Merge but scopes conflict detection to a dot-path prefix.
+// Conflicts outside that prefix are silently resolved so the scoped path can
+// be used without being blocked by unrelated conflicts.
+func (e *Engine) MergeScoped(scopePrefix string) (*MergeResult, error) {
 	files, err := e.load()
 	if err != nil {
 		return nil, err
 	}
-	mode := e.conflictMode(onConflict)
-	tree, err := secrets.Merge(files, mode, scopePrefix)
+	tree, err := secrets.Merge(files, config.MergeModeError, scopePrefix)
 	if err != nil {
 		return nil, err
 	}
@@ -180,18 +180,6 @@ func (e *Engine) load() ([]secrets.ParsedFile, error) {
 	return files, nil
 }
 
-// conflictMode maps the CLI on_conflict flag to a MergeMode.
-// The flag takes precedence over the config value.
-func (e *Engine) conflictMode(onConflict config.OnConflict) config.MergeMode {
-	effective := e.cfg.OnConflict
-	if onConflict != "" {
-		effective = onConflict
-	}
-	if effective == config.OnConflictOverride {
-		return config.MergeModeOverride
-	}
-	return config.MergeModeError
-}
 
 func sourcePaths(cfg *config.Config) []string {
 	paths := make([]string, len(cfg.Vaults))

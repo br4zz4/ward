@@ -70,14 +70,14 @@ func TestEnvs_conflict_file_blocked(t *testing.T) {
 	}
 }
 
-func TestEnvs_conflict_file_override_wins(t *testing.T) {
-	out, _, code := testutil.Run(t, bin, fix("conflict-file"), "envs", "--on-conflict=override")
-	if code != 0 {
-		t.Fatalf("exit %d", code)
+func TestEnvs_conflict_file_always_errors(t *testing.T) {
+	// File conflict always errors — there is no override mode
+	_, stderr, code := testutil.Run(t, bin, fix("conflict-file"), "envs")
+	if code == 0 {
+		t.Fatal("expected non-zero exit — conflict has no automatic resolution")
 	}
-	// Last vault wins — vault-b values
-	if !testutil.Contains(out, "db.vault-b.internal") {
-		t.Errorf("expected vault-b value to win, got: %q", out)
+	if !testutil.Contains(testutil.StripANSI(stderr), "to resolve") {
+		t.Errorf("expected resolution hints, got: %q", stderr)
 	}
 }
 

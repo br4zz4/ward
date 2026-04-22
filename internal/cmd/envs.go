@@ -5,7 +5,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/oporpino/ward/internal/config"
 	"github.com/oporpino/ward/internal/secrets"
 	"github.com/oporpino/ward/internal/ward"
 	"github.com/spf13/cobra"
@@ -13,10 +12,9 @@ import (
 
 func NewEnvsCmd() *cobra.Command {
 	var prefixed bool
-	var onConflict string
 
 	c := &cobra.Command{
-		Use:               "envs [--prefixed] [--on-conflict=error|override] [dot.path]",
+		Use:               "envs [--prefixed] [dot.path]",
 		Short:             "Show the env vars that would be injected by exec",
 		Args:              cobra.MaximumNArgs(1),
 		ValidArgsFunction: completeDotPaths,
@@ -30,7 +28,7 @@ func NewEnvsCmd() *cobra.Command {
 			if err != nil {
 				fatal(err)
 			}
-			result, err := eng.MergeWithConflict(config.OnConflict(onConflict), dotPath)
+			result, err := eng.MergeScoped(dotPath)
 			if err != nil {
 				fatal(err)
 			}
@@ -45,7 +43,6 @@ func NewEnvsCmd() *cobra.Command {
 	}
 
 	c.Flags().BoolVar(&prefixed, "prefixed", false, "use full path env var names")
-	c.Flags().StringVar(&onConflict, "on-conflict", "", "conflict mode: error (default) | override")
 	return c
 }
 

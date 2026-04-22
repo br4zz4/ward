@@ -32,35 +32,21 @@ sources:
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	// Default: no merge field → OnConflictError
-	if cfg.OnConflict != OnConflictError {
-		t.Errorf("expected default on_conflict=error, got %q", cfg.OnConflict)
-	}
 	if cfg.Encryption.Engine != "sops+age" {
 		t.Errorf("unexpected engine: %q", cfg.Encryption.Engine)
 	}
 }
 
-func TestLoad_explicit_merge_override(t *testing.T) {
-	path := writeTemp(t, `merge: override`)
+func TestLoad_legacy_sources_migrated(t *testing.T) {
+	path := writeTemp(t, `sources:
+  - path: .ward/vault
+`)
 	cfg, err := Load(path)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	// Legacy merge: override → on_conflict: override
-	if cfg.OnConflict != OnConflictOverride {
-		t.Errorf("expected on_conflict=override, got %q", cfg.OnConflict)
-	}
-}
-
-func TestLoad_explicit_on_conflict(t *testing.T) {
-	path := writeTemp(t, `on_conflict: override`)
-	cfg, err := Load(path)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if cfg.OnConflict != OnConflictOverride {
-		t.Errorf("expected on_conflict=override, got %q", cfg.OnConflict)
+	if len(cfg.Vaults) != 1 || cfg.Vaults[0].Path != ".ward/vault" {
+		t.Errorf("expected sources migrated to vaults, got %v", cfg.Vaults)
 	}
 }
 

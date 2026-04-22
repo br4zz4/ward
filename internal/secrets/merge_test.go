@@ -15,18 +15,15 @@ func strVal(n *Node) string {
 	return s
 }
 
-func TestMerge_deep_merge(t *testing.T) {
+func TestMerge_different_dotpaths_coexist(t *testing.T) {
+	// Two files defining different dot-paths under the same root — no conflict
 	files := []ParsedFile{
 		{
 			File: "company.ward",
 			Data: map[string]interface{}{
 				"company": map[string]interface{}{
-					"name": "acme",
-					"sectors": map[string]interface{}{
-						"one": map[string]interface{}{
-							"name": "sector 1",
-						},
-					},
+					"name":   "acme",
+					"region": "us-east-1",
 				},
 			},
 		},
@@ -36,7 +33,7 @@ func TestMerge_deep_merge(t *testing.T) {
 				"company": map[string]interface{}{
 					"sectors": map[string]interface{}{
 						"one": map[string]interface{}{
-							"name":         "override sector 1",
+							"sector_name":  "sector 1",
 							"database_url": "postgres://staging",
 						},
 					},
@@ -45,41 +42,30 @@ func TestMerge_deep_merge(t *testing.T) {
 		},
 	}
 
-	tree, err := Merge(files, config.MergeModeDeep, "")
+	tree, err := Merge(files, config.MergeModeError, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
 	company := tree["company"].Children
-	// name at company level preserved
 	if strVal(company["name"]) != "acme" {
 		t.Errorf("company.name: got %q, want %q", strVal(company["name"]), "acme")
 	}
-
 	one := company["sectors"].Children["one"].Children
-	// leaf overrides ancestor
-	if strVal(one["name"]) != "override sector 1" {
-		t.Errorf("one.name: got %q, want %q", strVal(one["name"]), "override sector 1")
-	}
 	if strVal(one["database_url"]) != "postgres://staging" {
 		t.Errorf("one.database_url: got %q", strVal(one["database_url"]))
 	}
 }
 
-func TestMerge_leaf_wins_over_ancestor(t *testing.T) {
+func TestMerge_same_dotpath_two_files_is_conflict(t *testing.T) {
+	// Same dot-path in two files → always conflict
 	files := []ParsedFile{
-		{File: "base.ward", Data: map[string]interface{}{"key": "base"}},
-		{File: "leaf.ward", Data: map[string]interface{}{"key": "leaf"}},
+		{File: "a.ward", Data: map[string]interface{}{"key": "from-a"}},
+		{File: "b.ward", Data: map[string]interface{}{"key": "from-b"}},
 	}
-	tree, err := Merge(files, config.MergeModeDeep, "")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if strVal(tree["key"]) != "leaf" {
-		t.Errorf("expected leaf to win, got %q", strVal(tree["key"]))
-	}
-	if tree["key"].Origin.File != "leaf.ward" {
-		t.Errorf("expected origin leaf.ward, got %q", tree["key"].Origin.File)
+	_, err := Merge(files, config.MergeModeError, "")
+	if err == nil {
+		t.Fatal("expected conflict when same dot-path appears in two files")
 	}
 }
 
@@ -163,7 +149,7 @@ func TestMerge_error_mode_conflict(t *testing.T) {
 }
 
 func TestMerge_no_files(t *testing.T) {
-	tree, err := Merge(nil, config.MergeModeDeep, "")
+	tree, err := Merge(nil, config.MergeModeError, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -176,7 +162,7 @@ func TestMerge_origin_tracked(t *testing.T) {
 	files := []ParsedFile{
 		{File: "base.ward", Data: map[string]interface{}{"x": "1"}},
 	}
-	tree, err := Merge(files, config.MergeModeDeep, "")
+	tree, err := Merge(files, config.MergeModeError, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

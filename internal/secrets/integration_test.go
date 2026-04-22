@@ -69,7 +69,7 @@ company:
 		t.Fatalf("expected 2 files in ancestor line, got %d", len(ordered))
 	}
 
-	tree, err := secrets.Merge(ordered, config.MergeModeDeep, "")
+	tree, err := secrets.Merge(ordered, config.MergeModeError, "")
 	if err != nil {
 		t.Fatalf("merge: %v", err)
 	}
@@ -194,17 +194,14 @@ func TestIntegration_leaf_origin_tracked(t *testing.T) {
 	dec := sops.MockDecryptor{}
 
 	writeWard(t, dir, "base.ward", `app:
-  name: base
-`)
-	writeWard(t, dir, "override.ward", `app:
-  name: override
+  name: myapp
 `)
 
 	paths, _ := secrets.Discover([]string{dir})
 	files, _ := secrets.LoadAll(paths, dec)
 	sorted := secrets.SortBySpecificity(files)
 
-	tree, err := secrets.Merge(sorted, config.MergeModeDeep, "")
+	tree, err := secrets.Merge(sorted, config.MergeModeError, "")
 	if err != nil {
 		t.Fatalf("merge: %v", err)
 	}

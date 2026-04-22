@@ -28,7 +28,7 @@ func NewGetCmd() *cobra.Command {
 			if err != nil {
 				fatal(err)
 			}
-			result, err := eng.MergeWithConflict("", dotPath)
+			result, err := eng.MergeScoped(dotPath)
 			if err != nil {
 				fatal(err)
 			}
