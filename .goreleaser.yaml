@@ -68,8 +68,8 @@ nfpms:
     formats:
       - apk
     apk:
-      key_name: ward-apk
       signature:
+        key_name: ward-apk
         key_file: "{{ .Env.APK_KEY_FILE }}"
     contents:
       - src: ./LICENSE
