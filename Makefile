@@ -1,3 +1,5 @@
+include .commons/make/shell.makefile
+
 .PHONY: test test.integration test.e2e build
 
 build:
