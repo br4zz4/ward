@@ -85,7 +85,7 @@ homebrew_casks:
   - name: ward
     repository:
       owner: br4zz4
-      name: homebrew-tap
+      name: homebrew-ward
       token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
     commit_author:
       name: br4zz4

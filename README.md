@@ -51,7 +51,7 @@ conflict: cannot merge key "database_url" — defined in multiple files at the s
 **macOS (Homebrew)**
 
 ```sh
-brew tap br4zz4/tap
+brew tap br4zz4/ward
 brew install --cask ward
 ```
 
