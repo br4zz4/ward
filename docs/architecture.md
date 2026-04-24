@@ -7,7 +7,7 @@ This document explains the internals of `ward` — how it discovers files, deter
 ## Overview
 
 ```
-ward exec staging.ward -- app
+ward exec myapp.environments.staging -- app
 
      ┌─────────────┐
      │  Discover   │  glob *.ward under vaults
@@ -26,7 +26,7 @@ ward exec staging.ward -- app
      └──────┬──────┘
             │  map[string]*Node
      ┌──────▼──────┐
-     │   Env vars  │  flatten to KEY=value, scope to anchor container
+     │   Env vars  │  flatten to KEY=value, scoped by dot-path prefix
      └──────┬──────┘
             │  map[string]EnvEntry
      ┌──────▼──────┐
@@ -103,29 +103,9 @@ A file is an ancestor if its map-branch structure is **structurally compatible**
 2. For every map-valued key in the candidate that also exists in the anchor, the sub-maps are recursively compatible.
 3. Branches in the candidate that do not exist in the anchor are **allowed** — a single file may cover multiple environments; irrelevant branches are not conflicting.
 
-### File anchor loading
+### Loading all vaults
 
-`secrets.FilterByAnchor(anchor ParsedFile, all []ParsedFile) []ParsedFile`
-
-Returns all files that are structurally compatible ancestors of the anchor **and** have a strictly smaller map depth. This guards against sibling files being misidentified as ancestors.
-
-### Directory anchor loading
-
-Handled in `internal/ward/engine.go: orderForDirAnchor`. For each file in the dir, finds its ancestors from the global file list using the same `IsAncestorOf + mapDepth` check, deduplicates, then trims ancestors to scope.
-
-### TrimToScope
-
-`secrets.TrimToScope(ancestor ParsedFile, dirFiles []ParsedFile) ParsedFile`
-
-When a directory anchor is used, ancestors are trimmed so that only branches relevant to the dir's files are retained. This prevents sibling data from leaking:
-
-```
-secrets.ward has:              dir anchor = sectors/two
-  sectors:
-    one:                       ← pruned (not in any file under two/)
-      name: sector 1
-  name: acme                   ← kept (leaf at company level)
-```
+`engine.MergeScoped(scopePrefix string)` loads all `.ward` files from all configured vaults, resolves ancestry order (least to most specific), and merges them. The `scopePrefix` dot-path is used only during conflict detection and env var resolution — not to filter which files are loaded.
 
 ### Specificity
 
@@ -173,7 +153,7 @@ Conflicts are accumulated across the full merge (not fail-fast). All conflicts a
 
 ## Env var generation
 
-### Flat (no anchor, no `--prefixed`)
+### Flat (no dot-path, no `--prefixed`)
 
 `secrets.ToFlatEnvEntries(tree map[string]*Node) map[string]EnvEntry`
 
@@ -183,7 +163,7 @@ Walks all leaf nodes and uses only the leaf key name, uppercased. No structural 
 myapp.staging.database_url → DATABASE_URL
 ```
 
-### Full path (no anchor, `--prefixed`)
+### Full path (no dot-path, `--prefixed`)
 
 `secrets.ToEnvEntries(tree map[string]*Node) map[string]EnvEntry`
 
@@ -193,16 +173,15 @@ Walks all leaf nodes. Key = uppercased dot-path with `.` replaced by `_`.
 myapp.staging.database_url → MYAPP_STAGING_DATABASE_URL
 ```
 
-### Anchor-relative (with anchor)
+### Dot-path scoped (with dot-path argument)
 
-`secrets.ToEnvEntriesFromAnchor(tree map[string]*Node, anchorData map[string]interface{}) map[string]EnvEntry`
+`engine.EnvVarsPrefer(r *MergeResult, prefixed bool, preferPrefix string) (map[string]EnvEntry, error)`
 
-Descends through the tree following the anchor's structure until the anchor's container level, then collects all leaves using the remaining path as the key prefix.
+When a dot-path is provided (e.g. `myapp.environments.staging`), the full merged tree is used but env var names are resolved using flat leaf names. The `preferPrefix` is used to break ties when two leaves would produce the same env var name — the one under the given dot-path wins.
 
 ```
-anchor = staging.ward (defines myapp.staging.*)
-container level = myapp
-exposed keys: STAGING_DATABASE_URL, STAGING_REDIS_URL
+dot-path = myapp.environments.staging
+exposed: DATABASE_URL, REDIS_URL (flat leaf names)
 ```
 
 ### EnvEntry
@@ -225,9 +204,10 @@ type EnvEntry struct {
 
 `internal/ward.Engine` is the central orchestration object. It holds the config and decryptor and exposes:
 
-- `Merge(anchorPath)` — load, order, merge
-- `MergeForView(anchorPath)` — like Merge but always produces a full tree even when conflicts exist (for `list`/`show`)
-- `Inspect(anchorPath)` — conflict-only check
+- `Merge()` — load, order, merge all vaults
+- `MergeScoped(dotPath)` — like Merge but scopes conflict detection to a dot-path prefix
+- `MergeForView()` — always produces a full tree even when conflicts exist (for `view`)
+- `Inspect()` — conflict-only check
 - `EnvVars(result, prefixed)` — resolve env var names
 - `Encrypt/Decrypt` — passthrough to the configured adapter
 
@@ -242,9 +222,9 @@ type EnvEntry struct {
 
 `maybeAddSource` adds the new file's directory to `vaults` in the config if it is not already covered by an existing vault. The path stored in the config is always relative to the project root (parent of `.ward/`). Paths outside the project root get `../` prefixes as needed.
 
-### Colour coding in list
+### Colour coding in view
 
 `printTreeWithOrigin` renders leaves as:
-- **Green** — origin inside anchor scope, key not in any ancestor
+- **Green** — active key, not overriding any ancestor value
 - **Orange** — overrides an ancestor value
-- **Light blue** — inherited from outside anchor scope (shown in `list` only)
+- **Light blue** — inherited from outside the given dot-path scope (shown in `view` only)
