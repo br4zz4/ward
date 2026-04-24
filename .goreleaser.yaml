@@ -44,7 +44,7 @@ nfpms:
     vendor: br4zz4
     homepage: https://github.com/br4zz4/ward
     maintainer: br4zz4
-    description: Hierarchical secrets management with zero external dependencies.
+    description: Hierarchical secrets manager
     license: MIT
     formats:
       - deb
@@ -63,7 +63,7 @@ nfpms:
     vendor: br4zz4
     homepage: https://github.com/br4zz4/ward
     maintainer: br4zz4
-    description: Hierarchical secrets management with zero external dependencies.
+    description: Hierarchical secrets manager
     license: MIT
     formats:
       - apk
@@ -92,7 +92,7 @@ homebrew_casks:
       email: br4zz4@users.noreply.github.com
     directory: Casks
     homepage: https://github.com/br4zz4/ward
-    description: Hierarchical secrets management with zero external dependencies.
+    description: Hierarchical secrets manager
     license: MIT
     custom_block: |
       postflight do

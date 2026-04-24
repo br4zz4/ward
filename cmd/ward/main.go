@@ -16,7 +16,7 @@ func main() {
 
 	root := &cobra.Command{
 		Use:     "ward",
-		Short:   "Hierarchical secrets management using SOPS+age",
+		Short:   "Hierarchical secrets manager.",
 		Version: version,
 		PersistentPreRun: func(_ *cobra.Command, _ []string) {
 			cmd.SetConfigFile(configPath)
