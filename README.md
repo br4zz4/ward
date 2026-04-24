@@ -12,7 +12,7 @@ Hierarchical secrets management with zero external dependencies.
 ```
 
 ```sh
-ward exec staging.ward -- your-app
+ward exec myapp.environments.staging -- your-app
 # DATABASE_URL=postgres://staging.acme.internal/app
 # NAME=sector 1 override
 # REDIS_URL=redis://staging.acme.internal:6379
@@ -51,7 +51,7 @@ conflict: cannot merge key "database_url" — defined in multiple files at the s
 **macOS (Homebrew)**
 
 ```sh
-brew tap brazza-tech/tap
+brew tap br4zz4/tap
 brew install --cask ward
 ```
 
@@ -104,17 +104,14 @@ ward new staging
 # Create a file in a specific path
 ward new ./.commons/ward/vaults/ruby/staging
 
-# List all secrets with origins
-ward list
-
-# Inspect a specific environment
-ward list .ward/vault/staging.ward
+# Show the merged tree with origins
+ward view
 
 # Show the env vars that would be injected
-ward envs .ward/vault/staging.ward
+ward envs myapp.environments.staging
 
 # Inject and run
-ward exec .ward/vault/staging.ward -- env | grep DATABASE
+ward exec myapp.environments.staging -- env | grep DATABASE
 ```
 
 ---
@@ -141,18 +138,18 @@ If the file is outside the existing vaults, it is automatically added to `.ward/
 
 Decrypt a `.ward` file, open it in `$EDITOR`, re-encrypt on save. Defaults to the first file in the default vault.
 
-### `ward envs [anchor] [--prefixed]`
+### `ward envs [dot.path] [--prefixed]`
 
 Print the env vars that would be injected by `exec`.
 
 ```sh
-# Without anchor — flat leaf names, all vaults merged
+# Without dot-path — flat leaf names, all vaults merged
 ward envs
 # DATABASE_URL  = postgres://staging.acme.internal/app
 # REDIS_URL     = redis://staging.acme.internal:6379
 
-# With anchor — names relative to the anchor's container level
-ward envs .ward/vault/staging.ward
+# With dot-path — scoped to that path, names relative to its level
+ward envs myapp.environments.staging
 # NAME          = sector 1 override
 # DATABASE_URL  = postgres://staging.acme.internal/app
 
@@ -162,21 +159,21 @@ ward envs --prefixed
 # MYAPP_REDIS_URL     = redis://staging.acme.internal:6379
 ```
 
-### `ward exec [anchor] -- <command>`
+### `ward exec [dot.path] -- <command>`
 
 Merge secrets and inject as env vars, then run a command.
 
 ```sh
-ward exec .ward/vault/staging.ward -- rails server
-ward exec .ward/vault/staging.ward -- env | grep DATABASE
+ward exec myapp.environments.staging -- rails server
+ward exec myapp.environments.staging -- env | grep DATABASE
 ```
 
-### `ward list [anchor]`
+### `ward view [dot.path]`
 
 Print the merged tree with source file and line for each value.
 
 ```sh
-ward list .ward/vault/staging.ward
+ward view myapp.environments.staging
 ```
 
 ```
@@ -260,7 +257,7 @@ default_dir: secrets
 
 ```sh
 export WARD_KEY=ward-AAAA...
-ward exec .ward/vault/staging.ward -- deploy
+ward exec myapp.environments.staging -- deploy
 ```
 
 ---
@@ -269,10 +266,9 @@ ward exec .ward/vault/staging.ward -- deploy
 
 | Scenario | Env var |
 |---|---|
-| No anchor, no `--prefixed` | Flat leaf name: `DATABASE_URL` |
-| No anchor, `--prefixed` | Full dot-path: `MYAPP_STAGING_DATABASE_URL` |
-| File anchor | Relative to anchor's container: `DATABASE_URL` |
-| Dir anchor | Relative to dir level: `STAGING_DATABASE_URL` |
+| No dot-path, no `--prefixed` | Flat leaf name: `DATABASE_URL` |
+| No dot-path, `--prefixed` | Full dot-path: `MYAPP_STAGING_DATABASE_URL` |
+| With dot-path | Scoped to that path, flat leaf name: `DATABASE_URL` |
 
 ---
 

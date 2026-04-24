@@ -78,38 +78,28 @@ staging.ward         specificity = 6  (company, company.sectors, company.sectors
 
 ---
 
-## Anchor
+## Dot-path scoping
 
-An **anchor** tells `ward` to scope the merge to a specific file or directory.
-
-### File anchor
+A **dot-path** argument tells `ward exec`, `ward envs`, and `ward view` to scope the merge to a specific subtree of the merged data.
 
 ```sh
-ward show secrets/company/sectors/one/staging.ward
+ward exec company.sectors.one.staging -- deploy
 ```
 
-Loads `staging.ward` plus all its structural ancestors. The env var names are relative to the anchor's container level (`company.sectors.one`), so `staging.database_url` becomes `STAGING_DATABASE_URL`.
+All vaults are merged as usual. The dot-path then selects the subtree at `company.sectors.one.staging` and exposes only its leaves as env vars, using flat leaf names (`DATABASE_URL`, not `COMPANY_SECTORS_ONE_STAGING_DATABASE_URL`).
 
-### Directory anchor
-
-```sh
-ward show secrets/company/sectors/one
-```
-
-Loads all `.ward` files in `secrets/company/sectors/one/` plus their ancestors. Conflicts between siblings in the directory are always errors — the presence of multiple files at the same level makes any overlap ambiguous.
-
-Ancestor data is **trimmed to the directory's scope** before merging. If `company.ward` has `sectors.one` and `sectors.two`, only the `sectors.one` branch is included when the anchor is `sectors/one/`. This prevents unrelated data from leaking into the merge.
+TAB completion is available for dot-path arguments in all three commands.
 
 ---
 
-## Without an anchor
+## Without a dot-path
 
 ```sh
-ward show
 ward exec -- app
+ward envs
 ```
 
-All source files are loaded and merged. Conflicts between any two files at the same specificity level are errors. Use this for projects with a single unambiguous hierarchy.
+All vaults are merged and all leaves are exposed. Conflicts between any two files at the same specificity level are errors. Use this for projects with a single unambiguous hierarchy.
 
 ---
 
@@ -136,4 +126,4 @@ secrets/
       production.ward
 ```
 
-The second layout makes the hierarchy explicit in the directory tree, which helps when inspecting with `ward list`.
+The second layout makes the hierarchy explicit in the directory tree, which helps when inspecting with `ward view`.
