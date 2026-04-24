@@ -1,13 +1,12 @@
 # Contributor: br4zz4
 # Maintainer: br4zz4
 pkgname=ward
-pkgver=0.1.0
+pkgver=0.1.47
 pkgrel=0
-pkgdesc="Hierarchical secrets management using SOPS+age"
+pkgdesc="Hierarchical secrets manager"
 url="https://github.com/br4zz4/ward"
 arch="all"
 license="MIT"
-depends="sops age"
 makedepends="go"
 source="$pkgname-$pkgver.tar.gz::https://github.com/br4zz4/ward/archive/refs/tags/v$pkgver.tar.gz"
 builddir="$srcdir/$pkgname-$pkgver"
