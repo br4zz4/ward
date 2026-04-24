@@ -34,6 +34,7 @@ jobs:
         run: |
           echo "$APK_SIGNING_RSA_KEY" > /tmp/ward-apk.rsa
           chmod 600 /tmp/ward-apk.rsa
+          openssl rsa -in /tmp/ward-apk.rsa -noout -check && echo "RSA key OK" || echo "RSA key INVALID"
         env:
           APK_SIGNING_RSA_KEY: ${{ secrets.APK_SIGNING_RSA_KEY }}
 
