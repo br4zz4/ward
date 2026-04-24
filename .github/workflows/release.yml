@@ -66,10 +66,17 @@ jobs:
       - name: push to buildkite debian registry
         run: |
           for f in dist/*.deb; do
-            curl -sf -X POST \
+            resp=$(curl -s -w "\nHTTP:%{http_code}" -X POST \
               -H "Authorization: Bearer $BUILDKITE_PACKAGE_TOKEN" \
               -F "file=@$f" \
-              "https://api.buildkite.com/v2/packages/organizations/br4zz4/registries/ward-debian/packages"
+              "https://api.buildkite.com/v2/packages/organizations/br4zz4/registries/ward-debian/packages")
+            http_code=$(echo "$resp" | grep "HTTP:" | cut -d: -f2)
+            body=$(echo "$resp" | grep -v "HTTP:")
+            echo "DEB upload $f → HTTP $http_code"
+            if [ "$http_code" -ge 400 ]; then
+              echo "Error: $body"
+              exit 1
+            fi
           done
         env:
           BUILDKITE_PACKAGE_TOKEN: ${{ secrets.BUILDKITE_PACKAGE_TOKEN }}
