@@ -110,8 +110,10 @@ func registerMarketplace(baseDir string) {
 
 	pluginsDir := filepath.Join(baseDir, "plugins")
 	marketplaces["br4zz4"] = map[string]any{
-		"source": "directory",
-		"path":   pluginsDir,
+		"source": map[string]any{
+			"source": "directory",
+			"path":   pluginsDir,
+		},
 	}
 	settings["extraKnownMarketplaces"] = marketplaces
 
