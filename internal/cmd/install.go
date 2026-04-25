@@ -20,12 +20,6 @@ const (
 	marketplaceName = "br4zz4"
 )
 
-var pluginFiles = []string{
-	".claude-plugin/plugin.json",
-	"CLAUDE.md",
-	"skills/context/SKILL.md",
-}
-
 func NewInstallCmd() *cobra.Command {
 	parent := &cobra.Command{
 		Use:   "install",
@@ -103,8 +97,29 @@ func promptInstallTarget() (claudeDir, scope string) {
 	}
 }
 
+func fetchPluginFiles() ([]string, error) {
+	url := pluginBaseURL + "/files.json"
+	resp, err := http.Get(url) //nolint:gosec
+	if err != nil {
+		return nil, fmt.Errorf("could not fetch files.json: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("unexpected status %d fetching files.json", resp.StatusCode)
+	}
+	var files []string
+	if err := json.NewDecoder(resp.Body).Decode(&files); err != nil {
+		return nil, fmt.Errorf("could not parse files.json: %w", err)
+	}
+	return files, nil
+}
+
 func downloadPluginFiles(pluginDir string) {
-	for _, f := range pluginFiles {
+	files, err := fetchPluginFiles()
+	if err != nil {
+		fatal(err)
+	}
+	for _, f := range files {
 		url := pluginBaseURL + "/" + f
 		dest := filepath.Join(pluginDir, f)
 		if err := downloadFile(url, dest); err != nil {
