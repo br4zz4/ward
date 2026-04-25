@@ -46,6 +46,15 @@ func Serve() error {
 	)
 
 	s.AddTool(
+		mcp.NewTool("ward_docs",
+			mcp.WithDescription("Get documentation about ward: concepts, CLI usage, and available Claude Code skills"),
+		),
+		func(_ context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			return ok(wardDocs), nil
+		},
+	)
+
+	s.AddTool(
 		mcp.NewTool("ward_get",
 			mcp.WithDescription("Return the merged value at a dot-path (or full tree if no path given)"),
 			mcp.WithString("path", mcp.Description("dot-path to a secret, e.g. project.staging.secret_key")),
@@ -232,3 +241,51 @@ func Serve() error {
 
 	return server.ServeStdio(s)
 }
+
+const wardDocs = `# ward — hierarchical secrets manager
+
+ward merges encrypted YAML files (.ward) into a single secrets tree, resolved by dot-path.
+Files are encrypted with age keys. The key lives in .ward.key (local) or WARD_KEY (CI).
+
+## Core concepts
+
+- **vault**: a directory of .ward files (e.g. .ward/vault/)
+- **dot-path**: e.g. myapp.environments.staging — addresses a node in the merged tree
+- **merge**: files at deeper ancestry levels override parent values (child wins)
+- **config**: .ward/config.yaml defines vaults and key location
+
+## Key commands (also available as MCP tools)
+
+` + "```" + `sh
+ward get [dot-path]          # merged value at path (or full tree)
+ward view [dot-path]         # merged tree with source file and line per value
+ward envs [dot-path]         # env vars that would be injected by ward exec
+ward raw <file>              # decrypted raw YAML of a .ward file
+ward inspect [dot-path]      # ancestry chain showing where each value comes from
+ward vaults                  # list all configured vault paths
+ward exec <dot-path> -- cmd  # run command with secrets injected as env vars
+ward export [dot-path]       # export as shell export statements
+ward new <name>              # create a new .ward file
+ward config <key> [value]    # read or write ward configuration
+` + "```" + `
+
+## Project setup
+
+` + "```" + `sh
+ward init                    # creates .ward/config.yaml, .ward.key, first vault file
+echo ".ward.key" >> .gitignore
+` + "```" + `
+
+## Multiple vaults (monorepo)
+
+` + "```" + `yaml
+# .ward/config.yaml
+vaults:
+  - path: ./.ward/vault
+  - path: ../.commons/ward/vaults/shared
+` + "```" + `
+
+## Claude Code skills
+
+- **/ward:context** — use when working with ward in a project (setup, vaults, debugging)`
+
