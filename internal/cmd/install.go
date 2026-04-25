@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -14,9 +15,16 @@ import (
 
 const (
 	pluginBaseURL = "https://raw.githubusercontent.com/br4zz4/ai/main/providers/claude/plugins/ward"
-	pluginFiles   = "CLAUDE.md"
-	skillFile     = "skills/ward_debug.md"
 )
+
+var pluginFiles = []struct {
+	remote string
+	local  string
+}{
+	{"CLAUDE.md", "CLAUDE.md"},
+	{".claude-plugin/plugin.json", ".claude-plugin/plugin.json"},
+	{"skills/ward:workspace/SKILL.md", "skills/ward:workspace/SKILL.md"},
+}
 
 func NewInstallCmd() *cobra.Command {
 	parent := &cobra.Command{
@@ -33,8 +41,10 @@ func newInstallClaudePluginCmd() *cobra.Command {
 		Short: "Install the ward Claude Code plugin.",
 		Args:  cobra.NoArgs,
 		Run: func(_ *cobra.Command, _ []string) {
-			dir := promptInstallDir()
-			installPlugin(dir)
+			baseDir := promptInstallDir()
+			pluginDir := filepath.Join(baseDir, "plugins", "ward")
+			installPlugin(pluginDir)
+			registerMarketplace(baseDir)
 		},
 	}
 }
@@ -70,22 +80,52 @@ func promptInstallDir() string {
 	}
 }
 
-func installPlugin(baseDir string) {
-	files := map[string]string{
-		pluginFiles: filepath.Join(baseDir, "CLAUDE.md"),
-		skillFile:   filepath.Join(baseDir, skillFile),
-	}
-
-	for remote, local := range files {
-		url := pluginBaseURL + "/" + remote
-		if err := downloadFile(url, local); err != nil {
-			fatal(fmt.Errorf("failed to download %s: %w", remote, err))
+func installPlugin(pluginDir string) {
+	for _, f := range pluginFiles {
+		url := pluginBaseURL + "/" + f.remote
+		dest := filepath.Join(pluginDir, f.local)
+		if err := downloadFile(url, dest); err != nil {
+			fatal(fmt.Errorf("failed to download %s: %w", f.remote, err))
 		}
-		fmt.Printf("  %s✓%s %s\n", clrGreen, clrReset, local)
+		fmt.Printf("  %s✓%s %s\n", clrGreen, clrReset, dest)
+	}
+}
+
+func registerMarketplace(baseDir string) {
+	settingsPath := filepath.Join(baseDir, "settings.json")
+
+	var settings map[string]any
+	data, err := os.ReadFile(settingsPath)
+	if err == nil {
+		_ = json.Unmarshal(data, &settings)
+	}
+	if settings == nil {
+		settings = map[string]any{}
 	}
 
+	marketplaces, _ := settings["extraKnownMarketplaces"].(map[string]any)
+	if marketplaces == nil {
+		marketplaces = map[string]any{}
+	}
+
+	pluginsDir := filepath.Join(baseDir, "plugins")
+	marketplaces["br4zz4"] = map[string]any{
+		"source": "directory",
+		"path":   pluginsDir,
+	}
+	settings["extraKnownMarketplaces"] = marketplaces
+
+	out, err := json.MarshalIndent(settings, "", "  ")
+	if err != nil {
+		fatal(fmt.Errorf("could not marshal settings: %w", err))
+	}
+	if err := os.WriteFile(settingsPath, out, 0o644); err != nil {
+		fatal(fmt.Errorf("could not write settings: %w", err))
+	}
+
+	fmt.Printf("  %s✓%s marketplace registered\n", clrGreen, clrReset)
 	fmt.Printf("\n  %sward Claude plugin installed.%s\n", clrBold, clrReset)
-	fmt.Printf("  %sRestart Claude Code to load the new context.%s\n\n", clrGray, clrReset)
+	fmt.Printf("  %sRun /plugin install ward@br4zz4 in Claude Code to activate.%s\n\n", clrGray, clrReset)
 }
 
 func downloadFile(url, dest string) error {
