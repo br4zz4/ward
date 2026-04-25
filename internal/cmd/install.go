@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -14,8 +15,16 @@ import (
 )
 
 const (
-	pluginBaseURL = "https://raw.githubusercontent.com/br4zz4/ai/main/providers/claude/plugins/ward"
+	pluginBaseURL   = "https://raw.githubusercontent.com/br4zz4/ai/main/providers/claude/plugins/ward"
+	pluginName      = "ward"
+	marketplaceName = "br4zz4"
 )
+
+var pluginFiles = []string{
+	".claude-plugin/plugin.json",
+	"CLAUDE.md",
+	"skills/ward:workspace/SKILL.md",
+}
 
 func NewInstallCmd() *cobra.Command {
 	parent := &cobra.Command{
@@ -33,7 +42,10 @@ func newInstallClaudePluginCmd() *cobra.Command {
 		Args:  cobra.NoArgs,
 		Run: func(_ *cobra.Command, _ []string) {
 			claudeDir, scope := promptInstallTarget()
-			runInstallScript(claudeDir, scope)
+			pluginDir := filepath.Join(claudeDir, "plugins", pluginName)
+			downloadPluginFiles(pluginDir)
+			registerMarketplace(claudeDir)
+			installPlugin(claudeDir, scope)
 		},
 	}
 }
@@ -69,31 +81,67 @@ func promptInstallTarget() (claudeDir, scope string) {
 	}
 }
 
-func runInstallScript(claudeDir, scope string) {
-	tmp, err := os.CreateTemp("", "ward-install-*.sh")
-	if err != nil {
-		fatal(fmt.Errorf("could not create temp file: %w", err))
-	}
-	defer os.Remove(tmp.Name())
-
-	if err := downloadTo(pluginBaseURL+"/install.sh", tmp); err != nil {
-		fatal(fmt.Errorf("could not download install script: %w", err))
-	}
-	tmp.Close()
-
-	if err := os.Chmod(tmp.Name(), 0o755); err != nil {
-		fatal(fmt.Errorf("could not chmod install script: %w", err))
-	}
-
-	cmd := exec.Command("bash", tmp.Name(), claudeDir, scope)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
-		fatal(fmt.Errorf("install script failed: %w", err))
+func downloadPluginFiles(pluginDir string) {
+	for _, f := range pluginFiles {
+		url := pluginBaseURL + "/" + f
+		dest := filepath.Join(pluginDir, f)
+		if err := downloadFile(url, dest); err != nil {
+			fatal(fmt.Errorf("failed to download %s: %w", f, err))
+		}
+		fmt.Printf("  %s✓%s %s\n", clrGreen, clrReset, dest)
 	}
 }
 
-func downloadTo(url string, f *os.File) error {
+func registerMarketplace(claudeDir string) {
+	settingsPath := filepath.Join(claudeDir, "settings.json")
+	pluginsDir := filepath.Join(claudeDir, "plugins")
+
+	data, _ := os.ReadFile(settingsPath)
+	var settings map[string]any
+	if err := json.Unmarshal(data, &settings); err != nil || settings == nil {
+		settings = map[string]any{}
+	}
+
+	marketplaces, _ := settings["extraKnownMarketplaces"].(map[string]any)
+	if marketplaces == nil {
+		marketplaces = map[string]any{}
+	}
+	marketplaces[marketplaceName] = map[string]any{
+		"source": map[string]any{
+			"source": "directory",
+			"path":   pluginsDir,
+		},
+		"autoUpdate": true,
+	}
+	settings["extraKnownMarketplaces"] = marketplaces
+
+	out, err := json.MarshalIndent(settings, "", "  ")
+	if err != nil {
+		fatal(fmt.Errorf("could not marshal settings: %w", err))
+	}
+	if err := os.WriteFile(settingsPath, out, 0o644); err != nil {
+		fatal(fmt.Errorf("could not write settings: %w", err))
+	}
+	fmt.Printf("  %s✓%s marketplace %s registered\n", clrGreen, clrReset, marketplaceName)
+}
+
+func installPlugin(claudeDir, scope string) {
+	ref := pluginName + "@" + marketplaceName
+	out, err := exec.Command("claude", "plugin", "install", "--scope", scope, ref).CombinedOutput()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "  %s!%s plugin install: %s\n", clrLightRed, clrReset, strings.TrimSpace(string(out)))
+		fmt.Fprintf(os.Stderr, "  %sRun manually: /plugin install %s%s\n\n", clrGray, ref, clrReset)
+		return
+	}
+	fmt.Printf("  %s✓%s %s installed\n", clrGreen, clrReset, ref)
+	fmt.Printf("\n  %sward Claude plugin ready.%s\n\n", clrBold, clrReset)
+}
+
+func downloadFile(url, dest string) error {
+	if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
+		return fmt.Errorf("could not create directory: %w", err)
+	}
+
 	resp, err := http.Get(url) //nolint:gosec
 	if err != nil {
 		return fmt.Errorf("request failed: %w", err)
@@ -103,6 +151,12 @@ func downloadTo(url string, f *os.File) error {
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("unexpected status %d from %s", resp.StatusCode, url)
 	}
+
+	f, err := os.Create(dest)
+	if err != nil {
+		return fmt.Errorf("could not create file: %w", err)
+	}
+	defer f.Close()
 
 	if _, err := io.Copy(f, resp.Body); err != nil {
 		return fmt.Errorf("could not write file: %w", err)
