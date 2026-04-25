@@ -23,7 +23,7 @@ const (
 var pluginFiles = []string{
 	".claude-plugin/plugin.json",
 	"CLAUDE.md",
-	"skills/workspace/SKILL.md",
+	"skills/context/SKILL.md",
 }
 
 func NewInstallCmd() *cobra.Command {
