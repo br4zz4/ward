@@ -2,7 +2,7 @@
 
 > TLDR: Add `--mcp` flag to the ward binary that starts an MCP server over stdio, exposing ward operations as tools so Claude Code can interact with secrets directly.
 
-**Status:** proposed
+**Status:** completed
 **Created:** 2026-04-25
 **Owner:** @oporpino
 
