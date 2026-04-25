@@ -16,7 +16,7 @@ import (
 
 const (
 	pluginBaseURL   = "https://raw.githubusercontent.com/br4zz4/ai/main/providers/claude/plugins/ward"
-	pluginName      = "br4zz4:ward"
+	pluginName      = "ward"
 	marketplaceName = "br4zz4"
 )
 
@@ -156,10 +156,17 @@ func writeMarketplaceJSON(marketplaceDir string) error {
 		return err
 	}
 	payload := map[string]any{
+		"$schema":     "https://anthropic.com/claude-code/marketplace.schema.json",
+		"name":        marketplaceName,
+		"description": "br4zz4 Claude Code plugins",
+		"owner": map[string]any{
+			"name": marketplaceName,
+		},
 		"plugins": []map[string]any{
 			{
-				"name":   pluginName,
-				"source": "./ward",
+				"name":        pluginName,
+				"description": "Claude Code context and skills for the ward secrets manager.",
+				"source":      "./ward",
 			},
 		},
 	}
