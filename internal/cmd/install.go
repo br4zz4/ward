@@ -190,22 +190,16 @@ func installPlugin(claudeDir, scope string) {
 	ref := pluginName + "@" + marketplaceName
 
 	if isPluginInstalled() {
-		out, err := exec.Command("claude", "plugin", "update", ref).CombinedOutput()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "  %s!%s plugin update: %s\n", clrLightRed, clrReset, strings.TrimSpace(string(out)))
-			return
-		}
-		fmt.Printf("  %s✓%s %s updated\n", clrGreen, clrReset, ref)
-	} else {
-		out, err := exec.Command("claude", "plugin", "install", "--scope", scope, ref).CombinedOutput()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "  %s!%s plugin install: %s\n", clrLightRed, clrReset, strings.TrimSpace(string(out)))
-			fmt.Fprintf(os.Stderr, "  %sRun manually: /plugin install %s%s\n\n", clrGray, ref, clrReset)
-			return
-		}
-		fmt.Printf("  %s✓%s %s installed\n", clrGreen, clrReset, ref)
+		exec.Command("claude", "plugin", "uninstall", ref).CombinedOutput() //nolint:errcheck
 	}
 
+	out, err := exec.Command("claude", "plugin", "install", "--scope", scope, ref).CombinedOutput()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "  %s!%s plugin install: %s\n", clrLightRed, clrReset, strings.TrimSpace(string(out)))
+		fmt.Fprintf(os.Stderr, "  %sRun manually: /plugin install %s%s\n\n", clrGray, ref, clrReset)
+		return
+	}
+	fmt.Printf("  %s✓%s %s installed\n", clrGreen, clrReset, ref)
 	fmt.Printf("\n  %sward Claude plugin ready.%s\n\n", clrBold, clrReset)
 }
 
