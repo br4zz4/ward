@@ -16,14 +16,14 @@ import (
 
 const (
 	pluginBaseURL   = "https://raw.githubusercontent.com/br4zz4/ai/main/providers/claude/plugins/ward"
-	pluginName      = "ward"
+	pluginName      = "br4zz4:ward"
 	marketplaceName = "br4zz4"
 )
 
 var pluginFiles = []string{
 	".claude-plugin/plugin.json",
 	"CLAUDE.md",
-	"skills/ward:workspace/SKILL.md",
+	"skills/workspace/SKILL.md",
 }
 
 func NewInstallCmd() *cobra.Command {
@@ -32,6 +32,15 @@ func NewInstallCmd() *cobra.Command {
 		Short: "Install integrations and plugins.",
 	}
 	parent.AddCommand(newInstallClaudePluginCmd())
+	return parent
+}
+
+func NewUninstallCmd() *cobra.Command {
+	parent := &cobra.Command{
+		Use:   "uninstall",
+		Short: "Uninstall integrations and plugins.",
+	}
+	parent.AddCommand(newUninstallClaudePluginCmd())
 	return parent
 }
 
@@ -50,9 +59,21 @@ func newInstallClaudePluginCmd() *cobra.Command {
 	}
 }
 
+func newUninstallClaudePluginCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "claude-plugin",
+		Short: "Uninstall the ward Claude Code plugin.",
+		Args:  cobra.NoArgs,
+		Run: func(_ *cobra.Command, _ []string) {
+			claudeDir, _ := promptInstallTarget()
+			uninstallPlugin(claudeDir)
+		},
+	}
+}
+
 func promptInstallTarget() (claudeDir, scope string) {
-	fmt.Printf("\n  %sInstall ward Claude plugin%s\n\n", clrBold, clrReset)
-	fmt.Printf("  Where do you want to install?\n")
+	fmt.Printf("\n  %sward Claude plugin%s\n\n", clrBold, clrReset)
+	fmt.Printf("  Where is it installed?\n")
 	fmt.Printf("    %s1)%s project  %s(.claude/ in current directory)%s\n", clrCyan, clrReset, clrGray, clrReset)
 	fmt.Printf("    %s2)%s global   %s(~/.claude/)%s\n", clrCyan, clrReset, clrGray, clrReset)
 	fmt.Printf("\n  > ")
@@ -135,6 +156,62 @@ func installPlugin(claudeDir, scope string) {
 	}
 	fmt.Printf("  %s✓%s %s installed\n", clrGreen, clrReset, ref)
 	fmt.Printf("\n  %sward Claude plugin ready.%s\n\n", clrBold, clrReset)
+}
+
+func uninstallPlugin(claudeDir string) {
+	ref := pluginName + "@" + marketplaceName
+
+	out, err := exec.Command("claude", "plugin", "uninstall", ref).CombinedOutput()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "  %s!%s plugin uninstall: %s\n", clrLightRed, clrReset, strings.TrimSpace(string(out)))
+	} else {
+		fmt.Printf("  %s✓%s %s uninstalled\n", clrGreen, clrReset, ref)
+	}
+
+	pluginDir := filepath.Join(claudeDir, "plugins", pluginName)
+	if err := os.RemoveAll(pluginDir); err != nil {
+		fmt.Fprintf(os.Stderr, "  %s!%s remove plugin dir: %v\n", clrLightRed, clrReset, err)
+	} else {
+		fmt.Printf("  %s✓%s plugin files removed\n", clrGreen, clrReset)
+	}
+
+	cacheDir := filepath.Join(claudeDir, "plugins", "cache", marketplaceName)
+	if err := os.RemoveAll(cacheDir); err != nil {
+		fmt.Fprintf(os.Stderr, "  %s!%s remove cache dir: %v\n", clrLightRed, clrReset, err)
+	} else {
+		fmt.Printf("  %s✓%s cache removed\n", clrGreen, clrReset)
+	}
+
+	deregisterMarketplace(claudeDir)
+
+	fmt.Printf("\n  %sward Claude plugin removed.%s\n\n", clrBold, clrReset)
+}
+
+func deregisterMarketplace(claudeDir string) {
+	settingsPath := filepath.Join(claudeDir, "settings.json")
+
+	data, err := os.ReadFile(settingsPath)
+	if err != nil {
+		return
+	}
+	var settings map[string]any
+	if err := json.Unmarshal(data, &settings); err != nil {
+		return
+	}
+
+	if marketplaces, ok := settings["extraKnownMarketplaces"].(map[string]any); ok {
+		delete(marketplaces, marketplaceName)
+	}
+	if enabled, ok := settings["enabledPlugins"].(map[string]any); ok {
+		delete(enabled, pluginName+"@"+marketplaceName)
+	}
+
+	out, err := json.MarshalIndent(settings, "", "  ")
+	if err != nil {
+		return
+	}
+	_ = os.WriteFile(settingsPath, out, 0o644)
+	fmt.Printf("  %s✓%s marketplace %s removed\n", clrGreen, clrReset, marketplaceName)
 }
 
 func downloadFile(url, dest string) error {

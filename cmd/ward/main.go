@@ -27,6 +27,7 @@ func main() {
 
 	root.AddCommand(
 		cmd.NewInstallCmd(),
+		cmd.NewUninstallCmd(),
 		cmd.NewGetCmd(),
 		cmd.NewViewCmd(),
 		cmd.NewEnvsCmd(),
