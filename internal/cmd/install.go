@@ -21,8 +21,8 @@ var pluginFiles = []struct {
 	remote string
 	local  string
 }{
-	{"CLAUDE.md", "CLAUDE.md"},
 	{".claude-plugin/plugin.json", ".claude-plugin/plugin.json"},
+	{"CLAUDE.md", "CLAUDE.md"},
 	{"skills/ward:workspace/SKILL.md", "skills/ward:workspace/SKILL.md"},
 }
 
