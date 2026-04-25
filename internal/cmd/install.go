@@ -51,9 +51,10 @@ func newInstallClaudePluginCmd() *cobra.Command {
 		Args:  cobra.NoArgs,
 		Run: func(_ *cobra.Command, _ []string) {
 			claudeDir, scope := promptInstallTarget()
-			pluginDir := filepath.Join(claudeDir, "plugins", pluginName)
+			marketplaceDir := filepath.Join(claudeDir, marketplaceName)
+			pluginDir := filepath.Join(marketplaceDir, "ward")
 			downloadPluginFiles(pluginDir)
-			registerMarketplace(claudeDir)
+			registerMarketplace(claudeDir, marketplaceDir)
 			installPlugin(claudeDir, scope)
 		},
 	}
@@ -113,9 +114,12 @@ func downloadPluginFiles(pluginDir string) {
 	}
 }
 
-func registerMarketplace(claudeDir string) {
+func registerMarketplace(claudeDir, marketplaceDir string) {
+	if err := writeMarketplaceJSON(marketplaceDir); err != nil {
+		fatal(fmt.Errorf("could not write marketplace.json: %w", err))
+	}
+
 	settingsPath := filepath.Join(claudeDir, "settings.json")
-	pluginsDir := filepath.Join(claudeDir, "plugins")
 
 	data, _ := os.ReadFile(settingsPath)
 	var settings map[string]any
@@ -130,7 +134,7 @@ func registerMarketplace(claudeDir string) {
 	marketplaces[marketplaceName] = map[string]any{
 		"source": map[string]any{
 			"source": "directory",
-			"path":   pluginsDir,
+			"path":   marketplaceDir,
 		},
 		"autoUpdate": true,
 	}
@@ -144,6 +148,26 @@ func registerMarketplace(claudeDir string) {
 		fatal(fmt.Errorf("could not write settings: %w", err))
 	}
 	fmt.Printf("  %s✓%s marketplace %s registered\n", clrGreen, clrReset, marketplaceName)
+}
+
+func writeMarketplaceJSON(marketplaceDir string) error {
+	metaDir := filepath.Join(marketplaceDir, ".claude-plugin")
+	if err := os.MkdirAll(metaDir, 0o755); err != nil {
+		return err
+	}
+	payload := map[string]any{
+		"plugins": []map[string]any{
+			{
+				"name":   pluginName,
+				"source": "./ward",
+			},
+		},
+	}
+	out, err := json.MarshalIndent(payload, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(metaDir, "marketplace.json"), out, 0o644)
 }
 
 func isPluginInstalled() bool {
@@ -188,9 +212,9 @@ func uninstallPlugin(claudeDir string) {
 		fmt.Printf("  %s✓%s %s uninstalled\n", clrGreen, clrReset, ref)
 	}
 
-	pluginDir := filepath.Join(claudeDir, "plugins", pluginName)
-	if err := os.RemoveAll(pluginDir); err != nil {
-		fmt.Fprintf(os.Stderr, "  %s!%s remove plugin dir: %v\n", clrLightRed, clrReset, err)
+	marketplaceDir := filepath.Join(claudeDir, marketplaceName)
+	if err := os.RemoveAll(marketplaceDir); err != nil {
+		fmt.Fprintf(os.Stderr, "  %s!%s remove marketplace dir: %v\n", clrLightRed, clrReset, err)
 	} else {
 		fmt.Printf("  %s✓%s plugin files removed\n", clrGreen, clrReset)
 	}
