@@ -45,6 +45,10 @@ func NewExecCmd() *cobra.Command {
 			cmd.Stdin = os.Stdin
 			cmd.Env = mergeEnv(os.Environ(), envVars)
 
+			if dir := OriginalDir(); dir != "" {
+				cmd.Dir = dir
+			}
+
 			if err := cmd.Run(); err != nil {
 				if exitErr, ok := err.(*exec.ExitError); ok {
 					os.Exit(exitErr.ExitCode())
