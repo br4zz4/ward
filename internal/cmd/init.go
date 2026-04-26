@@ -16,7 +16,6 @@ import (
 // wardConfigTemplate is the config written by ward init.
 // All optional fields are shown as comments with their defaults.
 // docs: https://github.com/br4zz4/ward/blob/main/docs/configuration.md
-// Use fmt.Sprintf(wardConfigTemplate, projectName, projectName) to expand.
 const wardConfigTemplate = `# ward configuration — https://github.com/br4zz4/ward/blob/main/docs/configuration.md
 
 # encryption:

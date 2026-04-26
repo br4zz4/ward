@@ -171,26 +171,6 @@ func newFileStub(vaultName, filePath, cfgPath string) string {
 	return buildNestedYAML(segments)
 }
 
-// vaultPathSegments converts a vault path like "../.commons/stacks/ruby" into
-// clean segments ["commons", "stacks", "ruby"], stripping leading dots/slashes.
-func vaultPathSegments(vaultPath string) []string {
-	// Clean and split
-	clean := filepath.Clean(vaultPath)
-	parts := strings.Split(clean, string(filepath.Separator))
-	var out []string
-	for _, p := range parts {
-		if p == "." || p == ".." || p == "" {
-			continue
-		}
-		// Strip leading dot from hidden dirs (e.g. ".commons" → "commons")
-		p = strings.TrimPrefix(p, ".")
-		if p != "" {
-			out = append(out, p)
-		}
-	}
-	return out
-}
-
 // buildNestedYAML turns ["a","b","c"] into:
 //
 //	a:
@@ -210,46 +190,3 @@ func buildNestedYAML(segments []string) string {
 	return sb.String()
 }
 
-// maybeAddSource appends the directory of newFile to the sources list in
-// the config file if it is not already covered by an existing source.
-func maybeAddSource(cfgPath, newFile string) error {
-	cfg, err := config.Load(cfgPath)
-	if err != nil {
-		return nil // best-effort
-	}
-
-	newDir, err := filepath.Abs(filepath.Dir(newFile))
-	if err != nil {
-		return nil
-	}
-
-	projectRoot := filepath.Dir(filepath.Dir(cfgPath))
-
-	for _, src := range cfg.Vaults {
-		srcAbs, err := filepath.Abs(filepath.Join(projectRoot, src.Path))
-		if err != nil {
-			continue
-		}
-		rel, err := filepath.Rel(srcAbs, newDir)
-		if err != nil {
-			continue
-		}
-		if rel == "." || !strings.HasPrefix(rel, "..") {
-			return nil // already covered
-		}
-	}
-
-	rel, err := filepath.Rel(projectRoot, newDir)
-	if err != nil {
-		rel = newDir
-	}
-	sourcePath := filepath.Join(".", rel)
-
-	cfg.Vaults = append(cfg.Vaults, config.Source{Path: sourcePath})
-	if err := config.Save(cfgPath, cfg); err != nil {
-		return fmt.Errorf("updating %s: %w", cfgPath, err)
-	}
-	fmt.Printf("  %s+%s added %s%s%s to vaults\n",
-		clrGreen, clrReset, clrCyan, sourcePath, clrReset)
-	return nil
-}

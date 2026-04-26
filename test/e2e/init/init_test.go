@@ -24,8 +24,13 @@ func TestMain(m *testing.M) {
 }
 
 func TestInit_creates_ward_dir(t *testing.T) {
+	// arrange
 	dir := t.TempDir()
+
+	// act
 	_, _, code := testutil.Run(t, bin, dir, "init")
+
+	// assert
 	if code != 0 {
 		t.Fatalf("init exit %d", code)
 	}
@@ -43,8 +48,13 @@ func TestInit_creates_ward_dir(t *testing.T) {
 }
 
 func TestInit_creates_secrets_file(t *testing.T) {
+	// arrange
 	dir := t.TempDir()
+
+	// act
 	_, _, code := testutil.Run(t, bin, dir, "init")
+
+	// assert
 	if code != 0 {
 		t.Fatalf("init exit %d", code)
 	}
@@ -60,17 +70,27 @@ func TestInit_creates_secrets_file(t *testing.T) {
 }
 
 func TestInit_fails_if_already_initialized(t *testing.T) {
+	// arrange
 	dir := t.TempDir()
 	testutil.Run(t, bin, dir, "init")
+
+	// act
 	_, _, code := testutil.Run(t, bin, dir, "init")
+
+	// assert
 	if code == 0 {
 		t.Fatal("expected non-zero exit when init called twice")
 	}
 }
 
 func TestInit_get_works_after_init(t *testing.T) {
+	// arrange
 	dir := t.TempDir()
+
+	// act
 	_, _, code := testutil.Run(t, bin, dir, "init")
+
+	// assert
 	if code != 0 {
 		t.Fatalf("init exit %d", code)
 	}

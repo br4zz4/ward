@@ -40,6 +40,9 @@ func TestVaultList_shows_configured_vaults(t *testing.T) {
 	if !strings.Contains(stdout, "myapp") {
 		t.Errorf("expected vault name 'myapp' in output, got: %s", stdout)
 	}
+	if !strings.Contains(stdout, ".ward/vaults/myapp") {
+		t.Errorf("expected vault path '.ward/vaults/myapp' in output, got: %s", stdout)
+	}
 }
 
 func TestVaultAdd_registers_new_vault(t *testing.T) {
