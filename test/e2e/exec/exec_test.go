@@ -4,6 +4,7 @@ package exec_test
 
 import (
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/br4zz4/ward/test/e2e/testutil"
@@ -147,5 +148,24 @@ func TestExec_runs_in_caller_working_directory(t *testing.T) {
 	}
 	if !testutil.Contains(out, "workdir") {
 		t.Errorf("expected command to run in caller working directory (workdir), got: %q", out)
+	}
+}
+
+// ── structure-violation ───────────────────────────────────────────────────────
+
+func TestExec_structure_violation_fails(t *testing.T) {
+	// arrange
+	dir := t.TempDir()
+	testutil.RunCmd(t, "cp", "-r", fix("structure-violation")+"/.", dir)
+
+	// act
+	_, stderr, code := testutil.Run(t, bin, dir, "exec", "--", "env")
+
+	// assert
+	if code == 0 {
+		t.Fatal("expected non-zero exit for structure violation")
+	}
+	if !strings.Contains(stderr, "vault structure violations") {
+		t.Errorf("expected 'vault structure violations' in stderr, got: %s", stderr)
 	}
 }

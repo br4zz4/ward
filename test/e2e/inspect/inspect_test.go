@@ -4,6 +4,7 @@ package inspect_test
 
 import (
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/br4zz4/ward/test/e2e/testutil"
@@ -80,5 +81,24 @@ func TestInspect_conflict_envvar_exits_zero(t *testing.T) {
 	_, _, code := testutil.Run(t, bin, fix("conflict-envvar"), "inspect")
 	if code != 0 {
 		t.Fatalf("inspect should pass for env var collision (not a merge conflict), got %d", code)
+	}
+}
+
+// ── structure-violation ───────────────────────────────────────────────────────
+
+func TestInspect_structure_violation_fails(t *testing.T) {
+	// arrange
+	dir := t.TempDir()
+	testutil.RunCmd(t, "cp", "-r", fix("structure-violation")+"/.", dir)
+
+	// act
+	_, stderr, code := testutil.Run(t, bin, dir, "inspect")
+
+	// assert
+	if code == 0 {
+		t.Fatal("expected non-zero exit for structure violation")
+	}
+	if !strings.Contains(stderr, "vault structure violations") {
+		t.Errorf("expected 'vault structure violations' in stderr, got: %s", stderr)
 	}
 }
