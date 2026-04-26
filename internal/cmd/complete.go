@@ -3,9 +3,33 @@ package cmd
 import (
 	"strings"
 
+	"github.com/br4zz4/ward/internal/config"
 	"github.com/br4zz4/ward/internal/secrets"
 	"github.com/spf13/cobra"
 )
+
+// completeVaultNames provides shell completion for vault names.
+func completeVaultNames(_ *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	if len(args) > 0 {
+		// second arg onwards: complete file paths within the vault
+		return completeWardFiles(nil, args, toComplete)
+	}
+	cfgPath, err := resolvedConfigFile()
+	if err != nil {
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+	cfg, err := config.Load(cfgPath)
+	if err != nil {
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+	var names []string
+	for _, v := range cfg.Vaults {
+		if toComplete == "" || strings.HasPrefix(v.Name, toComplete) {
+			names = append(names, v.Name)
+		}
+	}
+	return names, cobra.ShellCompDirectiveNoFileComp
+}
 
 // completeWardFiles provides shell completion for commands that accept a .ward file path.
 // It lists all .ward files discovered in the configured vaults.

@@ -13,9 +13,10 @@ import (
 
 func NewNewCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "new <vault> <path>",
-		Short: "Create a new encrypted .ward file and open it in $EDITOR",
-		Args:  cobra.ExactArgs(2),
+		Use:               "new <vault> <path>",
+		Short:             "Create a new encrypted .ward file and open it in $EDITOR",
+		Args:              cobra.ExactArgs(2),
+		ValidArgsFunction: completeVaultNames,
 		Run: func(_ *cobra.Command, args []string) {
 			vaultName := args[0]
 			pathArg := args[1]
