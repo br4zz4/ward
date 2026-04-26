@@ -29,10 +29,11 @@ func TestInit_creates_ward_dir(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("init exit %d", code)
 	}
+	dirName := filepath.Base(dir)
 	for _, path := range []string{
 		filepath.Join(dir, ".ward"),
 		filepath.Join(dir, ".ward", "config.yaml"),
-		filepath.Join(dir, ".ward", "vault"),
+		filepath.Join(dir, ".ward", "vaults", dirName),
 		filepath.Join(dir, ".ward", ".key"),
 	} {
 		if _, err := os.Stat(path); os.IsNotExist(err) {
@@ -47,7 +48,8 @@ func TestInit_creates_secrets_file(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("init exit %d", code)
 	}
-	vault := filepath.Join(dir, ".ward", "vault")
+	dirName := filepath.Base(dir)
+	vault := filepath.Join(dir, ".ward", "vaults", dirName)
 	entries, err := os.ReadDir(vault)
 	if err != nil {
 		t.Fatalf("reading vault dir: %v", err)

@@ -16,6 +16,7 @@ import (
 // wardConfigTemplate is the config written by ward init.
 // All optional fields are shown as comments with their defaults.
 // docs: https://github.com/br4zz4/ward/blob/main/docs/configuration.md
+// Use fmt.Sprintf(wardConfigTemplate, projectName, projectName) to expand.
 const wardConfigTemplate = `# ward configuration — https://github.com/br4zz4/ward/blob/main/docs/configuration.md
 
 # encryption:
@@ -24,12 +25,14 @@ const wardConfigTemplate = `# ward configuration — https://github.com/br4zz4/w
 
 
 # vaults:
-#   default_dir: .ward/vault   # where 'ward new <name>' creates files
+#   default_dir: .ward/vaults/%s   # where 'ward new <name>' creates files
 #   sources:
-#     - path: .ward/vault      # add more vaults here
+#     - name: %s                   # add more vaults here
+#       path: .ward/vaults/%s
 
 vaults:
-  - path: .ward/vault
+  - name: %s
+    path: .ward/vaults/%s
 `
 
 func NewInitCmd() *cobra.Command {
@@ -47,6 +50,9 @@ func NewInitCmd() *cobra.Command {
 				os.Exit(1)
 			}
 
+			projectName := currentDirName()
+			vaultDir := fmt.Sprintf(".ward/vaults/%s", projectName)
+
 			// 1. Create .ward/ directory and config
 			if err := os.MkdirAll(".ward", 0755); err != nil {
 				fatal(fmt.Errorf("creating .ward/: %w", err))
@@ -56,7 +62,8 @@ func NewInitCmd() *cobra.Command {
 			if err := wardage.GenerateKey(".ward/.key"); err != nil {
 				fatal(err)
 			}
-			if err := writeIfAbsent(".ward/config.yaml", wardConfigTemplate); err != nil {
+			configContent := fmt.Sprintf(wardConfigTemplate, projectName, projectName, projectName, projectName, projectName)
+			if err := writeIfAbsent(".ward/config.yaml", configContent); err != nil {
 				fatal(err)
 			}
 
@@ -65,13 +72,12 @@ func NewInitCmd() *cobra.Command {
 				fatal(err)
 			}
 
-			// 4. Create .ward/vault/ and encrypt the initial secrets file
-			if err := os.MkdirAll(".ward/vault", 0755); err != nil {
-				fatal(fmt.Errorf("creating .ward/vault/: %w", err))
+			// 4. Create .ward/vaults/<projectName>/ and encrypt the initial secrets file
+			if err := os.MkdirAll(vaultDir, 0755); err != nil {
+				fatal(fmt.Errorf("creating %s/: %w", vaultDir, err))
 			}
-			dirName := currentDirName()
-			stub := initSecretsStub(dirName)
-			if err := encryptIfAbsent(".ward/vault/secrets.ward", stub, ".ward/.key"); err != nil {
+			stub := initSecretsStub(projectName)
+			if err := encryptIfAbsent(vaultDir+"/secrets.ward", stub, ".ward/.key"); err != nil {
 				fatal(err)
 			}
 
@@ -98,7 +104,7 @@ func NewInitCmd() *cobra.Command {
 				}
 				printFileRow(".ward/.key", "encryption key — "+clrOrange+"keep private, never commit"+clrReset)
 				printFileRow(".ward/config.yaml", "config — "+clrGreen+"commit this"+clrReset)
-				printFileRow(".ward/vault/", "encrypted secrets — "+clrGreen+"safe to commit"+clrReset)
+				printFileRow(vaultDir+"/", "encrypted secrets — "+clrGreen+"safe to commit"+clrReset)
 				fmt.Println()
 
 				// — WARD_KEY section —
