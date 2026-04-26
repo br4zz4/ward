@@ -3,8 +3,22 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
+
+func writeConfig(t *testing.T, dir, content string) string {
+	t.Helper()
+	wardDir := filepath.Join(dir, ".ward")
+	if err := os.MkdirAll(wardDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	cfgPath := filepath.Join(wardDir, "config.yaml")
+	if err := os.WriteFile(cfgPath, []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+	return cfgPath
+}
 
 func writeTemp(t *testing.T, content string) string {
 	t.Helper()
@@ -140,7 +154,7 @@ func TestLoad_vaults(t *testing.T) {
 	path := writeTemp(t, `
 vaults:
   - path: ../commons/secrets
-  - path: /org/infra/secrets
+  - path: /org/infra/creds
 `)
 	cfg, err := Load(path)
 	if err != nil {
@@ -226,7 +240,7 @@ func TestLoad_sources_legacy_compat(t *testing.T) {
 	path := writeTemp(t, `
 sources:
   - path: ../commons/secrets
-  - path: /org/infra/secrets
+  - path: /org/infra/creds
 `)
 	cfg, err := Load(path)
 	if err != nil {
@@ -237,5 +251,65 @@ sources:
 	}
 	if cfg.Vaults[0].Path != "../commons/secrets" {
 		t.Errorf("unexpected vault path: %q", cfg.Vaults[0].Path)
+	}
+}
+
+func TestLoad_adds_name_from_path_when_absent(t *testing.T) {
+	// arrange
+	dir := t.TempDir()
+	cfgPath := writeConfig(t, dir, `
+vaults:
+  - path: .ward/vaults/myapp
+`)
+	// act
+	loaded, err := Load(cfgPath)
+	// assert
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.Vaults[0].Name != "myapp" {
+		t.Errorf("expected name 'myapp', got %q", loaded.Vaults[0].Name)
+	}
+}
+
+func TestLoad_rejects_duplicate_vault_names(t *testing.T) {
+	// arrange
+	dir := t.TempDir()
+	cfgPath := writeConfig(t, dir, `
+vaults:
+  - name: shared
+    path: .ward/vaults/shared
+  - name: shared
+    path: .ward/vaults/other
+`)
+	// act
+	_, err := Load(cfgPath)
+	// assert
+	if err == nil {
+		t.Fatal("expected error for duplicate name")
+	}
+	if !strings.Contains(err.Error(), "duplicate vault name") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestLoad_rejects_duplicate_vault_paths(t *testing.T) {
+	// arrange
+	dir := t.TempDir()
+	cfgPath := writeConfig(t, dir, `
+vaults:
+  - name: a
+    path: .ward/vaults/shared
+  - name: b
+    path: .ward/vaults/shared
+`)
+	// act
+	_, err := Load(cfgPath)
+	// assert
+	if err == nil {
+		t.Fatal("expected error for duplicate path")
+	}
+	if !strings.Contains(err.Error(), "duplicate vault path") {
+		t.Errorf("unexpected error: %v", err)
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -31,6 +32,7 @@ type Encryption struct {
 }
 
 type Source struct {
+	Name string `yaml:"name,omitempty"`
 	Path string `yaml:"path"`
 }
 
@@ -120,6 +122,32 @@ func Load(path string) (*Config, error) {
 		cfg.Vaults = cfg.Sources
 	}
 	cfg.Sources = nil // avoid double-serialization
+
+	// backward-compat: derive name from path when absent
+	for i := range cfg.Vaults {
+		if cfg.Vaults[i].Name == "" {
+			cfg.Vaults[i].Name = filepath.Base(strings.TrimSuffix(cfg.Vaults[i].Path, "/"))
+		}
+	}
+
+	// check for duplicate vault names
+	seenNames := make(map[string]bool)
+	for _, src := range cfg.Vaults {
+		if seenNames[src.Name] {
+			return nil, fmt.Errorf("duplicate vault name %q in %s", src.Name, path)
+		}
+		seenNames[src.Name] = true
+	}
+
+	// check for duplicate vault paths
+	seenPaths := make(map[string]bool)
+	for _, src := range cfg.Vaults {
+		normPath := strings.TrimSuffix(src.Path, "/")
+		if seenPaths[normPath] {
+			return nil, fmt.Errorf("duplicate vault path %q in %s", normPath, path)
+		}
+		seenPaths[normPath] = true
+	}
 
 	return cfg, nil
 }
