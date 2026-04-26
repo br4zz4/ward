@@ -131,3 +131,21 @@ func TestExec_conflict_envvar_hint_runs(t *testing.T) {
 		t.Errorf("expected TOKEN=staging-token injected, got: %q", out)
 	}
 }
+
+// ── working directory ────────────────────────────────────────────────────────
+
+func TestExec_runs_in_caller_working_directory(t *testing.T) {
+	// arrange
+	subdir := fix("subdir") + "/workdir"
+
+	// act: run ward exec from a subdirectory of the fixture
+	out, _, code := testutil.Run(t, bin, subdir, "exec", "--", "pwd")
+
+	// assert
+	if code != 0 {
+		t.Fatalf("exit %d", code)
+	}
+	if !testutil.Contains(out, "workdir") {
+		t.Errorf("expected command to run in caller working directory (workdir), got: %q", out)
+	}
+}
