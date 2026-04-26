@@ -6,7 +6,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/br4zz4/ward/internal/config"
 	"gopkg.in/yaml.v3"
 )
 
@@ -137,19 +136,18 @@ func TestMaybeAddSource_missing_config_is_noop(t *testing.T) {
 	}
 }
 
-func TestNewFileStub_internal_vault_uses_project_name(t *testing.T) {
-	// projectRoot = <dir>/qwert, vault = .ward/vault (internal)
-	// file = .ward/vault/environments/staging.ward
-	// expected root key = qwert, then subpath + stem
+func TestNewFileStub_uses_vault_name_as_root(t *testing.T) {
+	// vaultName = "myapp", file inside vault with subdir
+	// expected root key = myapp, then subpath + stem
 	parent := t.TempDir()
 	projectDir := filepath.Join(parent, "qwert")
-	cfgPath := writeWardYAML(t, projectDir, "  - path: ./.ward/vault\n")
-	filePath := filepath.Join(projectDir, ".ward", "vault", "environments", "staging.ward")
+	cfgPath := writeWardYAML(t, projectDir, "  - name: myapp\n    path: .ward/vaults/myapp\n")
+	filePath := filepath.Join(projectDir, ".ward", "vaults", "myapp", "environments", "staging.ward")
 
-	got := newFileStub(filePath, cfgPath)
+	got := newFileStub("myapp", filePath, cfgPath)
 
-	if !strings.HasPrefix(got, "qwert:\n") {
-		t.Errorf("expected root key 'qwert', got:\n%s", got)
+	if !strings.HasPrefix(got, "myapp:\n") {
+		t.Errorf("expected root key 'myapp', got:\n%s", got)
 	}
 	if !strings.Contains(got, "environments:") {
 		t.Errorf("expected 'environments:' in stub, got:\n%s", got)
@@ -160,16 +158,16 @@ func TestNewFileStub_internal_vault_uses_project_name(t *testing.T) {
 }
 
 func TestNewFileStub_internal_vault_no_subdir(t *testing.T) {
-	// file directly in vault root → qwert:\n  staging:\n    secret_1: …
+	// file directly in vault root → myapp:\n  staging:\n    secret_1: …
 	parent := t.TempDir()
 	projectDir := filepath.Join(parent, "qwert")
-	cfgPath := writeWardYAML(t, projectDir, "  - path: ./.ward/vault\n")
-	filePath := filepath.Join(projectDir, ".ward", "vault", "staging.ward")
+	cfgPath := writeWardYAML(t, projectDir, "  - name: myapp\n    path: .ward/vaults/myapp\n")
+	filePath := filepath.Join(projectDir, ".ward", "vaults", "myapp", "staging.ward")
 
-	got := newFileStub(filePath, cfgPath)
+	got := newFileStub("myapp", filePath, cfgPath)
 
-	if !strings.HasPrefix(got, "qwert:\n") {
-		t.Errorf("expected root key 'qwert', got:\n%s", got)
+	if !strings.HasPrefix(got, "myapp:\n") {
+		t.Errorf("expected root key 'myapp', got:\n%s", got)
 	}
 	if !strings.Contains(got, "staging:") {
 		t.Errorf("expected 'staging:' in stub, got:\n%s", got)
@@ -177,8 +175,8 @@ func TestNewFileStub_internal_vault_no_subdir(t *testing.T) {
 }
 
 func TestNewFileStub_external_vault_uses_vault_segments(t *testing.T) {
-	// vault = ../.commons/stacks/ruby (external), file = staging.ward inside it
-	// expected: commons:\n  stacks:\n    ruby:\n      staging:\n
+	// vaultName = "commons", file inside external vault
+	// expected root key = commons
 	parent := t.TempDir()
 	projectDir := filepath.Join(parent, "myapp")
 	externalVault := filepath.Join(parent, ".commons", "stacks", "ruby")
@@ -189,121 +187,50 @@ func TestNewFileStub_external_vault_uses_vault_segments(t *testing.T) {
 
 	// Write relative vault path (../.commons/stacks/ruby) in config
 	vaultRelPath, _ := filepath.Rel(projectDir, externalVault)
-	cfgPath := writeWardYAML(t, projectDir, "  - path: "+vaultRelPath+"\n")
+	cfgPath := writeWardYAML(t, projectDir, "  - name: commons\n    path: "+vaultRelPath+"\n")
 
 	filePath := filepath.Join(externalVault, "staging.ward")
 
-	got := newFileStub(filePath, cfgPath)
+	got := newFileStub("commons", filePath, cfgPath)
 
 	if !strings.HasPrefix(got, "commons:\n") {
 		t.Errorf("expected root key 'commons', got:\n%s", got)
-	}
-	if !strings.Contains(got, "stacks:") {
-		t.Errorf("expected 'stacks:' in stub, got:\n%s", got)
-	}
-	if !strings.Contains(got, "ruby:") {
-		t.Errorf("expected 'ruby:' in stub, got:\n%s", got)
 	}
 	if !strings.Contains(got, "staging:") {
 		t.Errorf("expected 'staging:' in stub, got:\n%s", got)
 	}
 }
 
-func TestResolveNewPath_bare_name_goes_to_default_dir(t *testing.T) {
+func TestResolveNewPath_bare_name_goes_to_vault(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, ".ward", "config.yaml")
-	cfg := &config.Config{}
 
-	got := resolveNewPath("staging", cfgPath, cfg)
-	want := filepath.Join(dir, ".ward", "vault", "staging.ward")
+	got := resolveNewPath("staging", ".ward/vaults/myapp", cfgPath)
+	want := filepath.Join(dir, ".ward", "vaults", "myapp", "staging.ward")
 	if got != want {
 		t.Errorf("got %q, want %q", got, want)
 	}
 }
 
-func TestResolveNewPath_with_extension_bare_goes_to_default_dir(t *testing.T) {
+func TestResolveNewPath_with_extension_goes_to_vault(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, ".ward", "config.yaml")
-	cfg := &config.Config{}
 
-	got := resolveNewPath("staging.ward", cfgPath, cfg)
-	want := filepath.Join(dir, ".ward", "vault", "staging.ward")
+	got := resolveNewPath("staging.ward", ".ward/vaults/myapp", cfgPath)
+	want := filepath.Join(dir, ".ward", "vaults", "myapp", "staging.ward")
 	if got != want {
 		t.Errorf("got %q, want %q", got, want)
 	}
 }
 
-func TestResolveNewPath_slash_path_goes_to_default_dir(t *testing.T) {
-	// "infra/prod" has a slash but no leading ./ or ../ → goes inside default vault
+func TestResolveNewPath_slash_path_goes_to_vault(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, ".ward", "config.yaml")
-	cfg := &config.Config{}
 
-	got := resolveNewPath("infra/prod.ward", cfgPath, cfg)
-	want := filepath.Join(dir, ".ward", "vault", "infra", "prod.ward")
+	got := resolveNewPath("infra/prod.ward", ".ward/vaults/myapp", cfgPath)
+	want := filepath.Join(dir, ".ward", "vaults", "myapp", "infra", "prod.ward")
 	if got != want {
 		t.Errorf("got %q, want %q", got, want)
-	}
-}
-
-func TestResolveNewPath_dotslash_path_stays_relative(t *testing.T) {
-	// "./infra/prod" has explicit ./ → external path, use as-is
-	dir := t.TempDir()
-	cfgPath := filepath.Join(dir, ".ward", "config.yaml")
-	cfg := &config.Config{}
-
-	got := resolveNewPath("./infra/prod.ward", cfgPath, cfg)
-	if got != "./infra/prod.ward" {
-		t.Errorf("got %q, want %q", got, "./infra/prod.ward")
-	}
-}
-
-func TestResolveNewPath_dotdot_path_stays_relative(t *testing.T) {
-	// "../.commons/ruby/staging" → external path, use as-is
-	dir := t.TempDir()
-	cfgPath := filepath.Join(dir, ".ward", "config.yaml")
-	cfg := &config.Config{}
-
-	got := resolveNewPath("../.commons/ruby/staging", cfgPath, cfg)
-	if got != "../.commons/ruby/staging.ward" {
-		t.Errorf("got %q, want %q", got, "../.commons/ruby/staging.ward")
-	}
-}
-
-func TestResolveNewPath_custom_default_dir(t *testing.T) {
-	dir := t.TempDir()
-	cfgPath := filepath.Join(dir, ".ward", "config.yaml")
-	cfg := &config.Config{DefaultDir: "secrets"}
-
-	got := resolveNewPath("prod", cfgPath, cfg)
-	want := filepath.Join(dir, "secrets", "prod.ward")
-	if got != want {
-		t.Errorf("got %q, want %q", got, want)
-	}
-}
-
-func TestResolveNewPath_dot_slash_path_no_extension_stays_relative(t *testing.T) {
-	// ward new ./.commons/ward/vaults/ruby/staging
-	// has slash but no .ward suffix → use as-is with .ward appended, relative to CWD
-	dir := t.TempDir()
-	cfgPath := filepath.Join(dir, ".ward", "config.yaml")
-	cfg := &config.Config{}
-
-	got := resolveNewPath("./.commons/ward/vaults/ruby/staging", cfgPath, cfg)
-	if got != "./.commons/ward/vaults/ruby/staging.ward" {
-		t.Errorf("got %q, want %q", got, "./.commons/ward/vaults/ruby/staging.ward")
-	}
-}
-
-func TestResolveNewPath_slash_path_no_extension_stays_relative(t *testing.T) {
-	// ward new .commons/ward/vaults/ruby/staging (without leading ./)
-	dir := t.TempDir()
-	cfgPath := filepath.Join(dir, ".ward", "config.yaml")
-	cfg := &config.Config{}
-
-	got := resolveNewPath(".commons/ward/vaults/ruby/staging", cfgPath, cfg)
-	if got != ".commons/ward/vaults/ruby/staging.ward" {
-		t.Errorf("got %q, want %q", got, ".commons/ward/vaults/ruby/staging.ward")
 	}
 }
 
