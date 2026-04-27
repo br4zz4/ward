@@ -93,7 +93,7 @@ func mustValidateStructure(cfg *config.Config, cfgPath string) {
 	for _, v := range violations {
 		fmt.Fprintf(os.Stderr, "  %s•%s %s\n", clrLightRed, clrReset, v)
 	}
-	fmt.Fprintf(os.Stderr, "\n  %sfix the violations above before running this command%s\n\n", clrGray, clrReset)
+	fmt.Fprintf(os.Stderr, "\n  %suse %sward edit <file>%s to fix the root key%s\n\n", clrGray, clrCyan, clrGray, clrReset)
 	os.Exit(1)
 }
 
