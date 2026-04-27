@@ -15,6 +15,7 @@ func NewInspectCmd() *cobra.Command {
 		Short: "Detect conflicts across all files",
 		Args:  cobra.NoArgs,
 		Run: func(_ *cobra.Command, _ []string) {
+			enforceVaultStructure()
 			eng, err := newEngine()
 			if err != nil {
 				fatal(err)

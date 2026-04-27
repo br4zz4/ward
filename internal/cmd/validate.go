@@ -68,6 +68,21 @@ func validateVaultStructure(cfg *config.Config, cfgPath string) []string {
 	return violations
 }
 
+// enforceVaultStructure loads the config and calls mustValidateStructure.
+// Call this from commands that must block on structural violations (exec, inspect, view, envs, get).
+// Do NOT call from edit, new, vault — those must remain usable to fix violations.
+func enforceVaultStructure() {
+	cfgPath, err := resolvedConfigFile()
+	if err != nil {
+		return // no project — newEngine() will handle the error
+	}
+	cfg, err := config.Load(cfgPath)
+	if err != nil {
+		return // config error — newEngine() will handle it
+	}
+	mustValidateStructure(cfg, cfgPath)
+}
+
 // mustValidateStructure runs validateVaultStructure and exits with a styled error if violations are found.
 func mustValidateStructure(cfg *config.Config, cfgPath string) {
 	violations := validateVaultStructure(cfg, cfgPath)

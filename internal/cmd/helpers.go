@@ -79,7 +79,6 @@ func newEngine() (*ward.Engine, error) {
 		return nil, fmt.Errorf("loading %s: %w", cfgPath, err)
 	}
 	resolvedConfig = cfgPath // ensure cache is set
-	mustValidateStructure(cfg, cfgPath)
 	dec, err := decryptorFor(cfg)
 	if err != nil {
 		return nil, err

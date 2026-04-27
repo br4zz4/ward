@@ -16,6 +16,7 @@ func NewViewCmd() *cobra.Command {
 		Args:              cobra.MaximumNArgs(1),
 		ValidArgsFunction: completeDotPaths,
 		Run: func(_ *cobra.Command, args []string) {
+			enforceVaultStructure()
 			eng, err := newEngine()
 			if err != nil {
 				fatal(err)
