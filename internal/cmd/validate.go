@@ -58,8 +58,10 @@ func validateVaultStructure(cfg *config.Config, cfgPath string) []string {
 				return nil
 			}
 			if rootKey != "" && rootKey != vault.Name {
+				expectedDotPath := expectedFileDotPath(vault.Name, vaultAbs, path)
 				violations = append(violations, fmt.Sprintf(
-					"file %q: root key %q does not match vault name %q", path, rootKey, vault.Name,
+					"file %q: root key %q does not match vault name %q (expected: %s)",
+					path, rootKey, vault.Name, expectedDotPath,
 				))
 			}
 			return nil
@@ -95,6 +97,19 @@ func mustValidateStructure(cfg *config.Config, cfgPath string) {
 	}
 	fmt.Fprintf(os.Stderr, "\n  %suse %sward edit <file>%s to fix the root key%s\n\n", clrGray, clrCyan, clrGray, clrReset)
 	os.Exit(1)
+}
+
+// expectedFileDotPath builds the dot-path the file's root key should follow.
+// e.g. vault "app", file ".ward/vaults/app/secrets/test.ward" → "app.secrets.test"
+func expectedFileDotPath(vaultName, vaultAbs, filePath string) string {
+	rel, err := filepath.Rel(vaultAbs, filePath)
+	if err != nil {
+		return vaultName
+	}
+	rel = strings.TrimSuffix(rel, ".ward")
+	parts := strings.Split(rel, string(filepath.Separator))
+	segments := append([]string{vaultName}, parts...)
+	return strings.Join(segments, ".")
 }
 
 // firstRootKey reads a .ward file (which may be encrypted or plain YAML) and
