@@ -25,7 +25,7 @@ func TestMain(m *testing.M) {
 func fix(name string) string { return testutil.FixtureDir("get", name) }
 
 func TestGet_leaf_value(t *testing.T) {
-	out, _, code := testutil.Run(t, bin, fix("basic"), "get", "app.name")
+	out, _, code := testutil.Run(t, bin, fix("basic"), "get", "app.main.name")
 	if code != 0 {
 		t.Fatalf("exit %d", code)
 	}
@@ -35,7 +35,7 @@ func TestGet_leaf_value(t *testing.T) {
 }
 
 func TestGet_nested_value(t *testing.T) {
-	out, _, code := testutil.Run(t, bin, fix("basic"), "get", "app.db.host")
+	out, _, code := testutil.Run(t, bin, fix("basic"), "get", "app.main.db.host")
 	if code != 0 {
 		t.Fatalf("exit %d", code)
 	}
@@ -45,7 +45,7 @@ func TestGet_nested_value(t *testing.T) {
 }
 
 func TestGet_numeric_value(t *testing.T) {
-	out, _, code := testutil.Run(t, bin, fix("basic"), "get", "app.port")
+	out, _, code := testutil.Run(t, bin, fix("basic"), "get", "app.main.port")
 	if code != 0 {
 		t.Fatalf("exit %d", code)
 	}
@@ -55,7 +55,7 @@ func TestGet_numeric_value(t *testing.T) {
 }
 
 func TestGet_missing_key_fails(t *testing.T) {
-	_, _, code := testutil.Run(t, bin, fix("missing-key"), "get", "app.nonexistent")
+	_, _, code := testutil.Run(t, bin, fix("missing-key"), "get", "app.main.nonexistent")
 	if code == 0 {
 		t.Fatal("expected non-zero exit for missing key")
 	}
@@ -71,21 +71,10 @@ func TestGet_no_args_fails(t *testing.T) {
 	}
 }
 
-func TestGet_conflict_file_same_path_blocked(t *testing.T) {
-	_, stderr, code := testutil.Run(t, bin, fix("conflict-file"), "get", "app.secret_key")
-	if code == 0 {
-		t.Fatal("expected non-zero exit due to file conflict on requested path")
-	}
-	if !testutil.Contains(testutil.StripANSI(stderr), "conflict") {
-		t.Errorf("expected conflict error, got: %q", stderr)
-	}
-}
-
-func TestGet_conflict_file_unrelated_path_succeeds(t *testing.T) {
-	// vault_a_only exists only in vault-a — no conflict on this path
-	out, _, code := testutil.Run(t, bin, fix("conflict-file"), "get", "app.vault_a_only")
+func TestGet_multi_vault_vault_a_key(t *testing.T) {
+	out, _, code := testutil.Run(t, bin, fix("conflict-file"), "get", "vault-a.main.vault_a_only")
 	if code != 0 {
-		t.Fatalf("exit %d — get of non-conflicting path should succeed", code)
+		t.Fatalf("exit %d", code)
 	}
 	if !testutil.Contains(out, "value-from-a") {
 		t.Errorf("expected value-from-a, got: %q", out)

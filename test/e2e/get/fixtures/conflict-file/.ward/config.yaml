@@ -1,3 +1,5 @@
 vaults:
-  - name: app
-    path: .ward/vaults/app
+  - name: vault-a
+    path: .ward/vaults/vault-a
+  - name: vault-b
+    path: .ward/vaults/vault-b

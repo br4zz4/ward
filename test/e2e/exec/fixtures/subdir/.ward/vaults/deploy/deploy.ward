@@ -1,4 +1,0 @@
-deploy:
-  region: us-east-1
-  bucket: my-bucket
-  retries: "3"

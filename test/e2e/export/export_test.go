@@ -26,7 +26,7 @@ func TestMain(m *testing.M) {
 func fix(name string) string { return testutil.FixtureDir("export", name) }
 
 func TestExport_prints_to_stdout(t *testing.T) {
-	out, _, code := testutil.Run(t, bin, fix("basic"), "export", ".ward/vaults/app/app.ward")
+	out, _, code := testutil.Run(t, bin, fix("basic"), "export", ".ward/vaults/app/main.ward")
 	if code != 0 {
 		t.Fatalf("exit %d", code)
 	}
@@ -38,7 +38,7 @@ func TestExport_prints_to_stdout(t *testing.T) {
 func TestExport_to_file(t *testing.T) {
 	dir := t.TempDir()
 	outFile := filepath.Join(dir, "out.yaml")
-	_, _, code := testutil.Run(t, bin, fix("basic"), "export", ".ward/vaults/app/app.ward", outFile)
+	_, _, code := testutil.Run(t, bin, fix("basic"), "export", ".ward/vaults/app/main.ward", outFile)
 	if code != 0 {
 		t.Fatalf("exit %d", code)
 	}

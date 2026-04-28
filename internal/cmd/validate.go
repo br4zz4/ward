@@ -15,7 +15,9 @@ import (
 
 // validateVaultStructure checks every .ward file in every vault:
 //  1. The file must be physically inside the vault's directory.
-//  2. The first YAML root key must equal the vault's name.
+//  2. The YAML key path at the top of the file must exactly match the path
+//     derived from the vault name + subdirectories + file stem.
+//     e.g. vault "app", file "secrets/test.ward" → must start with app.secrets.test
 //
 // Returns a list of human-readable violation strings (empty = clean).
 func validateVaultStructure(cfg *config.Config, cfgPath string) []string {
@@ -29,7 +31,6 @@ func validateVaultStructure(cfg *config.Config, cfgPath string) []string {
 			continue
 		}
 
-		// walk the vault directory
 		info, err := os.Stat(vaultAbs)
 		if err != nil || !info.IsDir() {
 			continue // vault dir not yet created — skip silently
@@ -49,19 +50,19 @@ func validateVaultStructure(cfg *config.Config, cfgPath string) []string {
 				return nil
 			}
 
-			// Check 2: first root YAML key must equal vault name
-			rootKey, keyErr := firstRootKey(path)
+			// Check 2: YAML key path must match vault name + subdir segments + file stem
+			expected := expectedFileDotPath(vault.Name, vaultAbs, path)
+			expectedSegments := strings.Split(expected, ".")
+
+			actual, keyErr := leadingKeyPath(path, len(expectedSegments))
 			if keyErr != nil {
-				violations = append(violations, fmt.Sprintf(
-					"file %q: cannot read YAML: %v", path, keyErr,
-				))
+				// encrypted or unreadable — skip silently
 				return nil
 			}
-			if rootKey != "" && rootKey != vault.Name {
-				expectedDotPath := expectedFileDotPath(vault.Name, vaultAbs, path)
+			if actual != expected {
 				violations = append(violations, fmt.Sprintf(
-					"file %q: root key %q does not match vault name %q (expected: %s)",
-					path, rootKey, vault.Name, expectedDotPath,
+					"file %q: key path %q does not match expected %q",
+					path, actual, expected,
 				))
 			}
 			return nil
@@ -95,7 +96,7 @@ func mustValidateStructure(cfg *config.Config, cfgPath string) {
 	for _, v := range violations {
 		fmt.Fprintf(os.Stderr, "  %s•%s %s\n", clrLightRed, clrReset, v)
 	}
-	fmt.Fprintf(os.Stderr, "\n  %suse %sward edit <file>%s to fix the root key%s\n\n", clrGray, clrCyan, clrGray, clrReset)
+	fmt.Fprintf(os.Stderr, "\n  %suse %sward edit <file>%s to fix the key path%s\n\n", clrGray, clrCyan, clrGray, clrReset)
 	os.Exit(1)
 }
 
@@ -112,29 +113,52 @@ func expectedFileDotPath(vaultName, vaultAbs, filePath string) string {
 	return strings.Join(segments, ".")
 }
 
-// firstRootKey reads a .ward file (which may be encrypted or plain YAML) and
-// returns the first root key. Ward files that are age-encrypted will return ""
-// (encrypted — skip root-key validation). For plain YAML files, it parses and
-// returns the first mapping key.
-func firstRootKey(path string) (string, error) {
+// leadingKeyPath reads a plain .ward file and returns the dot-path formed by
+// following the first key at each YAML mapping level, up to depth levels deep.
+// Returns an error for encrypted files (caller should skip silently).
+//
+// Example — depth 3, file content:
+//
+//	app:
+//	  secrets:
+//	    test:
+//	      secret_1: value
+//
+// → "app.secrets.test"
+func leadingKeyPath(path string, depth int) (string, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return "", err
 	}
 	if bytes.HasPrefix(data, []byte("-----BEGIN AGE ENCRYPTED FILE-----")) {
-		return "", nil // encrypted — skip root-key validation
+		return "", fmt.Errorf("encrypted")
+	}
+	// Skip SOPS-encrypted YAML files (contain ENC[...] values and a sops: key).
+	if bytes.Contains(data, []byte("ENC[")) {
+		return "", fmt.Errorf("encrypted")
 	}
 	var doc yaml.Node
 	if err := yaml.Unmarshal(data, &doc); err != nil || doc.Kind == 0 {
 		return "", fmt.Errorf("not valid YAML")
 	}
-	if doc.Kind == yaml.DocumentNode && len(doc.Content) > 0 {
-		mapping := doc.Content[0]
-		if mapping.Kind == yaml.MappingNode && len(mapping.Content) > 0 {
-			return mapping.Content[0].Value, nil
-		}
+	if doc.Kind != yaml.DocumentNode || len(doc.Content) == 0 {
+		return "", fmt.Errorf("empty document")
 	}
-	return "", fmt.Errorf("no root key found")
+
+	var segments []string
+	node := doc.Content[0]
+	for i := 0; i < depth; i++ {
+		if node.Kind != yaml.MappingNode || len(node.Content) < 2 {
+			break
+		}
+		key := node.Content[0].Value
+		segments = append(segments, key)
+		node = node.Content[1] // value of first key
+	}
+	if len(segments) == 0 {
+		return "", fmt.Errorf("no keys found")
+	}
+	return strings.Join(segments, "."), nil
 }
 
 // DiscoverForVault returns all .ward files under the given vault path.

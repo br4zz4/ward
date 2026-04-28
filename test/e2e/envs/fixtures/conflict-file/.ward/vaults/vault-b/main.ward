@@ -1,0 +1,4 @@
+vault-b:
+  main:
+    db_host: db.vault-b.internal
+    port: "5433"

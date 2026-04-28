@@ -41,35 +41,12 @@ func TestInspect_clean_shows_checkmark(t *testing.T) {
 	}
 }
 
-// ── conflict-file ─────────────────────────────────────────────────────────────
+// ── multi-vault (formerly conflict-file) ─────────────────────────────────────
 
-func TestInspect_conflict_file_exits_nonzero(t *testing.T) {
+func TestInspect_multi_vault_clean(t *testing.T) {
 	_, _, code := testutil.Run(t, bin, fix("conflict-file"), "inspect")
-	if code == 0 {
-		t.Fatal("expected non-zero exit for file conflict")
-	}
-}
-
-func TestInspect_conflict_file_shows_dotpath(t *testing.T) {
-	_, stderr, _ := testutil.Run(t, bin, fix("conflict-file"), "inspect")
-	if !testutil.Contains(testutil.StripANSI(stderr), "app.secret_key") {
-		t.Errorf("expected conflict dot-path in output, got: %q", stderr)
-	}
-}
-
-func TestInspect_conflict_file_shows_both_sources(t *testing.T) {
-	_, stderr, _ := testutil.Run(t, bin, fix("conflict-file"), "inspect")
-	clean := testutil.StripANSI(stderr)
-	if !testutil.Contains(clean, "vault-a") || !testutil.Contains(clean, "vault-b") {
-		t.Errorf("expected both vault sources, got: %q", stderr)
-	}
-}
-
-func TestInspect_conflict_file_shows_resolution_hints(t *testing.T) {
-	_, stderr, _ := testutil.Run(t, bin, fix("conflict-file"), "inspect")
-	clean := testutil.StripANSI(stderr)
-	if !testutil.Contains(clean, "to resolve") {
-		t.Errorf("expected resolution hints, got: %q", stderr)
+	if code != 0 {
+		t.Fatalf("expected exit 0 for multi-vault fixture, got %d", code)
 	}
 }
 

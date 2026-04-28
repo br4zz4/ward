@@ -1,5 +1,0 @@
-app:
-  log_level: info
-  config:
-    log_level: debug
-    timeout: "30"

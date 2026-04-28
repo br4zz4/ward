@@ -1,3 +1,5 @@
 vaults:
-  - name: infra
-    path: .ward/vaults/infra
+  - name: vault-a
+    path: .ward/vaults/vault-a
+  - name: vault-b
+    path: .ward/vaults/vault-b

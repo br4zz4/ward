@@ -1,3 +1,0 @@
-app:
-  secret_key: key-from-b
-  region: eu-west-1

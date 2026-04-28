@@ -1,0 +1,7 @@
+app:
+  main:
+    name: my-service
+    port: "8080"
+    db:
+      host: localhost
+      port: "5432"
