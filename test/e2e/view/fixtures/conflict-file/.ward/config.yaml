@@ -1,4 +1,5 @@
-
 vaults:
-  - path: .ward/vault/vault-a
-  - path: .ward/vault/vault-b
+  - name: vault-a
+    path: .ward/vaults/vault-a
+  - name: vault-b
+    path: .ward/vaults/vault-b

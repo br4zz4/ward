@@ -4,6 +4,7 @@ package exec_test
 
 import (
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/br4zz4/ward/test/e2e/testutil"
@@ -41,8 +42,8 @@ func TestExec_prefixed_injects_full_path(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("exit %d", code)
 	}
-	if !testutil.Contains(out, "DEPLOY_REGION=us-east-1") {
-		t.Errorf("expected DEPLOY_REGION=us-east-1, got: %q", out)
+	if !testutil.Contains(out, "DEPLOY_MAIN_REGION=us-east-1") {
+		t.Errorf("expected DEPLOY_MAIN_REGION=us-east-1, got: %q", out)
 	}
 }
 
@@ -51,8 +52,8 @@ func TestExec_flat_does_not_have_prefixed_key(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("exit %d", code)
 	}
-	if testutil.Contains(out, "DEPLOY_REGION=") {
-		t.Errorf("flat mode should not have DEPLOY_REGION, got: %q", out)
+	if testutil.Contains(out, "DEPLOY_MAIN_REGION=") {
+		t.Errorf("flat mode should not have DEPLOY_MAIN_REGION, got: %q", out)
 	}
 }
 
@@ -72,34 +73,18 @@ func TestExec_propagates_exit_zero(t *testing.T) {
 	}
 }
 
-// ── conflict-file ────────────────────────────────────────────────────────────
+// ── multi-vault (formerly conflict-file) ────────────────────────────────────
 
-func TestExec_conflict_file_blocked(t *testing.T) {
-	_, stderr, code := testutil.Run(t, bin, fix("conflict-file"), "exec", "--", "env")
-	if code == 0 {
-		t.Fatal("expected non-zero exit due to file conflict")
+func TestExec_multi_vault_injects_both(t *testing.T) {
+	out, _, code := testutil.Run(t, bin, fix("conflict-file"), "exec", "--prefixed", "--", "env")
+	if code != 0 {
+		t.Fatalf("exit %d", code)
 	}
-	if !testutil.Contains(testutil.StripANSI(stderr), "conflict") {
-		t.Errorf("expected conflict error, got: %q", stderr)
+	if !testutil.Contains(out, "key-from-a") {
+		t.Errorf("expected key-from-a from vault-a, got: %q", out)
 	}
-}
-
-func TestExec_conflict_file_always_errors(t *testing.T) {
-	// File conflict always errors — there is no override mode
-	_, stderr, code := testutil.Run(t, bin, fix("conflict-file"), "exec", "--", "env")
-	if code == 0 {
-		t.Fatal("expected non-zero exit — conflict has no automatic resolution")
-	}
-	if !testutil.Contains(testutil.StripANSI(stderr), "to resolve") {
-		t.Errorf("expected resolution hints, got: %q", stderr)
-	}
-}
-
-func TestExec_conflict_file_error_mentions_both_files(t *testing.T) {
-	_, stderr, _ := testutil.Run(t, bin, fix("conflict-file"), "exec", "--", "env")
-	clean := testutil.StripANSI(stderr)
-	if !testutil.Contains(clean, "vault-a") || !testutil.Contains(clean, "vault-b") {
-		t.Errorf("expected both vault sources in error, got: %q", stderr)
+	if !testutil.Contains(out, "key-from-b") {
+		t.Errorf("expected key-from-b from vault-b, got: %q", out)
 	}
 }
 
@@ -147,5 +132,24 @@ func TestExec_runs_in_caller_working_directory(t *testing.T) {
 	}
 	if !testutil.Contains(out, "workdir") {
 		t.Errorf("expected command to run in caller working directory (workdir), got: %q", out)
+	}
+}
+
+// ── structure-violation ───────────────────────────────────────────────────────
+
+func TestExec_structure_violation_fails(t *testing.T) {
+	// arrange
+	dir := t.TempDir()
+	testutil.RunCmd(t, "cp", "-r", fix("structure-violation")+"/.", dir)
+
+	// act
+	_, stderr, code := testutil.Run(t, bin, dir, "exec", "--", "env")
+
+	// assert
+	if code == 0 {
+		t.Fatal("expected non-zero exit for structure violation")
+	}
+	if !strings.Contains(stderr, "vault structure violations") {
+		t.Errorf("expected 'vault structure violations' in stderr, got: %s", stderr)
 	}
 }

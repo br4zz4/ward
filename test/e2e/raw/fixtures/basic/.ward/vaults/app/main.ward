@@ -1,0 +1,4 @@
+app:
+  main:
+    name: rawapp
+    secret_key: raw-secret

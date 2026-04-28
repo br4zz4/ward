@@ -25,7 +25,7 @@ func TestMain(m *testing.M) {
 func fix(name string) string { return testutil.FixtureDir("raw", name) }
 
 func TestRaw_prints_yaml(t *testing.T) {
-	out, _, code := testutil.Run(t, bin, fix("basic"), "raw", ".ward/vault/app.ward")
+	out, _, code := testutil.Run(t, bin, fix("basic"), "raw", ".ward/vaults/app/main.ward")
 	if code != 0 {
 		t.Fatalf("exit %d", code)
 	}
@@ -35,7 +35,7 @@ func TestRaw_prints_yaml(t *testing.T) {
 }
 
 func TestRaw_contains_all_keys(t *testing.T) {
-	out, _, code := testutil.Run(t, bin, fix("basic"), "raw", ".ward/vault/app.ward")
+	out, _, code := testutil.Run(t, bin, fix("basic"), "raw", ".ward/vaults/app/main.ward")
 	if code != 0 {
 		t.Fatalf("exit %d", code)
 	}
@@ -47,7 +47,7 @@ func TestRaw_contains_all_keys(t *testing.T) {
 }
 
 func TestRaw_missing_file_fails(t *testing.T) {
-	_, _, code := testutil.Run(t, bin, fix("basic"), "raw", ".ward/vault/nonexistent.ward")
+	_, _, code := testutil.Run(t, bin, fix("basic"), "raw", ".ward/vaults/app/nonexistent.ward")
 	if code == 0 {
 		t.Fatal("expected non-zero exit for missing file")
 	}

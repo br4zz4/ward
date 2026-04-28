@@ -1,0 +1,5 @@
+app:
+  main:
+    name: clean-app
+    version: "1.0"
+    db_url: postgres://localhost/app

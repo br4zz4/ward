@@ -24,6 +24,7 @@ func NewGetCmd() *cobra.Command {
 
 			dotPath := args[0]
 
+			enforceVaultStructure()
 			eng, err := newEngine()
 			if err != nil {
 				fatal(err)

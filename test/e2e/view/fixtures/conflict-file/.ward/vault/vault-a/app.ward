@@ -1,3 +1,0 @@
-app:
-  secret_key: key-from-a
-  region: us-east-1

@@ -57,7 +57,7 @@ func TestView_shows_legend(t *testing.T) {
 }
 
 func TestView_subtree(t *testing.T) {
-	out, _, code := testutil.Run(t, bin, fix("basic"), "view", "app.db")
+	out, _, code := testutil.Run(t, bin, fix("basic"), "view", "app.main.db")
 	if code != 0 {
 		t.Fatalf("exit %d", code)
 	}
@@ -66,37 +66,25 @@ func TestView_subtree(t *testing.T) {
 	}
 }
 
-// ── conflict-file ────────────────────────────────────────────────────────────
+// ── multi-vault (formerly conflict-file) ────────────────────────────────────
 
-func TestView_conflict_file_succeeds(t *testing.T) {
-	// view always produces output even with conflicts
+func TestView_multi_vault_succeeds(t *testing.T) {
 	out, _, code := testutil.Run(t, bin, fix("conflict-file"), "view")
 	if code != 0 {
-		t.Fatalf("view should exit 0 even with conflicts, got %d", code)
+		t.Fatalf("view should exit 0 for multi-vault fixture, got %d", code)
 	}
 	if !testutil.Contains(out, "←") {
 		t.Errorf("expected origin arrows, got: %q", out)
 	}
 }
 
-func TestView_conflict_file_shows_both_values(t *testing.T) {
+func TestView_multi_vault_shows_both_values(t *testing.T) {
 	out, _, code := testutil.Run(t, bin, fix("conflict-file"), "view")
 	if code != 0 {
 		t.Fatalf("exit %d", code)
 	}
-	// Both conflicting values should be visible
 	if !testutil.Contains(out, "key-from-a") || !testutil.Contains(out, "key-from-b") {
-		t.Errorf("expected both conflict values visible, got: %q", out)
-	}
-}
-
-func TestView_conflict_file_legend_shows_conflict(t *testing.T) {
-	out, _, code := testutil.Run(t, bin, fix("conflict-file"), "view")
-	if code != 0 {
-		t.Fatalf("exit %d", code)
-	}
-	if !testutil.Contains(testutil.StripANSI(out), "conflict") {
-		t.Errorf("expected conflict in legend, got: %q", out)
+		t.Errorf("expected both vault values visible, got: %q", out)
 	}
 }
 

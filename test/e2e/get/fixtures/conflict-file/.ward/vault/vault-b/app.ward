@@ -1,3 +1,0 @@
-app:
-  secret_key: key-from-b
-  vault_b_only: value-from-b

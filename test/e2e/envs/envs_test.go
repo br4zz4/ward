@@ -53,43 +53,24 @@ func TestEnvs_prefixed_keys(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("exit %d", code)
 	}
-	if !testutil.Contains(testutil.StripANSI(out), "SERVICE_SECRET_KEY") {
-		t.Errorf("expected SERVICE_SECRET_KEY in prefixed output, got: %q", out)
+	if !testutil.Contains(testutil.StripANSI(out), "SERVICE_MAIN_SECRET_KEY") {
+		t.Errorf("expected SERVICE_MAIN_SECRET_KEY in prefixed output, got: %q", out)
 	}
 }
 
-// ── conflict-file ────────────────────────────────────────────────────────────
+// ── multi-vault (formerly conflict-file) ────────────────────────────────────
 
-func TestEnvs_conflict_file_blocked(t *testing.T) {
-	_, stderr, code := testutil.Run(t, bin, fix("conflict-file"), "envs")
-	if code == 0 {
-		t.Fatal("expected non-zero exit due to file conflict")
+func TestEnvs_multi_vault_all_keys_present(t *testing.T) {
+	out, _, code := testutil.Run(t, bin, fix("conflict-file"), "envs", "--prefixed")
+	if code != 0 {
+		t.Fatalf("exit %d", code)
 	}
-	if !testutil.Contains(testutil.StripANSI(stderr), "conflict") {
-		t.Errorf("expected conflict error, got: %q", stderr)
+	clean := testutil.StripANSI(out)
+	if !testutil.Contains(clean, "db.vault-a.internal") {
+		t.Errorf("expected db.vault-a.internal in output, got: %q", out)
 	}
-}
-
-func TestEnvs_conflict_file_always_errors(t *testing.T) {
-	// File conflict always errors — there is no override mode
-	_, stderr, code := testutil.Run(t, bin, fix("conflict-file"), "envs")
-	if code == 0 {
-		t.Fatal("expected non-zero exit — conflict has no automatic resolution")
-	}
-	if !testutil.Contains(testutil.StripANSI(stderr), "to resolve") {
-		t.Errorf("expected resolution hints, got: %q", stderr)
-	}
-}
-
-func TestEnvs_conflict_file_different_values_shown(t *testing.T) {
-	_, stderr, code := testutil.Run(t, bin, fix("conflict-file"), "envs")
-	if code == 0 {
-		t.Fatal("expected conflict")
-	}
-	// Error should mention both files
-	clean := testutil.StripANSI(stderr)
-	if !testutil.Contains(clean, "vault-a") || !testutil.Contains(clean, "vault-b") {
-		t.Errorf("expected both vault sources in error, got: %q", stderr)
+	if !testutil.Contains(clean, "db.vault-b.internal") {
+		t.Errorf("expected db.vault-b.internal in output, got: %q", out)
 	}
 }
 
@@ -163,10 +144,10 @@ func TestEnvs_prefixed_both_envs_present(t *testing.T) {
 		t.Fatalf("exit %d", code)
 	}
 	clean := testutil.StripANSI(out)
-	if !testutil.Contains(clean, "APP_STAGING_API_KEY") {
-		t.Errorf("expected APP_STAGING_API_KEY, got: %q", out)
+	if !testutil.Contains(clean, "APP_MAIN_STAGING_API_KEY") {
+		t.Errorf("expected APP_MAIN_STAGING_API_KEY, got: %q", out)
 	}
-	if !testutil.Contains(clean, "APP_PRODUCTION_API_KEY") {
-		t.Errorf("expected APP_PRODUCTION_API_KEY, got: %q", out)
+	if !testutil.Contains(clean, "APP_MAIN_PRODUCTION_API_KEY") {
+		t.Errorf("expected APP_MAIN_PRODUCTION_API_KEY, got: %q", out)
 	}
 }

@@ -25,6 +25,7 @@ func NewExecCmd() *cobra.Command {
 				os.Exit(1)
 			}
 
+			enforceVaultStructure()
 			eng, err := newEngine()
 			if err != nil {
 				fatal(err)
