@@ -57,9 +57,14 @@ func NewInitCmd() *cobra.Command {
 				fatal(fmt.Errorf("creating .ward/: %w", err))
 			}
 
-			// 2. Generate age key
+			// 2. Generate age key and store as ward-<base64url> token
 			if err := wardage.GenerateKey(".ward/.key"); err != nil {
 				fatal(err)
+			}
+			if token, err := encodeWardKey(".ward/.key"); err == nil {
+				if err := os.WriteFile(".ward/.key", []byte(token+"\n"), 0600); err != nil {
+					fatal(fmt.Errorf("writing token to .ward/.key: %w", err))
+				}
 			}
 			configContent := fmt.Sprintf(wardConfigTemplate, projectName, projectName, projectName, projectName, projectName)
 			if err := writeIfAbsent(".ward/config.yaml", configContent); err != nil {
