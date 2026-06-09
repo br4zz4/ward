@@ -134,13 +134,20 @@ func resolveKeyFile(cfg *config.Config) (string, error) {
 		return keyFile, nil
 	}
 
-	// 3. key_file
+	// 3. key_file — supports both raw age key and ward-<base64url> token
 	if cfg.Encryption.KeyFile != "" {
 		if _, err := os.Stat(cfg.Encryption.KeyFile); err != nil {
 			fatalKeyError(
 				fmt.Sprintf("key file %s%s%s not found", clrCyan, cfg.Encryption.KeyFile, clrReset),
 				fmt.Sprintf("run %sward init%s to generate it, or copy your %s.ward.key%s here", clrBold, clrReset, clrCyan, clrReset),
 			)
+		}
+		data, err := os.ReadFile(cfg.Encryption.KeyFile)
+		if err != nil {
+			return "", fmt.Errorf("reading key file: %w", err)
+		}
+		if strings.HasPrefix(strings.TrimSpace(string(data)), "ward-") {
+			return writeTempKey(strings.TrimSpace(string(data)))
 		}
 		return cfg.Encryption.KeyFile, nil
 	}
