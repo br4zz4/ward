@@ -29,8 +29,8 @@ func TestToEnvVars_basic(t *testing.T) {
 	env := ToEnvVars(tree)
 
 	cases := map[string]string{
-		"COMPANY_SECTORS_ONE_STAGING_DATABASE_URL": "postgres://staging",
-		"COMPANY_SECTORS_ONE_STAGING_REDIS_URL":    "redis://staging",
+		"company_sectors_one_staging_database_url": "postgres://staging",
+		"company_sectors_one_staging_redis_url":    "redis://staging",
 	}
 	for k, want := range cases {
 		if got := env[k]; got != want {
@@ -39,7 +39,7 @@ func TestToEnvVars_basic(t *testing.T) {
 	}
 }
 
-func TestToEnvVars_nested_uppercased(t *testing.T) {
+func TestToEnvVars_nested_preserves_case(t *testing.T) {
 	tree := map[string]*Node{
 		"myApp": {
 			Children: map[string]*Node{
@@ -48,16 +48,16 @@ func TestToEnvVars_nested_uppercased(t *testing.T) {
 		},
 	}
 	env := ToEnvVars(tree)
-	if _, ok := env["MYAPP_DBURL"]; !ok {
-		t.Errorf("expected MYAPP_DBURL, got keys: %v", env)
+	if _, ok := env["myApp_dbURL"]; !ok {
+		t.Errorf("expected myApp_dbURL, got keys: %v", env)
 	}
 }
 
-func TestToEnvVars_toplevel_preserves_case(t *testing.T) {
+func TestToEnvVars_preserves_case(t *testing.T) {
 	tree := map[string]*Node{
-		"TF_VAR_aws_region":              {Value: "us-east-1"},
-		"AWS_MANAGEMENT_ACCESS_KEY_ID":   {Value: "AKIA123"},
-		"my_lower_key":                   {Value: "value"},
+		"TF_VAR_aws_region":            {Value: "us-east-1"},   // mixed: preserved as-is
+		"AWS_MANAGEMENT_ACCESS_KEY_ID": {Value: "AKIA123"},     // uppercase: preserved
+		"my_lower_key":                 {Value: "value"},        // lowercase: preserved
 	}
 	env := ToEnvVars(tree)
 	if env["TF_VAR_aws_region"] != "us-east-1" {
@@ -68,6 +68,31 @@ func TestToEnvVars_toplevel_preserves_case(t *testing.T) {
 	}
 	if env["my_lower_key"] != "value" {
 		t.Errorf("expected my_lower_key=value, got %v", env)
+	}
+}
+
+func TestToFlatEnvEntries_preserves_case(t *testing.T) {
+	tree := map[string]*Node{
+		"app": {
+			Children: map[string]*Node{
+				"TF_VAR_aws_region":  {Value: "us-east-1"}, // mixed case nested: preserved
+				"DATABASE_URL":       {Value: "postgres://x"}, // uppercase nested: preserved
+				"secret_key":         {Value: "abc"},           // lowercase nested: preserved
+			},
+		},
+	}
+	got, err := ToFlatEnvEntries(tree, "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if v, ok := got["TF_VAR_aws_region"]; !ok || v.Value != "us-east-1" {
+		t.Errorf("expected TF_VAR_aws_region=us-east-1, got %v", got)
+	}
+	if v, ok := got["DATABASE_URL"]; !ok || v.Value != "postgres://x" {
+		t.Errorf("expected DATABASE_URL=postgres://x, got %v", got)
+	}
+	if v, ok := got["secret_key"]; !ok || v.Value != "abc" {
+		t.Errorf("expected secret_key=abc, got %v", got)
 	}
 }
 
@@ -93,14 +118,14 @@ func TestToFlatEnvEntries_basic(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if v, ok := got["DATABASE_URL"]; !ok || v.Value != "postgres://localhost/myapp" {
-		t.Errorf("expected DATABASE_URL=postgres://localhost/myapp, got %v", got)
+	if v, ok := got["database_url"]; !ok || v.Value != "postgres://localhost/myapp" {
+		t.Errorf("expected database_url=postgres://localhost/myapp, got %v", got)
 	}
-	if v, ok := got["REDIS_URL"]; !ok || v.Value != "redis://localhost:6379" {
-		t.Errorf("expected REDIS_URL=redis://localhost:6379, got %v", got)
+	if v, ok := got["redis_url"]; !ok || v.Value != "redis://localhost:6379" {
+		t.Errorf("expected redis_url=redis://localhost:6379, got %v", got)
 	}
-	if _, ok := got["MYAPP_DATABASE_URL"]; ok {
-		t.Error("should not have prefixed key MYAPP_DATABASE_URL")
+	if _, ok := got["myapp_database_url"]; ok {
+		t.Error("should not have prefixed key myapp_database_url")
 	}
 }
 
@@ -124,17 +149,63 @@ func TestToFlatEnvEntries_nested(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if _, ok := got["URL"]; !ok {
-		t.Error("expected URL")
+	if _, ok := got["url"]; !ok {
+		t.Error("expected url")
 	}
-	if _, ok := got["PORT"]; !ok {
-		t.Error("expected PORT")
+	if _, ok := got["port"]; !ok {
+		t.Error("expected port")
 	}
-	if _, ok := got["TOKEN"]; !ok {
-		t.Error("expected TOKEN")
+	if _, ok := got["token"]; !ok {
+		t.Error("expected token")
 	}
-	if _, ok := got["APP_DB_URL"]; ok {
-		t.Error("should not have prefixed key APP_DB_URL")
+	if _, ok := got["app_db_url"]; ok {
+		t.Error("should not have prefixed key app_db_url")
+	}
+}
+
+func TestToFlatEnvEntries_case_collision(t *testing.T) {
+	tree := map[string]*Node{
+		"DATABASE_URL": {Value: "postgres://upper"},
+		"database_url": {Value: "postgres://lower"},
+	}
+	_, err := ToFlatEnvEntries(tree, "")
+	if err == nil {
+		t.Fatal("expected error for case-insensitive collision, got nil")
+	}
+	ce, ok := err.(*EnvConflictError)
+	if !ok {
+		t.Fatalf("expected EnvConflictError, got %T", err)
+	}
+	if len(ce.Conflicts) != 1 {
+		t.Fatalf("expected 1 conflict, got %d", len(ce.Conflicts))
+	}
+	if !ce.Conflicts[0].CaseCollision {
+		t.Error("expected CaseCollision=true")
+	}
+}
+
+func TestToFlatEnvEntries_case_collision_nested(t *testing.T) {
+	tree := map[string]*Node{
+		"app": {
+			Children: map[string]*Node{
+				"DATABASE_URL": {Value: "postgres://nested"},
+			},
+		},
+		"database_url": {Value: "postgres://top"},
+	}
+	_, err := ToFlatEnvEntries(tree, "")
+	if err == nil {
+		t.Fatal("expected error for case-insensitive collision, got nil")
+	}
+	ce, ok := err.(*EnvConflictError)
+	if !ok {
+		t.Fatalf("expected EnvConflictError, got %T", err)
+	}
+	if len(ce.Conflicts) != 1 {
+		t.Fatalf("expected 1 conflict, got %d", len(ce.Conflicts))
+	}
+	if !ce.Conflicts[0].CaseCollision {
+		t.Error("expected CaseCollision=true")
 	}
 }
 

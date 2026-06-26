@@ -52,8 +52,9 @@ func parentDotPath(dotPath string) string {
 
 // EnvConflict holds a single env var name collision between two dot-paths.
 type EnvConflict struct {
-	EnvKey   string
-	DotPaths [2]string
+	EnvKey        string
+	DotPaths      [2]string
+	CaseCollision bool // true when keys are the same name but different case
 }
 
 // EnvConflictError is returned when flat env var names collide across different dot-paths.
@@ -73,14 +74,19 @@ func (e *EnvConflictError) Error() string {
 	)
 	for _, c := range e.Conflicts {
 		fmt.Fprintf(&sb, "%s%s%s%s\n", colorBold, colorPink, c.EnvKey, colorReset)
-		fmt.Fprintf(&sb, "  defined under %s%s%s\n", colorYellow, c.DotPaths[0], colorReset)
-		fmt.Fprintf(&sb, "  defined under %s%s%s\n\n", colorYellow, c.DotPaths[1], colorReset)
-		fmt.Fprintf(&sb, "  %sto resolve:%s\n", colorBold, colorReset)
-		fmt.Fprintf(&sb, "    %s1.%s scope to the path you need:\n", colorGray, colorReset)
-		fmt.Fprintf(&sb, "         %sward exec %s -- <cmd>%s\n", colorCyan, parentDotPath(c.DotPaths[0]), colorReset)
-		fmt.Fprintf(&sb, "         %sward exec %s -- <cmd>%s\n", colorCyan, parentDotPath(c.DotPaths[1]), colorReset)
-		fmt.Fprintf(&sb, "    %s2.%s use %s--prefixed%s to keep full path names:\n", colorGray, colorReset, colorCyan, colorReset)
-		fmt.Fprintf(&sb, "         %sward exec --prefixed -- <cmd>%s\n\n", colorCyan, colorReset)
+		if c.CaseCollision {
+			fmt.Fprintf(&sb, "  %s%s%s and %s%s%s differ only in case\n\n", colorYellow, c.DotPaths[0], colorReset, colorYellow, c.DotPaths[1], colorReset)
+			fmt.Fprintf(&sb, "  %sto resolve:%s use consistent casing across vaults\n\n", colorBold, colorReset)
+		} else {
+			fmt.Fprintf(&sb, "  defined under %s%s%s\n", colorYellow, c.DotPaths[0], colorReset)
+			fmt.Fprintf(&sb, "  defined under %s%s%s\n\n", colorYellow, c.DotPaths[1], colorReset)
+			fmt.Fprintf(&sb, "  %sto resolve:%s\n", colorBold, colorReset)
+			fmt.Fprintf(&sb, "    %s1.%s scope to the path you need:\n", colorGray, colorReset)
+			fmt.Fprintf(&sb, "         %sward exec %s -- <cmd>%s\n", colorCyan, parentDotPath(c.DotPaths[0]), colorReset)
+			fmt.Fprintf(&sb, "         %sward exec %s -- <cmd>%s\n", colorCyan, parentDotPath(c.DotPaths[1]), colorReset)
+			fmt.Fprintf(&sb, "    %s2.%s use %s--prefixed%s to keep full path names:\n", colorGray, colorReset, colorCyan, colorReset)
+			fmt.Fprintf(&sb, "         %sward exec --prefixed -- <cmd>%s\n\n", colorCyan, colorReset)
+		}
 	}
 	fmt.Fprintf(&sb, "  %s→ read more:%s https://github.com/br4zz4/ward/blob/main/docs/conflicts-and-collisions.md\n",
 		colorGray, colorReset)
@@ -110,6 +116,23 @@ func ToFlatEnvEntries(tree map[string]*Node, preferPrefix string) (map[string]En
 
 	out := map[string]EnvEntry{}
 	var conflicts []EnvConflict
+
+	// detect case-insensitive collisions (e.g. DATABASE_URL vs database_url)
+	caseGroups := map[string][]string{}
+	for k := range byEnvKey {
+		lower := strings.ToLower(k)
+		caseGroups[lower] = append(caseGroups[lower], k)
+	}
+	for _, keys := range caseGroups {
+		if len(keys) < 2 {
+			continue
+		}
+		conflicts = append(conflicts, EnvConflict{
+			EnvKey:        keys[0],
+			DotPaths:      [2]string{keys[0], keys[1]},
+			CaseCollision: true,
+		})
+	}
 
 	for envKey, entries := range byEnvKey {
 		if len(entries) == 1 {
@@ -156,15 +179,14 @@ func ToFlatEnvEntries(tree map[string]*Node, preferPrefix string) (map[string]En
 	return out, nil
 }
 
-// envKey builds the env var name for a leaf. Top-level keys (no prefix) preserve their
-// original case; nested keys are uppercased so "app.db_url" → "APP_DB_URL".
-// Hyphens are always converted to underscores.
+// envKey builds the env var name for a leaf. Case is always preserved as written in the YAML.
+// Hyphens are converted to underscores. Nested keys are joined with "_".
 func envKey(prefix, k string) string {
 	safe := strings.ReplaceAll(k, "-", "_")
 	if prefix == "" {
 		return safe
 	}
-	return strings.ToUpper(prefix + "_" + safe)
+	return prefix + "_" + safe
 }
 
 // collectLeafs walks the tree and groups all leaf nodes by their leaf key name.
@@ -177,11 +199,7 @@ func collectLeafs(nodes map[string]*Node, prefix string, out map[string][]leafRe
 		if node.Children != nil {
 			collectLeafs(node.Children, dotPath, out)
 		} else {
-			// Top-level keys (no ancestors) preserve their case; nested keys are uppercased.
 			leafKey := strings.ReplaceAll(k, "-", "_")
-			if prefix != "" {
-				leafKey = strings.ToUpper(leafKey)
-			}
 			out[leafKey] = append(out[leafKey], leafRef{dotPath, node})
 		}
 	}
