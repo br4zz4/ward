@@ -156,15 +156,14 @@ func ToFlatEnvEntries(tree map[string]*Node, preferPrefix string) (map[string]En
 	return out, nil
 }
 
-// envKey builds the env var name for a leaf. Top-level keys (no prefix) preserve their
-// original case; nested keys are uppercased so "app.db_url" → "APP_DB_URL".
-// Hyphens are always converted to underscores.
+// envKey builds the env var name for a leaf. Case is always preserved as written in the YAML.
+// Hyphens are converted to underscores. Nested keys are joined with "_".
 func envKey(prefix, k string) string {
 	safe := strings.ReplaceAll(k, "-", "_")
 	if prefix == "" {
 		return safe
 	}
-	return strings.ToUpper(prefix + "_" + safe)
+	return prefix + "_" + safe
 }
 
 // collectLeafs walks the tree and groups all leaf nodes by their leaf key name.
@@ -177,11 +176,7 @@ func collectLeafs(nodes map[string]*Node, prefix string, out map[string][]leafRe
 		if node.Children != nil {
 			collectLeafs(node.Children, dotPath, out)
 		} else {
-			// Top-level keys (no ancestors) preserve their case; nested keys are uppercased.
 			leafKey := strings.ReplaceAll(k, "-", "_")
-			if prefix != "" {
-				leafKey = strings.ToUpper(leafKey)
-			}
 			out[leafKey] = append(out[leafKey], leafRef{dotPath, node})
 		}
 	}
