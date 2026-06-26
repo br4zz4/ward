@@ -156,7 +156,18 @@ func ToFlatEnvEntries(tree map[string]*Node, preferPrefix string) (map[string]En
 	return out, nil
 }
 
-// collectLeafs walks the tree and groups all leaf nodes by their uppercased leaf key name.
+// envKey builds the env var name for a leaf. Top-level keys (no prefix) preserve their
+// original case; nested keys are uppercased so "app.db_url" → "APP_DB_URL".
+// Hyphens are always converted to underscores.
+func envKey(prefix, k string) string {
+	safe := strings.ReplaceAll(k, "-", "_")
+	if prefix == "" {
+		return safe
+	}
+	return strings.ToUpper(prefix + "_" + safe)
+}
+
+// collectLeafs walks the tree and groups all leaf nodes by their leaf key name.
 func collectLeafs(nodes map[string]*Node, prefix string, out map[string][]leafRef) {
 	for k, node := range nodes {
 		dotPath := k
@@ -166,8 +177,12 @@ func collectLeafs(nodes map[string]*Node, prefix string, out map[string][]leafRe
 		if node.Children != nil {
 			collectLeafs(node.Children, dotPath, out)
 		} else {
-			envKey := strings.ToUpper(strings.ReplaceAll(k, "-", "_"))
-			out[envKey] = append(out[envKey], leafRef{dotPath, node})
+			// Top-level keys (no ancestors) preserve their case; nested keys are uppercased.
+			leafKey := strings.ReplaceAll(k, "-", "_")
+			if prefix != "" {
+				leafKey = strings.ToUpper(leafKey)
+			}
+			out[leafKey] = append(out[leafKey], leafRef{dotPath, node})
 		}
 	}
 }
@@ -273,10 +288,7 @@ func collectEnvEntriesDescending(nodes map[string]*Node, anchor map[string]inter
 		if node.Children != nil {
 			continue
 		}
-		key := strings.ToUpper(k)
-		if prefix != "" {
-			key = strings.ToUpper(prefix + "_" + k)
-		}
+		key := envKey(prefix, k)
 		overrides := node.Overrides
 		if prev, exists := out[key]; exists && prev.Overrides {
 			overrides = true
@@ -327,10 +339,7 @@ func collectEnvEntriesDescending(nodes map[string]*Node, anchor map[string]inter
 // collectEnvEntriesWithAnchorScope collects all leaves from nodes using node.Overrides directly.
 func collectEnvEntriesWithAnchorScope(nodes map[string]*Node, anchorScope map[string]interface{}, prefix string, out map[string]EnvEntry) {
 	for k, node := range nodes {
-		key := k
-		if prefix != "" {
-			key = prefix + "_" + k
-		}
+		key := envKey(prefix, k)
 		if node.Children != nil {
 			var childScope map[string]interface{}
 			if anchorScope != nil {
@@ -340,35 +349,29 @@ func collectEnvEntriesWithAnchorScope(nodes map[string]*Node, anchorScope map[st
 			}
 			collectEnvEntriesWithAnchorScope(node.Children, childScope, key, out)
 		} else {
-			out[strings.ToUpper(key)] = EnvEntry{Value: fmt.Sprintf("%v", node.Value), Origin: node.Origin, Overrides: node.Overrides}
+			out[key] = EnvEntry{Value: fmt.Sprintf("%v", node.Value), Origin: node.Origin, Overrides: node.Overrides}
 		}
 	}
 }
 
 func collectEnvEntries(nodes map[string]*Node, prefix string, out map[string]EnvEntry) {
 	for k, node := range nodes {
-		key := k
-		if prefix != "" {
-			key = prefix + "_" + k
-		}
+		key := envKey(prefix, k)
 		if node.Children != nil {
 			collectEnvEntries(node.Children, key, out)
 		} else {
-			out[strings.ToUpper(key)] = EnvEntry{Value: fmt.Sprintf("%v", node.Value), Origin: node.Origin, Overrides: node.Overrides}
+			out[key] = EnvEntry{Value: fmt.Sprintf("%v", node.Value), Origin: node.Origin, Overrides: node.Overrides}
 		}
 	}
 }
 
 func collectEnvVars(nodes map[string]*Node, prefix string, out map[string]string) {
 	for k, node := range nodes {
-		key := k
-		if prefix != "" {
-			key = prefix + "_" + k
-		}
+		key := envKey(prefix, k)
 		if node.Children != nil {
 			collectEnvVars(node.Children, key, out)
 		} else {
-			out[strings.ToUpper(key)] = fmt.Sprintf("%v", node.Value)
+			out[key] = fmt.Sprintf("%v", node.Value)
 		}
 	}
 }
