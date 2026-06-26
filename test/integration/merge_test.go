@@ -200,11 +200,11 @@ func TestEnvVars_flat_no_collision(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if entries["NAME"].Value != "myapp" {
-		t.Errorf("expected NAME=myapp, got %q", entries["NAME"].Value)
+	if entries["name"].Value != "myapp" {
+		t.Errorf("expected name=myapp, got %q", entries["name"].Value)
 	}
-	if entries["REGION"].Value != "us-east-1" {
-		t.Errorf("expected REGION=us-east-1, got %q", entries["REGION"].Value)
+	if entries["region"].Value != "us-east-1" {
+		t.Errorf("expected region=us-east-1, got %q", entries["region"].Value)
 	}
 }
 
@@ -219,8 +219,8 @@ func TestEnvVars_prefixed(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if entries["APP_NAME"].Value != "myapp" {
-		t.Errorf("expected APP_NAME=myapp, got %q", entries["APP_NAME"].Value)
+	if entries["app_name"].Value != "myapp" {
+		t.Errorf("expected app_name=myapp, got %q", entries["app_name"].Value)
 	}
 }
 
@@ -250,8 +250,8 @@ func TestEnvVars_prefer_prefix_resolves_collision(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if entries["TOKEN"].Value != "staging-token" {
-		t.Errorf("expected TOKEN=staging-token, got %q", entries["TOKEN"].Value)
+	if entries["token"].Value != "staging-token" {
+		t.Errorf("expected token=staging-token, got %q", entries["token"].Value)
 	}
 }
 
@@ -268,8 +268,8 @@ func TestEnvVars_shadow_deeper_wins(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if entries["LOG_LEVEL"].Value != "debug" {
-		t.Errorf("expected deeper LOG_LEVEL=debug to win, got %q", entries["LOG_LEVEL"].Value)
+	if entries["log_level"].Value != "debug" {
+		t.Errorf("expected deeper log_level=debug to win, got %q", entries["log_level"].Value)
 	}
 }
 
