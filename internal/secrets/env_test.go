@@ -29,8 +29,8 @@ func TestToEnvVars_basic(t *testing.T) {
 	env := ToEnvVars(tree)
 
 	cases := map[string]string{
-		"COMPANY_SECTORS_ONE_STAGING_DATABASE_URL": "postgres://staging",
-		"COMPANY_SECTORS_ONE_STAGING_REDIS_URL":    "redis://staging",
+		"company_sectors_one_staging_database_url": "postgres://staging",
+		"company_sectors_one_staging_redis_url":    "redis://staging",
 	}
 	for k, want := range cases {
 		if got := env[k]; got != want {
@@ -39,7 +39,7 @@ func TestToEnvVars_basic(t *testing.T) {
 	}
 }
 
-func TestToEnvVars_nested_uppercased(t *testing.T) {
+func TestToEnvVars_nested_preserves_case(t *testing.T) {
 	tree := map[string]*Node{
 		"myApp": {
 			Children: map[string]*Node{
@@ -48,8 +48,8 @@ func TestToEnvVars_nested_uppercased(t *testing.T) {
 		},
 	}
 	env := ToEnvVars(tree)
-	if _, ok := env["MYAPP_DBURL"]; !ok {
-		t.Errorf("expected MYAPP_DBURL, got keys: %v", env)
+	if _, ok := env["myApp_dbURL"]; !ok {
+		t.Errorf("expected myApp_dbURL, got keys: %v", env)
 	}
 }
 
@@ -93,14 +93,14 @@ func TestToFlatEnvEntries_basic(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if v, ok := got["DATABASE_URL"]; !ok || v.Value != "postgres://localhost/myapp" {
-		t.Errorf("expected DATABASE_URL=postgres://localhost/myapp, got %v", got)
+	if v, ok := got["database_url"]; !ok || v.Value != "postgres://localhost/myapp" {
+		t.Errorf("expected database_url=postgres://localhost/myapp, got %v", got)
 	}
-	if v, ok := got["REDIS_URL"]; !ok || v.Value != "redis://localhost:6379" {
-		t.Errorf("expected REDIS_URL=redis://localhost:6379, got %v", got)
+	if v, ok := got["redis_url"]; !ok || v.Value != "redis://localhost:6379" {
+		t.Errorf("expected redis_url=redis://localhost:6379, got %v", got)
 	}
-	if _, ok := got["MYAPP_DATABASE_URL"]; ok {
-		t.Error("should not have prefixed key MYAPP_DATABASE_URL")
+	if _, ok := got["myapp_database_url"]; ok {
+		t.Error("should not have prefixed key myapp_database_url")
 	}
 }
 
@@ -124,17 +124,17 @@ func TestToFlatEnvEntries_nested(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if _, ok := got["URL"]; !ok {
-		t.Error("expected URL")
+	if _, ok := got["url"]; !ok {
+		t.Error("expected url")
 	}
-	if _, ok := got["PORT"]; !ok {
-		t.Error("expected PORT")
+	if _, ok := got["port"]; !ok {
+		t.Error("expected port")
 	}
-	if _, ok := got["TOKEN"]; !ok {
-		t.Error("expected TOKEN")
+	if _, ok := got["token"]; !ok {
+		t.Error("expected token")
 	}
-	if _, ok := got["APP_DB_URL"]; ok {
-		t.Error("should not have prefixed key APP_DB_URL")
+	if _, ok := got["app_db_url"]; ok {
+		t.Error("should not have prefixed key app_db_url")
 	}
 }
 
