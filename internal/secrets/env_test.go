@@ -39,7 +39,7 @@ func TestToEnvVars_basic(t *testing.T) {
 	}
 }
 
-func TestToEnvVars_uppercase(t *testing.T) {
+func TestToEnvVars_nested_uppercased(t *testing.T) {
 	tree := map[string]*Node{
 		"myApp": {
 			Children: map[string]*Node{
@@ -50,6 +50,24 @@ func TestToEnvVars_uppercase(t *testing.T) {
 	env := ToEnvVars(tree)
 	if _, ok := env["MYAPP_DBURL"]; !ok {
 		t.Errorf("expected MYAPP_DBURL, got keys: %v", env)
+	}
+}
+
+func TestToEnvVars_toplevel_preserves_case(t *testing.T) {
+	tree := map[string]*Node{
+		"TF_VAR_aws_region":              {Value: "us-east-1"},
+		"AWS_MANAGEMENT_ACCESS_KEY_ID":   {Value: "AKIA123"},
+		"my_lower_key":                   {Value: "value"},
+	}
+	env := ToEnvVars(tree)
+	if env["TF_VAR_aws_region"] != "us-east-1" {
+		t.Errorf("expected TF_VAR_aws_region=us-east-1, got %v", env)
+	}
+	if env["AWS_MANAGEMENT_ACCESS_KEY_ID"] != "AKIA123" {
+		t.Errorf("expected AWS_MANAGEMENT_ACCESS_KEY_ID=AKIA123, got %v", env)
+	}
+	if env["my_lower_key"] != "value" {
+		t.Errorf("expected my_lower_key=value, got %v", env)
 	}
 }
 
