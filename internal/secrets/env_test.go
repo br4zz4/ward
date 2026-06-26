@@ -53,11 +53,11 @@ func TestToEnvVars_nested_preserves_case(t *testing.T) {
 	}
 }
 
-func TestToEnvVars_toplevel_preserves_case(t *testing.T) {
+func TestToEnvVars_preserves_case(t *testing.T) {
 	tree := map[string]*Node{
-		"TF_VAR_aws_region":              {Value: "us-east-1"},
-		"AWS_MANAGEMENT_ACCESS_KEY_ID":   {Value: "AKIA123"},
-		"my_lower_key":                   {Value: "value"},
+		"TF_VAR_aws_region":            {Value: "us-east-1"},   // mixed: preserved as-is
+		"AWS_MANAGEMENT_ACCESS_KEY_ID": {Value: "AKIA123"},     // uppercase: preserved
+		"my_lower_key":                 {Value: "value"},        // lowercase: preserved
 	}
 	env := ToEnvVars(tree)
 	if env["TF_VAR_aws_region"] != "us-east-1" {
@@ -68,6 +68,31 @@ func TestToEnvVars_toplevel_preserves_case(t *testing.T) {
 	}
 	if env["my_lower_key"] != "value" {
 		t.Errorf("expected my_lower_key=value, got %v", env)
+	}
+}
+
+func TestToFlatEnvEntries_preserves_case(t *testing.T) {
+	tree := map[string]*Node{
+		"app": {
+			Children: map[string]*Node{
+				"TF_VAR_aws_region":  {Value: "us-east-1"}, // mixed case nested: preserved
+				"DATABASE_URL":       {Value: "postgres://x"}, // uppercase nested: preserved
+				"secret_key":         {Value: "abc"},           // lowercase nested: preserved
+			},
+		},
+	}
+	got, err := ToFlatEnvEntries(tree, "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if v, ok := got["TF_VAR_aws_region"]; !ok || v.Value != "us-east-1" {
+		t.Errorf("expected TF_VAR_aws_region=us-east-1, got %v", got)
+	}
+	if v, ok := got["DATABASE_URL"]; !ok || v.Value != "postgres://x" {
+		t.Errorf("expected DATABASE_URL=postgres://x, got %v", got)
+	}
+	if v, ok := got["secret_key"]; !ok || v.Value != "abc" {
+		t.Errorf("expected secret_key=abc, got %v", got)
 	}
 }
 
