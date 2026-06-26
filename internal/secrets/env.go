@@ -52,8 +52,9 @@ func parentDotPath(dotPath string) string {
 
 // EnvConflict holds a single env var name collision between two dot-paths.
 type EnvConflict struct {
-	EnvKey   string
-	DotPaths [2]string
+	EnvKey        string
+	DotPaths      [2]string
+	CaseCollision bool // true when keys are the same name but different case
 }
 
 // EnvConflictError is returned when flat env var names collide across different dot-paths.
@@ -73,14 +74,19 @@ func (e *EnvConflictError) Error() string {
 	)
 	for _, c := range e.Conflicts {
 		fmt.Fprintf(&sb, "%s%s%s%s\n", colorBold, colorPink, c.EnvKey, colorReset)
-		fmt.Fprintf(&sb, "  defined under %s%s%s\n", colorYellow, c.DotPaths[0], colorReset)
-		fmt.Fprintf(&sb, "  defined under %s%s%s\n\n", colorYellow, c.DotPaths[1], colorReset)
-		fmt.Fprintf(&sb, "  %sto resolve:%s\n", colorBold, colorReset)
-		fmt.Fprintf(&sb, "    %s1.%s scope to the path you need:\n", colorGray, colorReset)
-		fmt.Fprintf(&sb, "         %sward exec %s -- <cmd>%s\n", colorCyan, parentDotPath(c.DotPaths[0]), colorReset)
-		fmt.Fprintf(&sb, "         %sward exec %s -- <cmd>%s\n", colorCyan, parentDotPath(c.DotPaths[1]), colorReset)
-		fmt.Fprintf(&sb, "    %s2.%s use %s--prefixed%s to keep full path names:\n", colorGray, colorReset, colorCyan, colorReset)
-		fmt.Fprintf(&sb, "         %sward exec --prefixed -- <cmd>%s\n\n", colorCyan, colorReset)
+		if c.CaseCollision {
+			fmt.Fprintf(&sb, "  %s%s%s and %s%s%s differ only in case\n\n", colorYellow, c.DotPaths[0], colorReset, colorYellow, c.DotPaths[1], colorReset)
+			fmt.Fprintf(&sb, "  %sto resolve:%s use consistent casing across vaults\n\n", colorBold, colorReset)
+		} else {
+			fmt.Fprintf(&sb, "  defined under %s%s%s\n", colorYellow, c.DotPaths[0], colorReset)
+			fmt.Fprintf(&sb, "  defined under %s%s%s\n\n", colorYellow, c.DotPaths[1], colorReset)
+			fmt.Fprintf(&sb, "  %sto resolve:%s\n", colorBold, colorReset)
+			fmt.Fprintf(&sb, "    %s1.%s scope to the path you need:\n", colorGray, colorReset)
+			fmt.Fprintf(&sb, "         %sward exec %s -- <cmd>%s\n", colorCyan, parentDotPath(c.DotPaths[0]), colorReset)
+			fmt.Fprintf(&sb, "         %sward exec %s -- <cmd>%s\n", colorCyan, parentDotPath(c.DotPaths[1]), colorReset)
+			fmt.Fprintf(&sb, "    %s2.%s use %s--prefixed%s to keep full path names:\n", colorGray, colorReset, colorCyan, colorReset)
+			fmt.Fprintf(&sb, "         %sward exec --prefixed -- <cmd>%s\n\n", colorCyan, colorReset)
+		}
 	}
 	fmt.Fprintf(&sb, "  %s→ read more:%s https://github.com/br4zz4/ward/blob/main/docs/conflicts-and-collisions.md\n",
 		colorGray, colorReset)
@@ -110,6 +116,23 @@ func ToFlatEnvEntries(tree map[string]*Node, preferPrefix string) (map[string]En
 
 	out := map[string]EnvEntry{}
 	var conflicts []EnvConflict
+
+	// detect case-insensitive collisions (e.g. DATABASE_URL vs database_url)
+	caseGroups := map[string][]string{}
+	for k := range byEnvKey {
+		lower := strings.ToLower(k)
+		caseGroups[lower] = append(caseGroups[lower], k)
+	}
+	for _, keys := range caseGroups {
+		if len(keys) < 2 {
+			continue
+		}
+		conflicts = append(conflicts, EnvConflict{
+			EnvKey:        keys[0],
+			DotPaths:      [2]string{keys[0], keys[1]},
+			CaseCollision: true,
+		})
+	}
 
 	for envKey, entries := range byEnvKey {
 		if len(entries) == 1 {

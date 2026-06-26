@@ -163,6 +163,52 @@ func TestToFlatEnvEntries_nested(t *testing.T) {
 	}
 }
 
+func TestToFlatEnvEntries_case_collision(t *testing.T) {
+	tree := map[string]*Node{
+		"DATABASE_URL": {Value: "postgres://upper"},
+		"database_url": {Value: "postgres://lower"},
+	}
+	_, err := ToFlatEnvEntries(tree, "")
+	if err == nil {
+		t.Fatal("expected error for case-insensitive collision, got nil")
+	}
+	ce, ok := err.(*EnvConflictError)
+	if !ok {
+		t.Fatalf("expected EnvConflictError, got %T", err)
+	}
+	if len(ce.Conflicts) != 1 {
+		t.Fatalf("expected 1 conflict, got %d", len(ce.Conflicts))
+	}
+	if !ce.Conflicts[0].CaseCollision {
+		t.Error("expected CaseCollision=true")
+	}
+}
+
+func TestToFlatEnvEntries_case_collision_nested(t *testing.T) {
+	tree := map[string]*Node{
+		"app": {
+			Children: map[string]*Node{
+				"DATABASE_URL": {Value: "postgres://nested"},
+			},
+		},
+		"database_url": {Value: "postgres://top"},
+	}
+	_, err := ToFlatEnvEntries(tree, "")
+	if err == nil {
+		t.Fatal("expected error for case-insensitive collision, got nil")
+	}
+	ce, ok := err.(*EnvConflictError)
+	if !ok {
+		t.Fatalf("expected EnvConflictError, got %T", err)
+	}
+	if len(ce.Conflicts) != 1 {
+		t.Fatalf("expected 1 conflict, got %d", len(ce.Conflicts))
+	}
+	if !ce.Conflicts[0].CaseCollision {
+		t.Error("expected CaseCollision=true")
+	}
+}
+
 func TestToFlatEnvEntries_empty(t *testing.T) {
 	got, err := ToFlatEnvEntries(map[string]*Node{}, "")
 	if err != nil {
