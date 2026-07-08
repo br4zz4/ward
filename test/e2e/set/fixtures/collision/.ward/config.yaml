@@ -1,0 +1,5 @@
+vaults:
+  - name: va
+    path: .ward/vaults/va
+  - name: vb
+    path: .ward/vaults/vb

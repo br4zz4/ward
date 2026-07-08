@@ -52,6 +52,8 @@ func main() {
 		cmd.NewRawCmd(),
 		cmd.NewExportCmd(),
 		cmd.NewOverrideCmd(),
+		cmd.NewSetCmd(),
+		cmd.NewUnsetCmd(),
 		cmd.NewVaultCmd(),
 	)
 
