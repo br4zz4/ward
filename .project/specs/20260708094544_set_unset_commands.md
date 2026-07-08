@@ -2,7 +2,7 @@
 
 > TLDR: Add `ward set <dot.path> <value>` and `ward unset <dot.path>` to write and remove individual secrets by full dot-path, aborting with a clear error when the path is ambiguous across files.
 
-**Status:** proposed
+**Status:** in_progress
 **Created:** 2026-07-08
 **Owner:** @oporpino
 
@@ -43,8 +43,12 @@ A Type-2 conflict (env-var collision — two different dot-paths whose last segm
 1. Same vault resolution and Type-1 conflict abort as `set`.
 2. Locate the single file defining the key.
    - Key not found in any file → **error**: `key not found: <dot.path>` (same as `get`).
-3. Remove the leaf from the file's YAML tree; prune now-empty intermediate maps **but keep the file's root structure** (do not delete the file even if it becomes empty).
+3. Remove the leaf from the file's YAML tree, keeping the surrounding scaffold maps (`vault.[subdirs].stem`) in place — do **not** prune them. Pruning would drop key levels the vault-structure validator requires, so the file must keep its scaffold even when it holds no secrets.
 4. Re-encrypt and write back; confirmation message.
+
+### Implementation note: dot-path depth
+
+The vault-structure rule pins every file's leading keys to `vault.[subdirs].stem`, so a leaf secret always lives at `vault.[subdirs].stem.leafname` — at least **three** segments. `set` rejects paths with fewer than three segments up front, and derives a new file's path from the middle segments (dropping the vault and the leaf).
 
 ### `internal/cmd/root.go`
 Register both commands.

@@ -195,6 +195,34 @@ ward get myapp.staging.database_url
 # postgres://staging.acme.internal/app
 ```
 
+### `ward set <dot.path> <value>`
+
+Set a single secret at a full dot-path. The first segment is the vault; the path
+must be at least three segments (`vault.file.key`).
+
+```sh
+ward set myapp.staging.database_url postgres://...
+```
+
+- Updates the value when the path already lives in exactly one file.
+- Creates a new `.ward` file (named after the path) when no file defines it,
+  printing a notice.
+- Aborts if the path is defined in more than one file (cannot know which to set).
+- If the write leaves an env var colliding with a different dot-path, it still
+  succeeds and prints a non-blocking warning.
+
+### `ward unset <dot.path>`
+
+Remove a single secret at a full dot-path.
+
+```sh
+ward unset myapp.staging.database_url
+```
+
+- Errors with `key not found` when the path does not exist.
+- Aborts on the same multi-file ambiguity as `set`.
+- Keeps the file's scaffold structure even when it removes the last secret.
+
 ### `ward config`
 
 Open `.ward/config.yaml` in `$EDITOR`.
