@@ -4,9 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"gopkg.in/yaml.v3"
-
-	"github.com/br4zz4/ward/internal/config"
+	"github.com/br4zz4/ward/internal/secrets"
 	"github.com/spf13/cobra"
 )
 
@@ -19,67 +17,51 @@ func NewUnsetCmd() *cobra.Command {
 		Run: func(_ *cobra.Command, args []string) {
 			dotPath := args[0]
 
-			enforceVaultStructure()
+			ed := newSecretEditor()
+			ed.vaultFor(dotPath)
 
-			cfgPath, err := resolvedConfigFile()
-			if err != nil {
-				fatal(fmt.Errorf("no ward project found — run `ward init` first"))
-			}
-			cfg, err := config.Load(cfgPath)
-			if err != nil {
-				fatal(err)
-			}
-
-			vaultName := firstSegment(dotPath)
-			if findVault(cfg, vaultName) == nil {
-				fatalVaultNotFound(vaultName)
-			}
-
-			eng, err := newEngine()
-			if err != nil {
-				fatal(err)
-			}
-			files, err := eng.LoadFiles()
-			if err != nil {
-				fatal(err)
-			}
-
-			// Type-1 conflict: same dot-path defined in more than one file → abort.
-			// Match leaf or group so a group path can report a precise error below.
-			targets := resolvePathFiles(files, dotPath)
-			if len(targets) > 1 {
-				fatal(fmt.Errorf("%s", ambiguousTargetError(dotPath, targets, files)))
-			}
+			// Match leaf or group so a group path resolves to its file and can
+			// report a precise error. More than one → Type-1 conflict.
+			targets := secrets.FilesMatching(ed.files, dotPath, secrets.Exists)
+			ed.abortOnAmbiguity(dotPath, targets)
 			if len(targets) == 0 {
 				fatal(fmt.Errorf("key not found: %s", dotPath))
 			}
 
 			targetPath := targets[0]
-			plain, err := eng.Decrypt(targetPath)
-			if err != nil {
-				fatal(fmt.Errorf("decrypting %s: %w", targetPath, err))
-			}
-			data := map[string]interface{}{}
-			if err := yaml.Unmarshal(plain, &data); err != nil {
-				fatal(fmt.Errorf("parsing %s: %w", targetPath, err))
-			}
+			tree := ed.load(targetPath)
 
-			switch unsetLeaf(data, dotPath) {
-			case unsetNotFound:
-				fatal(fmt.Errorf("key not found: %s", dotPath))
-			case unsetIsGroup:
-				fatal(fmt.Errorf("%s is a group, not a leaf — unset removes a single secret, not a whole branch", dotPath))
-			}
+			requireRemovable(tree.Unset(dotPath), dotPath)
 
-			out, err := yaml.Marshal(data)
-			if err != nil {
-				fatal(fmt.Errorf("encoding YAML: %w", err))
-			}
-			if err := eng.Encrypt(targetPath, out); err != nil {
-				fatal(fmt.Errorf("encrypting %s: %w", targetPath, err))
-			}
-
+			ed.save(targetPath, tree)
 			fmt.Fprintf(os.Stderr, "  %s✓%s unset %s%s%s\n", clrGreen, clrReset, clrBold, dotPath, clrReset)
 		},
 	}
+}
+
+// requireRemovable exits with the right error for a non-removal outcome, or
+// returns cleanly when a leaf was removed.
+func requireRemovable(outcome secrets.UnsetOutcome, dotPath string) {
+	switch outcome {
+	case secrets.UnsetAbsent:
+		fatal(fmt.Errorf("key not found: %s", dotPath))
+	case secrets.UnsetGroup:
+		fatal(fmt.Errorf("%s is a group, not a leaf — unset removes a single secret, not a whole branch", dotPath))
+	}
+}
+
+// --- test-facing wrappers ----------------------------------------------------
+
+// unsetResult mirrors secrets.UnsetOutcome for the cmd-level unit tests.
+type unsetResult = secrets.UnsetOutcome
+
+const (
+	unsetNotFound = secrets.UnsetAbsent
+	unsetIsGroup  = secrets.UnsetGroup
+	unsetRemoved  = secrets.UnsetDone
+)
+
+// unsetLeaf removes a single leaf from data, keeping surrounding scaffold groups.
+func unsetLeaf(data map[string]interface{}, dotPath string) unsetResult {
+	return secrets.NewTree(data).Unset(dotPath)
 }
