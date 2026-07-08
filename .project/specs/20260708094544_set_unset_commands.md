@@ -41,10 +41,13 @@ A Type-2 conflict (env-var collision — two different dot-paths whose last segm
 ### `internal/cmd/unset.go` (new)
 `ward unset <dot.path>`:
 1. Same vault resolution and Type-1 conflict abort as `set`.
-2. Locate the single file defining the key.
-   - Key not found in any file → **error**: `key not found: <dot.path>` (same as `get`).
+2. Locate the single file defining the path (leaf **or** group).
+   - Path not found in any file → **error**: `key not found: <dot.path>` (same as `get`).
+   - Path points to a **group** (a map with children), not a leaf → **error**: `<dot.path> is a group, not a leaf` and remove nothing. `unset` only ever removes a single leaf secret, never a whole branch.
 3. Remove the leaf from the file's YAML tree, keeping the surrounding scaffold maps (`vault.[subdirs].stem`) in place — do **not** prune them. Pruning would drop key levels the vault-structure validator requires, so the file must keep its scaffold even when it holds no secrets.
 4. Re-encrypt and write back; confirmation message.
+
+`unset` does not warn about Type-2 collisions: removing a leaf can only reduce collisions, never create one.
 
 ### Implementation note: dot-path depth
 
@@ -59,7 +62,8 @@ Reuse `newEngine`, `resolveNewPath`/`newFileStub` logic (from `new.go`), `splitP
 ### Tests
 - `internal/cmd/set_test.go`, `internal/cmd/unset_test.go` — unit tests (TDD).
 - E2E fixtures under `test/e2e/set/` and `test/e2e/unset/` following the existing `vaults/<name>/*.ward` layout.
-- Cover: create new key (+new file notice), update existing key, unset existing key, unset missing key (error), Type-1 conflict abort (set and unset), Type-2 collision warning (set writes + warns), vault-not-found (set), empty-file-after-unset keeps structure.
+- Cover: create new key (+new file notice), update existing key, unset existing key, unset missing key (error), unset group path (error, nothing removed), Type-2 collision warning (set writes + warns), vault-not-found (set/unset), empty-file-after-unset keeps structure.
+- **Type-1 conflict (same dot-path in 2+ files)** is covered by a unit test only. It is not reachable via e2e in a structurally valid project: the vault-structure rule pins each file to a unique `vault.stem` prefix, so two files cannot define the same leaf path, and `enforceVaultStructure()` (which runs first) would abort with a structure error before the Type-1 abort could fire.
 
 ## How to verify
 
