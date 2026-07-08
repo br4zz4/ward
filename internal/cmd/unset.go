@@ -45,7 +45,8 @@ func NewUnsetCmd() *cobra.Command {
 			}
 
 			// Type-1 conflict: same dot-path defined in more than one file → abort.
-			targets := resolveTargetFiles(files, dotPath)
+			// Match leaf or group so a group path can report a precise error below.
+			targets := resolvePathFiles(files, dotPath)
 			if len(targets) > 1 {
 				fatal(fmt.Errorf("%s", ambiguousTargetError(dotPath, targets, files)))
 			}
@@ -63,8 +64,11 @@ func NewUnsetCmd() *cobra.Command {
 				fatal(fmt.Errorf("parsing %s: %w", targetPath, err))
 			}
 
-			if !unsetLeaf(data, dotPath) {
+			switch unsetLeaf(data, dotPath) {
+			case unsetNotFound:
 				fatal(fmt.Errorf("key not found: %s", dotPath))
+			case unsetIsGroup:
+				fatal(fmt.Errorf("%s is a group, not a leaf — unset removes a single secret, not a whole branch", dotPath))
 			}
 
 			out, err := yaml.Marshal(data)

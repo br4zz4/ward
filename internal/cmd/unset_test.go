@@ -14,11 +14,11 @@ func TestUnsetLeaf_removes_existing(t *testing.T) {
 	}
 
 	// act
-	ok := unsetLeaf(data, "app.db.token")
+	result := unsetLeaf(data, "app.db.token")
 
 	// assert
-	if !ok {
-		t.Fatal("expected unsetLeaf to report success")
+	if result != unsetRemoved {
+		t.Fatalf("expected unsetRemoved, got %v", result)
 	}
 	db := data["app"].(map[string]interface{})["db"].(map[string]interface{})
 	if _, exists := db["token"]; exists {
@@ -36,11 +36,33 @@ func TestUnsetLeaf_missing_key_returns_false(t *testing.T) {
 	}
 
 	// act
-	ok := unsetLeaf(data, "app.db.missing")
+	result := unsetLeaf(data, "app.db.missing")
 
 	// assert
-	if ok {
-		t.Fatal("expected unsetLeaf to report not found")
+	if result != unsetNotFound {
+		t.Fatalf("expected unsetNotFound, got %v", result)
+	}
+}
+
+func TestUnsetLeaf_group_path_is_not_removed(t *testing.T) {
+	// arrange: app.db is a group (has children), not a leaf
+	data := map[string]interface{}{
+		"app": map[string]interface{}{"db": map[string]interface{}{
+			"host": "localhost",
+			"port": "5432",
+		}},
+	}
+
+	// act
+	result := unsetLeaf(data, "app.db")
+
+	// assert: reports group, removes nothing
+	if result != unsetIsGroup {
+		t.Fatalf("expected unsetIsGroup, got %v", result)
+	}
+	db, ok := data["app"].(map[string]interface{})["db"].(map[string]interface{})
+	if !ok || len(db) != 2 {
+		t.Fatal("expected group and its children to be left intact")
 	}
 }
 

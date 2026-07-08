@@ -85,6 +85,27 @@ func TestUnset_missing_key_fails(t *testing.T) {
 	}
 }
 
+func TestUnset_group_path_fails(t *testing.T) {
+	// arrange
+	dir := t.TempDir()
+	copyFixture(t, fix("basic"), dir)
+
+	// act: app.main is a group (has children), not a leaf
+	_, stderr, code := testutil.Run(t, bin, dir, "unset", "app.main")
+
+	// assert: refuses and explains, without removing the branch
+	if code == 0 {
+		t.Fatal("expected non-zero exit for a group path")
+	}
+	if !testutil.Contains(testutil.StripANSI(stderr), "group, not a leaf") {
+		t.Errorf("expected group-not-leaf error, got: %q", stderr)
+	}
+	out, _, _ := testutil.Run(t, bin, dir, "get", "app.main.name")
+	if !testutil.Contains(out, "my-service") {
+		t.Errorf("expected branch to remain intact, got: %q", out)
+	}
+}
+
 func TestUnset_unknown_vault_fails(t *testing.T) {
 	// arrange
 	dir := t.TempDir()

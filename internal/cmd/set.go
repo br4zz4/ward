@@ -156,6 +156,20 @@ func resolveTargetFiles(files []secrets.ParsedFile, dotPath string) []string {
 	return out
 }
 
+// resolvePathFiles returns the files whose data defines the dot-path at all,
+// whether as a leaf or a group. unset uses this so a path pointing to a group
+// still resolves to its file and can report a precise "group, not a leaf" error.
+func resolvePathFiles(files []secrets.ParsedFile, dotPath string) []string {
+	var out []string
+	parts := strings.Split(dotPath, ".")
+	for _, pf := range files {
+		if pathExists(pf.Data, parts) {
+			out = append(out, pf.File)
+		}
+	}
+	return out
+}
+
 // leafExists reports whether data contains a scalar leaf at the given path segments.
 func leafExists(data map[string]interface{}, parts []string) bool {
 	current := data
@@ -168,6 +182,27 @@ func leafExists(data map[string]interface{}, parts []string) bool {
 			// Last segment must be a scalar leaf, not a map.
 			_, isMap := v.(map[string]interface{})
 			return !isMap
+		}
+		next, isMap := v.(map[string]interface{})
+		if !isMap {
+			return false
+		}
+		current = next
+	}
+	return false
+}
+
+// pathExists reports whether data contains the given path segments, as either a
+// leaf or a group.
+func pathExists(data map[string]interface{}, parts []string) bool {
+	current := data
+	for i, p := range parts {
+		v, ok := current[p]
+		if !ok {
+			return false
+		}
+		if i == len(parts)-1 {
+			return true
 		}
 		next, isMap := v.(map[string]interface{})
 		if !isMap {
@@ -196,30 +231,41 @@ func setLeaf(data map[string]interface{}, dotPath, value string) {
 	}
 }
 
+// unsetResult reports the outcome of unsetLeaf.
+type unsetResult int
+
+const (
+	unsetNotFound unsetResult = iota // no key at the path
+	unsetIsGroup                     // the path points to a group (map), not a leaf
+	unsetRemoved                     // a leaf was removed
+)
+
 // unsetLeaf removes the leaf at dot-path, leaving the surrounding scaffold maps
 // (vault.[subdirs].stem) in place so the file keeps a valid structure even when
-// it becomes empty of secrets. Returns false if the leaf does not exist.
-func unsetLeaf(data map[string]interface{}, dotPath string) bool {
+// it becomes empty of secrets. It only removes a single leaf: if the path points
+// to a group (a map with children) it removes nothing and reports unsetIsGroup.
+func unsetLeaf(data map[string]interface{}, dotPath string) unsetResult {
 	parts := strings.Split(dotPath, ".")
 	current := data
 	for i, p := range parts {
 		if i == len(parts)-1 {
-			if _, ok := current[p]; !ok {
-				return false
+			v, ok := current[p]
+			if !ok {
+				return unsetNotFound
 			}
-			if _, isMap := current[p].(map[string]interface{}); isMap {
-				return false // path points to a map, not a leaf
+			if _, isMap := v.(map[string]interface{}); isMap {
+				return unsetIsGroup // a group, not a leaf — never remove a whole branch
 			}
 			delete(current, p)
-			return true
+			return unsetRemoved
 		}
 		next, isMap := current[p].(map[string]interface{})
 		if !isMap {
-			return false
+			return unsetNotFound
 		}
 		current = next
 	}
-	return false
+	return unsetNotFound
 }
 
 // fatalVaultNotFound prints a styled error and exits when the vault (first
