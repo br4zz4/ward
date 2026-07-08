@@ -39,14 +39,13 @@ func (t *Tree) Kind(dotPath string) NodeKind {
 		return KindAbsent
 	}
 	v, exists := parent[key]
-	switch {
-	case !exists:
+	if !exists {
 		return KindAbsent
-	case isGroup(v):
-		return KindGroup
-	default:
-		return KindLeaf
 	}
+	if isGroup(v) {
+		return KindGroup
+	}
+	return KindLeaf
 }
 
 // Set writes value at the dot-path, creating intermediate groups as needed.
@@ -67,20 +66,22 @@ const (
 	UnsetDone
 )
 
+// unsetForKind translates what lives at a path into the removal outcome.
+var unsetForKind = map[NodeKind]UnsetOutcome{
+	KindAbsent: UnsetAbsent,
+	KindGroup:  UnsetGroup,
+	KindLeaf:   UnsetDone,
+}
+
 // Unset removes the leaf at the dot-path, leaving surrounding scaffold groups in
 // place. It never removes a whole branch: a group path yields UnsetGroup.
 func (t *Tree) Unset(dotPath string) UnsetOutcome {
-	parent, key, ok := t.walkToParent(dotPath, false)
-	if !ok {
-		return UnsetAbsent
-	}
-	switch outcome := kindToUnset(parent, key); outcome {
-	case UnsetDone:
+	outcome := unsetForKind[t.Kind(dotPath)]
+	if outcome == UnsetDone {
+		parent, key, _ := t.walkToParent(dotPath, false)
 		delete(parent, key)
-		return UnsetDone
-	default:
-		return outcome
 	}
+	return outcome
 }
 
 // walkToParent descends to the map that directly holds the final segment,
@@ -102,19 +103,6 @@ func (t *Tree) walkToParent(dotPath string, create bool) (parent map[string]inte
 		current = next
 	}
 	return current, parts[len(parts)-1], true
-}
-
-// kindToUnset maps the value at parent[key] to an unset outcome.
-func kindToUnset(parent map[string]interface{}, key string) UnsetOutcome {
-	v, exists := parent[key]
-	switch {
-	case !exists:
-		return UnsetAbsent
-	case isGroup(v):
-		return UnsetGroup
-	default:
-		return UnsetDone
-	}
 }
 
 // isGroup reports whether v is a nested map (a group), not a scalar leaf.
