@@ -166,6 +166,12 @@ func (e *Engine) Encrypt(path string, plaintext []byte) error {
 	return os.WriteFile(path, plaintext, 0644)
 }
 
+// LoadFiles discovers and loads all .ward files from every configured vault,
+// returning them parsed but unmerged (in config/discovery order).
+func (e *Engine) LoadFiles() ([]secrets.ParsedFile, error) {
+	return e.load()
+}
+
 // --- internal helpers --------------------------------------------------------
 
 func (e *Engine) load() ([]secrets.ParsedFile, error) {
