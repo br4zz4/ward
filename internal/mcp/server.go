@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -24,6 +25,21 @@ func run(args ...string) (string, error) {
 		bin = "ward"
 	}
 	cmd := exec.Command(bin, args...)
+	out, err := cmd.CombinedOutput()
+	text := stripANSI(strings.TrimSpace(string(out)))
+	if err != nil {
+		return "", fmt.Errorf("%s", text)
+	}
+	return text, nil
+}
+
+func runWithStdin(stdin string, args ...string) (string, error) {
+	bin, err := os.Executable()
+	if err != nil {
+		bin = "ward"
+	}
+	cmd := exec.Command(bin, args...)
+	cmd.Stdin = bytes.NewBufferString(stdin)
 	out, err := cmd.CombinedOutput()
 	text := stripANSI(strings.TrimSpace(string(out)))
 	if err != nil {
@@ -73,12 +89,12 @@ func Serve() error {
 	)
 
 	s.AddTool(
-		mcp.NewTool("ward_view",
+		mcp.NewTool("ward_tree",
 			mcp.WithDescription("Show merged tree with source file and line for each value"),
 			mcp.WithString("path", mcp.Description("optional dot-path to scope the view")),
 		),
 		func(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			args := []string{"view"}
+			args := []string{"tree"}
 			if p := req.GetString("path", ""); p != "" {
 				args = append(args, p)
 			}
@@ -114,12 +130,15 @@ func Serve() error {
 
 	s.AddTool(
 		mcp.NewTool("ward_raw",
-			mcp.WithDescription("Show the raw (decrypted) contents of a .ward file"),
-			mcp.WithString("file", mcp.Required(), mcp.Description("path to the .ward file")),
+			mcp.WithDescription("Show the raw (decrypted) contents of a .ward file (all files when none given)"),
+			mcp.WithString("file", mcp.Description("optional path to a .ward file")),
 		),
 		func(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			file := req.GetString("file", "")
-			out, err := run("raw", file)
+			args := []string{"raw"}
+			if f := req.GetString("file", ""); f != "" {
+				args = append(args, f)
+			}
+			out, err := run(args...)
 			if err != nil {
 				return fail(err), nil
 			}
@@ -189,15 +208,47 @@ func Serve() error {
 	)
 
 	s.AddTool(
-		mcp.NewTool("ward_override",
-			mcp.WithDescription("Set a runtime override for a secret value"),
-			mcp.WithString("path", mcp.Required(), mcp.Description("dot-path of the secret")),
-			mcp.WithString("value", mcp.Required(), mcp.Description("new value")),
+		mcp.NewTool("ward_import",
+			mcp.WithDescription("Read YAML from content and encrypt it into the given .ward file"),
+			mcp.WithString("file", mcp.Required(), mcp.Description("path to the .ward file")),
+			mcp.WithString("content", mcp.Required(), mcp.Description("YAML content to encrypt into the file")),
+		),
+		func(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			file := req.GetString("file", "")
+			content := req.GetString("content", "")
+			out, err := runWithStdin(content, "import", file)
+			if err != nil {
+				return fail(err), nil
+			}
+			return ok(out), nil
+		},
+	)
+
+	s.AddTool(
+		mcp.NewTool("ward_set",
+			mcp.WithDescription("Set a single secret at a full dot-path"),
+			mcp.WithString("path", mcp.Required(), mcp.Description("full dot-path of the secret, e.g. myapp.staging.secret_key")),
+			mcp.WithString("value", mcp.Required(), mcp.Description("value to set")),
 		),
 		func(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			path := req.GetString("path", "")
 			value := req.GetString("value", "")
-			out, err := run("override", path, value)
+			out, err := run("set", path, value)
+			if err != nil {
+				return fail(err), nil
+			}
+			return ok(out), nil
+		},
+	)
+
+	s.AddTool(
+		mcp.NewTool("ward_unset",
+			mcp.WithDescription("Remove a single secret at a full dot-path"),
+			mcp.WithString("path", mcp.Required(), mcp.Description("full dot-path of the secret to remove")),
+		),
+		func(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			path := req.GetString("path", "")
+			out, err := run("unset", path)
 			if err != nil {
 				return fail(err), nil
 			}
@@ -258,13 +309,16 @@ Files are encrypted with age keys. The key lives in .ward.key (local) or WARD_KE
 
 ` + "```" + `sh
 ward get [dot-path]          # merged value at path (or full tree)
-ward view [dot-path]         # merged tree with source file and line per value
+ward tree [dot-path]         # merged tree with source file and line per value
 ward envs [dot-path]         # env vars that would be injected by ward exec
-ward raw <file>              # decrypted raw YAML of a .ward file
+ward raw [file]              # decrypted raw YAML of a .ward file (all files when none given)
 ward inspect [dot-path]      # ancestry chain showing where each value comes from
 ward vaults                  # list all configured vault paths
 ward exec <dot-path> -- cmd  # run command with secrets injected as env vars
 ward export [dot-path]       # export as shell export statements
+ward set <dot-path> <value>  # set a single secret at a full dot-path
+ward unset <dot-path>        # remove a single secret at a full dot-path
+ward import <file.ward>      # read YAML from stdin and encrypt into the given .ward file
 ward new <name>              # create a new .ward file
 ward config <key> [value]    # read or write ward configuration
 ` + "```" + `
