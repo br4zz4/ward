@@ -78,6 +78,14 @@ func TestInspect_conflict_envvar_fails(t *testing.T) {
 	}
 }
 
+func TestInspect_conflict_envvar_prefixed_ok(t *testing.T) {
+	// --prefixed models full-path names, which never collide → clean
+	_, _, code := testutil.Run(t, bin, fix("conflict-envvar"), "inspect", "--prefixed")
+	if code != 0 {
+		t.Fatalf("expected exit 0 with --prefixed, got %d", code)
+	}
+}
+
 func TestInspect_conflict_envvar_scoped_leaf_ok(t *testing.T) {
 	// scoping to one side of the collision disambiguates → clean
 	_, _, code := testutil.Run(t, bin, fix("conflict-envvar"), "inspect", "app.staging")

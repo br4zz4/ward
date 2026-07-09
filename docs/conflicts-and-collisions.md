@@ -85,8 +85,10 @@ so ward cannot determine which `TOKEN` to inject.
 
 **Note:** collisions are detected at the env-var layer, conflicts at the merge
 layer. `ward inspect` reports **both** — run it (optionally scoped to a dot-path,
-e.g. `ward inspect <scope>`) as a single pre-flight check. `ward view` also shows
-collisions inline in the tree.
+e.g. `ward inspect <scope>`) as a single pre-flight check. `ward inspect --prefixed`
+checks as if full-path env var names were used, so it passes when `--prefixed`
+would resolve every collision — a quick way to confirm that fix. `ward view` also
+shows collisions inline in the tree.
 
 ---
 
