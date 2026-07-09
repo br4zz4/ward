@@ -105,7 +105,7 @@ ward new staging
 ward new ./.commons/ward/vaults/ruby/staging
 
 # Show the merged tree with origins
-ward view
+ward tree
 
 # Show the env vars that would be injected
 ward envs myapp.environments.staging
@@ -168,12 +168,13 @@ ward exec myapp.environments.staging -- rails server
 ward exec myapp.environments.staging -- env | grep DATABASE
 ```
 
-### `ward view [dot.path]`
+### `ward tree [dot.path]`
 
 Print the merged tree with source file and line for each value.
+(Formerly `ward view`, which still works but is deprecated.)
 
 ```sh
-ward view myapp.environments.staging
+ward tree myapp.environments.staging
 ```
 
 ```

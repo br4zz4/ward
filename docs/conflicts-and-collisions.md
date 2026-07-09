@@ -87,7 +87,7 @@ so ward cannot determine which `TOKEN` to inject.
 layer. `ward inspect` reports **both** — run it (optionally scoped to a dot-path,
 e.g. `ward inspect <scope>`) as a single pre-flight check. `ward inspect --prefixed`
 checks as if full-path env var names were used, so it passes when `--prefixed`
-would resolve every collision — a quick way to confirm that fix. `ward view` also
+would resolve every collision — a quick way to confirm that fix. `ward tree` also
 shows collisions inline in the tree.
 
 ---
@@ -114,7 +114,7 @@ name `log_level`. The deeper one wins when flattening to env vars:
 ward envs   # → LOG_LEVEL=debug
 ```
 
-`ward view` marks the shallower value as `(overridden)` in orange so you
+`ward tree` marks the shallower value as `(overridden)` in orange so you
 can see it is present but not active.
 
 ---
