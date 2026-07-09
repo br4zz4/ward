@@ -1,3 +1,8 @@
+// Build a local dev copy on the user's PATH as `ward-dev`, so it can be tested
+// side by side with a released `ward` (e.g. one installed via brew) without
+// clobbering it. Run with: go generate ./cmd/ward
+//
+//go:generate sh -c "go build -o \"$HOME/.local/bin/ward-dev\" . && echo 'installed ward-dev -> ~/.local/bin/ward-dev'"
 package main
 
 import (
