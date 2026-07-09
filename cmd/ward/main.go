@@ -49,27 +49,33 @@ func main() {
 
 	exec := cmd.NewExecCmd()
 	envs := cmd.NewEnvsCmd()
-	exec.GroupID = primaryGroup
-	envs.GroupID = primaryGroup
+	newCmd := cmd.NewNewCmd()
+	tree := cmd.NewTreeCmd()
+	for _, c := range []*cobra.Command{exec, envs, newCmd, tree} {
+		c.GroupID = primaryGroup
+	}
 
 	root.AddCommand(
 		exec,
 		envs,
+		newCmd,
+		tree,
 		cmd.NewInstallCmd(),
 		cmd.NewUninstallCmd(),
 		cmd.NewGetCmd(),
-		cmd.NewViewCmd(),
 		cmd.NewInspectCmd(),
 		cmd.NewInitCmd(),
 		cmd.NewEditCmd(),
-		cmd.NewNewCmd(),
 		cmd.NewConfigCmd(),
 		cmd.NewRawCmd(),
 		cmd.NewExportCmd(),
-		cmd.NewOverrideCmd(),
+		cmd.NewImportCmd(),
 		cmd.NewSetCmd(),
 		cmd.NewUnsetCmd(),
 		cmd.NewVaultCmd(),
+		// Deprecated aliases — hidden from help, still functional.
+		cmd.NewViewCmd(),
+		cmd.NewOverrideCmd(),
 	)
 
 	root.CompletionOptions.DisableDefaultCmd = false
