@@ -10,8 +10,10 @@ import (
 )
 
 func NewInspectCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:               "inspect [dot.path]",
+	var prefixed bool
+
+	c := &cobra.Command{
+		Use:               "inspect [--prefixed] [dot.path]",
 		Short:             "Detect conflicts and env var collisions across all files",
 		Args:              cobra.MaximumNArgs(1),
 		ValidArgsFunction: completeDotPaths,
@@ -27,7 +29,7 @@ func NewInspectCmd() *cobra.Command {
 				fatal(err)
 			}
 
-			err = eng.InspectScoped(dotPath)
+			err = eng.InspectScoped(dotPath, prefixed)
 			if err == nil {
 				fmt.Printf("%s✓%s no conflicts found\n", clrGreen, clrReset)
 				return
@@ -35,6 +37,9 @@ func NewInspectCmd() *cobra.Command {
 			reportInspectError(stampEnvCommand(err, "inspect"))
 		},
 	}
+
+	c.Flags().BoolVar(&prefixed, "prefixed", false, "check as if env vars used full path names (no Type-2 collisions)")
+	return c
 }
 
 // reportInspectError prints a conflict (Type-1) or env var collision (Type-2)

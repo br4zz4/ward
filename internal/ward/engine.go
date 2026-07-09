@@ -85,13 +85,17 @@ func (e *Engine) MergeForView() (*MergeResult, error) {
 // (*secrets.ConflictError) or a Type-2 env var collision
 // (*secrets.EnvConflictError). It returns nil when the whole set is clean.
 func (e *Engine) Inspect() error {
-	return e.InspectScoped("")
+	return e.InspectScoped("", false)
 }
 
-// InspectScoped is like Inspect but narrows detection to a dot-path. Conflicts
-// and collisions outside the scope are resolved away so a caller can check a
-// single path in isolation; passing "" inspects the whole tree.
-func (e *Engine) InspectScoped(scopePrefix string) error {
+// InspectScoped is like Inspect but narrows detection to a dot-path and can model
+// the --prefixed resolution. Conflicts and collisions outside the scope are
+// resolved away so a caller can check a single path in isolation; passing ""
+// inspects the whole tree. When prefixed is true, env var names use their full
+// dot-path (as `--prefixed` does), so Type-2 collisions cannot occur and only
+// Type-1 file conflicts are reported — letting a caller confirm that --prefixed
+// resolves the collisions.
+func (e *Engine) InspectScoped(scopePrefix string, prefixed bool) error {
 	files, err := e.load()
 	if err != nil {
 		return err
@@ -100,6 +104,10 @@ func (e *Engine) InspectScoped(scopePrefix string) error {
 	tree, mergeErr := secrets.Merge(files, config.MergeModeError, scopePrefix)
 	if mergeErr != nil {
 		return mergeErr
+	}
+	if prefixed {
+		// Full-path env var names never collide; nothing further to check.
+		return nil
 	}
 	// Type-2: distinct dot-paths collapsing to the same env var name.
 	if _, envErr := secrets.ToFlatEnvEntries(tree, scopePrefix); envErr != nil {
