@@ -8,6 +8,16 @@ import (
 	"github.com/br4zz4/ward/internal/ward"
 )
 
+// stampEnvCommand tags a Type-2 collision error with the command that surfaced
+// it, so its resolution examples show that command (envs/exec/inspect). Any
+// other error passes through unchanged. Returns the (possibly-stamped) error.
+func stampEnvCommand(err error, command string) error {
+	if ce, ok := err.(*secrets.EnvConflictError); ok {
+		ce.Cmd = command
+	}
+	return err
+}
+
 // ambiguousTargetError builds a Type-1 conflict message: the dot-path is defined
 // in more than one file, so ward cannot know which file to write.
 func ambiguousTargetError(dotPath string, targets []string, files []secrets.ParsedFile) string {

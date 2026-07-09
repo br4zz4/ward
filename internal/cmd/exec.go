@@ -37,7 +37,7 @@ func NewExecCmd() *cobra.Command {
 
 			envVars, err := resolveEnvVars(eng, result, dotPath, prefixed)
 			if err != nil {
-				fatal(err)
+				fatal(stampEnvCommand(err, "exec"))
 			}
 
 			cmd := exec.Command(cmdArgs[0], cmdArgs[1:]...)
