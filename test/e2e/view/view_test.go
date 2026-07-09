@@ -24,6 +24,23 @@ func TestMain(m *testing.M) {
 
 func fix(name string) string { return testutil.FixtureDir("view", name) }
 
+// ── deprecation ──────────────────────────────────────────────────────────────
+
+func TestView_still_works_but_warns_deprecated(t *testing.T) {
+	// view is deprecated in favour of tree: it still renders, then warns.
+	out, stderr, code := testutil.Run(t, bin, fix("basic"), "view")
+	if code != 0 {
+		t.Fatalf("view should still work, exit %d", code)
+	}
+	if !testutil.Contains(out, "app") {
+		t.Errorf("expected view to still render the tree, got: %q", out)
+	}
+	clean := testutil.StripANSI(stderr)
+	if !testutil.Contains(clean, "deprecated") || !testutil.Contains(clean, "ward tree") {
+		t.Errorf("expected deprecation notice pointing at 'ward tree', got: %q", stderr)
+	}
+}
+
 // ── basic ────────────────────────────────────────────────────────────────────
 
 func TestView_shows_tree(t *testing.T) {

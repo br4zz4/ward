@@ -80,7 +80,7 @@ staging.ward         specificity = 6  (company, company.sectors, company.sectors
 
 ## Dot-path scoping
 
-A **dot-path** argument tells `ward exec`, `ward envs`, and `ward view` to scope the merge to a specific subtree of the merged data.
+A **dot-path** argument tells `ward exec`, `ward envs`, and `ward tree` to scope the merge to a specific subtree of the merged data.
 
 ```sh
 ward exec company.sectors.one.staging -- deploy
@@ -126,4 +126,4 @@ secrets/
       production.ward
 ```
 
-The second layout makes the hierarchy explicit in the directory tree, which helps when inspecting with `ward view`.
+The second layout makes the hierarchy explicit in the directory tree, which helps when inspecting with `ward tree`.

@@ -65,6 +65,21 @@ func (e *secretEditor) abortOnAmbiguity(dotPath string, targets []string) {
 	}
 }
 
+// keyNotFound builds a level-aware "key not found" error from the loaded files:
+// it merges them (ignoring conflicts) and reports which keys were available at
+// the level where dotPath broke. Falls back to a plain message if the merge fails.
+func (e *secretEditor) keyNotFound(dotPath string) error {
+	tree, err := secrets.Merge(e.files, config.MergeModeOverride, "")
+	if err != nil {
+		return fmt.Errorf("key not found: %s", dotPath)
+	}
+	_, lookupErr := secrets.Lookup(tree, dotPath)
+	if lookupErr != nil {
+		return lookupErr
+	}
+	return fmt.Errorf("key not found: %s", dotPath)
+}
+
 // load decrypts and parses targetPath into a mutable Tree.
 func (e *secretEditor) load(targetPath string) *secrets.Tree {
 	plain, err := e.eng.Decrypt(targetPath)

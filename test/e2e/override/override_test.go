@@ -51,6 +51,22 @@ func TestOverride_missing_file_fails(t *testing.T) {
 	}
 }
 
+func TestOverride_still_works_but_warns_deprecated(t *testing.T) {
+	// override is deprecated in favour of import: it still writes, then warns.
+	dir := t.TempDir()
+	copyFixture(t, fix("basic"), dir)
+
+	_, stderr, code := testutil.RunWithStdinFull(t, bin, dir,
+		"app:\n  main:\n    name: updated\n", "override", ".ward/vaults/app/main.ward")
+	if code != 0 {
+		t.Fatalf("override should still work, exit %d", code)
+	}
+	clean := testutil.StripANSI(stderr)
+	if !testutil.Contains(clean, "deprecated") || !testutil.Contains(clean, "ward import") {
+		t.Errorf("expected deprecation notice pointing at 'ward import', got: %q", stderr)
+	}
+}
+
 // copyFixture copies a fixture directory to dst using the OS.
 func copyFixture(t *testing.T, src, dst string) {
 	t.Helper()

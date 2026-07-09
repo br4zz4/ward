@@ -147,21 +147,10 @@ func (e *Engine) EnvVarsMap(r *MergeResult, prefixed bool) (map[string]string, e
 }
 
 // GetAtPath navigates the merged tree by dot-path and returns the node at that
-// location, or an error if the path does not exist.
+// location, or a *secrets.KeyNotFoundError (naming the level where the path
+// broke and the keys available there) when it does not exist.
 func (e *Engine) GetAtPath(r *MergeResult, dotPath string) (*secrets.Node, error) {
-	parts := splitPath(dotPath)
-	current := &secrets.Node{Children: r.Tree}
-	for _, part := range parts {
-		if current.Children == nil {
-			return nil, fmt.Errorf("key not found: %s", dotPath)
-		}
-		next, ok := current.Children[part]
-		if !ok {
-			return nil, fmt.Errorf("key not found: %s", dotPath)
-		}
-		current = next
-	}
-	return current, nil
+	return secrets.Lookup(r.Tree, dotPath)
 }
 
 // SourcePaths returns the configured source directory paths.
@@ -217,17 +206,4 @@ func sourcePaths(cfg *config.Config) []string {
 		paths[i] = s.Path
 	}
 	return paths
-}
-
-func splitPath(dotPath string) []string {
-	// strings.Split is in strings package — inline to avoid import for a single call
-	parts := make([]string, 0, 4)
-	start := 0
-	for i := 0; i < len(dotPath); i++ {
-		if dotPath[i] == '.' {
-			parts = append(parts, dotPath[start:i])
-			start = i + 1
-		}
-	}
-	return append(parts, dotPath[start:])
 }

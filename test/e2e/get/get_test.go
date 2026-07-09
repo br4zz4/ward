@@ -61,6 +61,15 @@ func TestGet_missing_key_fails(t *testing.T) {
 	}
 }
 
+func TestGet_missing_key_lists_available(t *testing.T) {
+	// the error should name the level where the path broke and its keys
+	_, stderr, _ := testutil.Run(t, bin, fix("missing-key"), "get", "app.main.nonexistent")
+	clean := testutil.StripANSI(stderr)
+	if !testutil.Contains(clean, "available under app.main") || !testutil.Contains(clean, "name") {
+		t.Errorf("expected available-keys hint under app.main, got: %q", stderr)
+	}
+}
+
 func TestGet_no_args_fails(t *testing.T) {
 	_, stderr, code := testutil.Run(t, bin, fix("basic"), "get")
 	if code == 0 {
