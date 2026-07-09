@@ -36,7 +36,7 @@ func NewEnvsCmd() *cobra.Command {
 
 			entries, err := resolveEnvEntries(eng, result, dotPath, prefixed)
 			if err != nil {
-				fatal(err)
+				fatal(stampEnvCommand(err, "envs"))
 			}
 
 			printEnvEntries(entries)

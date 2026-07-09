@@ -1,3 +1,8 @@
+// Build a local dev copy on the user's PATH as `ward-dev`, so it can be tested
+// side by side with a released `ward` (e.g. one installed via brew) without
+// clobbering it. Run with: go generate ./cmd/ward
+//
+//go:generate sh -c "go build -o \"$HOME/.local/bin/ward-dev\" . && echo 'installed ward-dev -> ~/.local/bin/ward-dev'"
 package main
 
 import (
@@ -37,14 +42,24 @@ func main() {
 
 	root.PersistentFlags().StringVarP(&configPath, "config", "c", "", "config file (default: auto-detect .ward/config.yaml)")
 
+	// Primary commands are the day-to-day entry points; the rest are grouped
+	// under "Additional Commands" so --help leads with what matters most.
+	const primaryGroup = "primary"
+	root.AddGroup(&cobra.Group{ID: primaryGroup, Title: "Primary Commands:"})
+
+	exec := cmd.NewExecCmd()
+	envs := cmd.NewEnvsCmd()
+	exec.GroupID = primaryGroup
+	envs.GroupID = primaryGroup
+
 	root.AddCommand(
+		exec,
+		envs,
 		cmd.NewInstallCmd(),
 		cmd.NewUninstallCmd(),
 		cmd.NewGetCmd(),
 		cmd.NewViewCmd(),
-		cmd.NewEnvsCmd(),
 		cmd.NewInspectCmd(),
-		cmd.NewExecCmd(),
 		cmd.NewInitCmd(),
 		cmd.NewEditCmd(),
 		cmd.NewNewCmd(),

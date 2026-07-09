@@ -83,9 +83,12 @@ so ward cannot determine which `TOKEN` to inject.
    prefix. If both entries are under the hint (e.g. `ward envs app`), the
    collision is still reported.
 
-**Note:** collisions are detected at the env-var layer, not at the merge layer.
-`ward inspect` reports *conflicts* only. Use `ward envs` or `ward view` to
-surface collisions.
+**Note:** collisions are detected at the env-var layer, conflicts at the merge
+layer. `ward inspect` reports **both** — run it (optionally scoped to a dot-path,
+e.g. `ward inspect <scope>`) as a single pre-flight check. `ward inspect --prefixed`
+checks as if full-path env var names were used, so it passes when `--prefixed`
+would resolve every collision — a quick way to confirm that fix. `ward view` also
+shows collisions inline in the tree.
 
 ---
 
@@ -121,5 +124,5 @@ can see it is present but not active.
 | Condition  | Trigger | Layer | `ward inspect` | Resolution |
 |------------|---------|-------|----------------|------------|
 | **Conflict**   | Same leaf dot-path in ≥2 files | Merge | ✓ reports it | Remove from one file, or move to shared vault |
-| **Collision**  | Same leaf name, unrelated dot-paths | Env vars | ✗ silent | Use `--prefixed` or a dot-path hint |
+| **Collision**  | Same leaf name, unrelated dot-paths | Env vars | ✓ reports it | Use `--prefixed` or narrow the scope |
 | **Shadow**     | Same leaf name, one path is ancestor of the other | Env vars | ✗ silent | No action needed — deeper wins intentionally |

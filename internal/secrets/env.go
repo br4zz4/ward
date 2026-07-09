@@ -60,6 +60,11 @@ type EnvConflict struct {
 // EnvConflictError is returned when flat env var names collide across different dot-paths.
 type EnvConflictError struct {
 	Conflicts []EnvConflict
+
+	// Cmd is the ward command that surfaced the collision ("exec", "envs",
+	// "inspect"). It only shapes the resolution examples. The empty value is
+	// treated as "exec" so an un-stamped error still reads sensibly.
+	Cmd string
 }
 
 func (e *EnvConflictError) Error() string {
@@ -69,28 +74,86 @@ func (e *EnvConflictError) Error() string {
 	if n > 1 {
 		word = "collisions"
 	}
-	fmt.Fprintf(&sb, "%s%sfound %d env var %s%s — use a more specific dot-path:\n\n",
+	fmt.Fprintf(&sb, "%s%sfound %d env var %s%s — one name, two scopes:\n\n",
 		colorBold, colorRed, n, word, colorReset,
 	)
 	for _, c := range e.Conflicts {
-		fmt.Fprintf(&sb, "%s%s%s%s\n", colorBold, colorPink, c.EnvKey, colorReset)
 		if c.CaseCollision {
-			fmt.Fprintf(&sb, "  %s%s%s and %s%s%s differ only in case\n\n", colorYellow, c.DotPaths[0], colorReset, colorYellow, c.DotPaths[1], colorReset)
-			fmt.Fprintf(&sb, "  %sto resolve:%s use consistent casing across vaults\n\n", colorBold, colorReset)
-		} else {
-			fmt.Fprintf(&sb, "  defined under %s%s%s\n", colorYellow, c.DotPaths[0], colorReset)
-			fmt.Fprintf(&sb, "  defined under %s%s%s\n\n", colorYellow, c.DotPaths[1], colorReset)
-			fmt.Fprintf(&sb, "  %sto resolve:%s\n", colorBold, colorReset)
-			fmt.Fprintf(&sb, "    %s1.%s scope to the path you need:\n", colorGray, colorReset)
-			fmt.Fprintf(&sb, "         %sward exec %s -- <cmd>%s\n", colorCyan, parentDotPath(c.DotPaths[0]), colorReset)
-			fmt.Fprintf(&sb, "         %sward exec %s -- <cmd>%s\n", colorCyan, parentDotPath(c.DotPaths[1]), colorReset)
-			fmt.Fprintf(&sb, "    %s2.%s use %s--prefixed%s to keep full path names:\n", colorGray, colorReset, colorCyan, colorReset)
-			fmt.Fprintf(&sb, "         %sward exec --prefixed -- <cmd>%s\n\n", colorCyan, colorReset)
+			e.writeCaseCollision(&sb, c)
+			continue
 		}
+		e.writeScopeCollision(&sb, c)
 	}
 	fmt.Fprintf(&sb, "  %s→ read more:%s https://github.com/br4zz4/ward/blob/main/docs/conflicts-and-collisions.md\n",
 		colorGray, colorReset)
 	return sb.String()
+}
+
+// writeScopeCollision renders one env var defined under two unrelated scopes,
+// with copy-pasteable fixes tailored to the command that ran.
+func (e *EnvConflictError) writeScopeCollision(sb *strings.Builder, c EnvConflict) {
+	scopeA, scopeB := parentDotPath(c.DotPaths[0]), parentDotPath(c.DotPaths[1])
+
+	fmt.Fprintf(sb, "%s✗ %s%s  %s— same env var from two scopes%s\n",
+		colorBold+colorPink, c.EnvKey, colorReset, colorGray, colorReset)
+	fmt.Fprintf(sb, "    %s%s%s\n", colorYellow, c.DotPaths[0], colorReset)
+	fmt.Fprintf(sb, "    %s%s%s\n\n", colorYellow, c.DotPaths[1], colorReset)
+
+	fmt.Fprintf(sb, "  %sfix — pick one:%s\n", colorBold, colorReset)
+	fmt.Fprintf(sb, "    %s→ narrow the scope to the one you need:%s\n", colorGray, colorReset)
+	fmt.Fprintf(sb, "        %s%s%s\n", colorCyan, e.example(scopeA), colorReset)
+	fmt.Fprintf(sb, "        %s%s%s\n", colorCyan, e.example(scopeB), colorReset)
+	fmt.Fprintf(sb, "    %s→ keep both, with full-path names:%s\n", colorGray, colorReset)
+	fmt.Fprintf(sb, "        %s%s%s\n", colorCyan, e.prefixedExample(), colorReset)
+	fmt.Fprintf(sb, "        %s(→ %s and %s)%s\n\n",
+		colorGray, prefixedName(c.DotPaths[0]), prefixedName(c.DotPaths[1]), colorReset)
+}
+
+// writeCaseCollision renders the case-only collision (same name, different case).
+func (e *EnvConflictError) writeCaseCollision(sb *strings.Builder, c EnvConflict) {
+	fmt.Fprintf(sb, "%s✗ %s%s  %s— two names differ only in case%s\n",
+		colorBold+colorPink, c.EnvKey, colorReset, colorGray, colorReset)
+	fmt.Fprintf(sb, "    %s%s%s\n", colorYellow, c.DotPaths[0], colorReset)
+	fmt.Fprintf(sb, "    %s%s%s\n\n", colorYellow, c.DotPaths[1], colorReset)
+	fmt.Fprintf(sb, "  %sfix:%s rename one so both use consistent casing\n\n", colorBold, colorReset)
+}
+
+// commandName returns the command whose examples to show, defaulting to exec.
+func (e *EnvConflictError) commandName() string {
+	if e.Cmd == "" {
+		return "exec"
+	}
+	return e.Cmd
+}
+
+// example renders a scoped invocation for the triggering command.
+// exec needs a trailing "-- <cmd>"; envs/inspect take just the scope.
+func (e *EnvConflictError) example(scope string) string {
+	if e.commandName() == "exec" {
+		return fmt.Sprintf("ward exec %s -- <cmd>", scope)
+	}
+	return fmt.Sprintf("ward %s %s", e.commandName(), scope)
+}
+
+// prefixedExample renders the --prefixed invocation for the triggering command.
+// inspect has no --prefixed of its own, so it points the user at envs/exec.
+func (e *EnvConflictError) prefixedExample() string {
+	switch e.commandName() {
+	case "exec":
+		return "ward exec --prefixed -- <cmd>"
+	case "inspect":
+		return "ward envs --prefixed   (or: ward exec --prefixed -- <cmd>)"
+	default:
+		return fmt.Sprintf("ward %s --prefixed", e.commandName())
+	}
+}
+
+// prefixedName previews the full-path env var name a dot-path becomes under
+// --prefixed: the whole dot-path joined by "_", hyphens normalised, case
+// preserved as written. Mirrors ToEnvEntries, which walks from the root.
+// e.g. "app.staging.token" → "app_staging_token".
+func prefixedName(dotPath string) string {
+	return strings.ReplaceAll(strings.ReplaceAll(dotPath, ".", "_"), "-", "_")
 }
 
 // leafRef is a leaf node with its full dot-path.

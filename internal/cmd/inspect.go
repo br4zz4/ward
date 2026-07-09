@@ -10,30 +10,50 @@ import (
 )
 
 func NewInspectCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "inspect",
-		Short: "Detect conflicts across all files",
-		Args:  cobra.NoArgs,
-		Run: func(_ *cobra.Command, _ []string) {
+	var prefixed bool
+
+	c := &cobra.Command{
+		Use:               "inspect [--prefixed] [dot.path]",
+		Short:             "Detect conflicts and env var collisions across all files",
+		Args:              cobra.MaximumNArgs(1),
+		ValidArgsFunction: completeDotPaths,
+		Run: func(_ *cobra.Command, args []string) {
+			dotPath := ""
+			if len(args) == 1 {
+				dotPath = args[0]
+			}
+
 			enforceVaultStructure()
 			eng, err := newEngine()
 			if err != nil {
 				fatal(err)
 			}
 
-			if err := eng.Inspect(); err == nil {
+			err = eng.InspectScoped(dotPath, prefixed)
+			if err == nil {
 				fmt.Printf("%s✓%s no conflicts found\n", clrGreen, clrReset)
 				return
-			} else if ce, ok := err.(*secrets.ConflictError); ok {
-				lines := strings.SplitN(ce.Error(), "\n", 2)
-				fmt.Fprintf(os.Stderr, "%s%s%s\n", clrLightRed, lines[0], clrReset)
-				if len(lines) > 1 {
-					fmt.Fprintln(os.Stderr, lines[1])
-				}
-				os.Exit(1)
-			} else {
-				fatal(err)
 			}
+			reportInspectError(stampEnvCommand(err, "inspect"))
 		},
+	}
+
+	c.Flags().BoolVar(&prefixed, "prefixed", false, "check as if env vars used full path names (no Type-2 collisions)")
+	return c
+}
+
+// reportInspectError prints a conflict (Type-1) or env var collision (Type-2)
+// using its own styled message, then exits non-zero. Any other error is fatal.
+func reportInspectError(err error) {
+	switch err.(type) {
+	case *secrets.ConflictError, *secrets.EnvConflictError:
+		lines := strings.SplitN(err.Error(), "\n", 2)
+		fmt.Fprintf(os.Stderr, "%s%s%s\n", clrLightRed, lines[0], clrReset)
+		if len(lines) > 1 {
+			fmt.Fprintln(os.Stderr, lines[1])
+		}
+		os.Exit(1)
+	default:
+		fatal(err)
 	}
 }
