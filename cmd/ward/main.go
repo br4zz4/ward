@@ -46,48 +46,64 @@ func main() {
 	// declaring it here makes it visible in the Flags section of --help.
 	root.PersistentFlags().BoolVar(&mcpMode, "mcp", false, "start in MCP server mode (for AI integrations)")
 
-	// Keep commands in registration order (not alphabetical) so the primary
-	// group reads init → new → tree → envs → exec.
+	// Keep commands in registration order (not alphabetical) so each group
+	// reads in the order the commands are added below.
 	cobra.EnableCommandSorting = false
 
-	// Primary commands are the day-to-day entry points; the rest are grouped
-	// under "Additional Commands" so --help leads with what matters most.
-	const primaryGroup = "primary"
-	root.AddGroup(&cobra.Group{ID: primaryGroup, Title: "Primary Commands:"})
+	// Commands are organised into task-based groups so --help reads by intent:
+	// run with secrets, manage individual secrets, manage vault files, and setup.
+	const (
+		groupRun    = "run"
+		groupSecret = "secrets"
+		groupVault  = "vaults"
+		groupSetup  = "setup"
+	)
+	root.AddGroup(
+		&cobra.Group{ID: groupRun, Title: "Run:"},
+		&cobra.Group{ID: groupSecret, Title: "Manage secrets:"},
+		&cobra.Group{ID: groupVault, Title: "Manage vaults:"},
+		&cobra.Group{ID: groupSetup, Title: "Setup:"},
+	)
 
-	initCmd := cmd.NewInitCmd()
-	newCmd := cmd.NewNewCmd()
-	tree := cmd.NewTreeCmd()
-	envs := cmd.NewEnvsCmd()
-	exec := cmd.NewExecCmd()
-	for _, c := range []*cobra.Command{initCmd, newCmd, tree, envs, exec} {
-		c.GroupID = primaryGroup
+	// group assigns a GroupID to each command and returns them in order.
+	group := func(id string, cmds ...*cobra.Command) []*cobra.Command {
+		for _, c := range cmds {
+			c.GroupID = id
+		}
+		return cmds
 	}
 
-	root.AddCommand(
-		// Primary, in intended order.
-		initCmd,
-		newCmd,
-		tree,
-		envs,
-		exec,
-		// Everything else.
-		cmd.NewInstallCmd(),
-		cmd.NewUninstallCmd(),
+	var all []*cobra.Command
+	all = append(all, group(groupRun,
+		cmd.NewExecCmd(),
+		cmd.NewEnvsCmd(),
+	)...)
+	all = append(all, group(groupSecret,
 		cmd.NewGetCmd(),
-		cmd.NewInspectCmd(),
-		cmd.NewEditCmd(),
-		cmd.NewConfigCmd(),
-		cmd.NewRawCmd(),
-		cmd.NewExportCmd(),
-		cmd.NewImportCmd(),
 		cmd.NewSetCmd(),
 		cmd.NewUnsetCmd(),
+		cmd.NewTreeCmd(),
+	)...)
+	all = append(all, group(groupVault,
+		cmd.NewInitCmd(),
+		cmd.NewNewCmd(),
+		cmd.NewEditCmd(),
+		cmd.NewImportCmd(),
+		cmd.NewExportCmd(),
+		cmd.NewRawCmd(),
 		cmd.NewVaultCmd(),
-		// Deprecated aliases — hidden from help, still functional.
-		cmd.NewViewCmd(),
-		cmd.NewOverrideCmd(),
-	)
+		cmd.NewInspectCmd(),
+	)...)
+	all = append(all, group(groupSetup,
+		cmd.NewConfigCmd(),
+		cmd.NewInstallCmd(),
+		cmd.NewUninstallCmd(),
+	)...)
+
+	// Deprecated aliases — hidden from help, still functional.
+	all = append(all, cmd.NewViewCmd(), cmd.NewOverrideCmd())
+
+	root.AddCommand(all...)
 
 	root.CompletionOptions.DisableDefaultCmd = false
 
