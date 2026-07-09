@@ -25,13 +25,13 @@ func NewUnsetCmd() *cobra.Command {
 			targets := secrets.FilesMatching(ed.files, dotPath, secrets.Exists)
 			ed.abortOnAmbiguity(dotPath, targets)
 			if len(targets) == 0 {
-				fatal(fmt.Errorf("key not found: %s", dotPath))
+				fatal(ed.keyNotFound(dotPath))
 			}
 
 			targetPath := targets[0]
 			tree := ed.load(targetPath)
 
-			requireRemovable(tree.Unset(dotPath), dotPath)
+			requireRemovable(tree.Unset(dotPath), dotPath, ed)
 
 			ed.save(targetPath, tree)
 			fmt.Fprintf(os.Stderr, "  %s✓%s unset %s%s%s\n", clrGreen, clrReset, clrBold, dotPath, clrReset)
@@ -41,10 +41,10 @@ func NewUnsetCmd() *cobra.Command {
 
 // requireRemovable exits with the right error for a non-removal outcome, or
 // returns cleanly when a leaf was removed.
-func requireRemovable(outcome secrets.UnsetOutcome, dotPath string) {
+func requireRemovable(outcome secrets.UnsetOutcome, dotPath string, ed *secretEditor) {
 	switch outcome {
 	case secrets.UnsetAbsent:
-		fatal(fmt.Errorf("key not found: %s", dotPath))
+		fatal(ed.keyNotFound(dotPath))
 	case secrets.UnsetGroup:
 		fatal(fmt.Errorf("%s is a group, not a leaf — unset removes a single secret, not a whole branch", dotPath))
 	}
