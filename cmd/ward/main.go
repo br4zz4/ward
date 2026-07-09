@@ -29,11 +29,12 @@ func main() {
 	}
 
 	var configPath string
+	var mcpMode bool
 
 	root := &cobra.Command{
 		Use:     "ward",
 		Short:   "Hierarchical secrets manager.",
-		Long:    "Hierarchical secrets manager.\n\nRun with --mcp to start in MCP server mode (for AI integrations).",
+		Long:    "Hierarchical secrets manager.",
 		Version: version,
 		PersistentPreRun: func(_ *cobra.Command, _ []string) {
 			cmd.SetConfigFile(configPath)
@@ -41,30 +42,40 @@ func main() {
 	}
 
 	root.PersistentFlags().StringVarP(&configPath, "config", "c", "", "config file (default: auto-detect .ward/config.yaml)")
+	// --mcp is intercepted before command dispatch (see the os.Args scan above);
+	// declaring it here makes it visible in the Flags section of --help.
+	root.PersistentFlags().BoolVar(&mcpMode, "mcp", false, "start in MCP server mode (for AI integrations)")
+
+	// Keep commands in registration order (not alphabetical) so the primary
+	// group reads init → new → tree → envs → exec.
+	cobra.EnableCommandSorting = false
 
 	// Primary commands are the day-to-day entry points; the rest are grouped
 	// under "Additional Commands" so --help leads with what matters most.
 	const primaryGroup = "primary"
 	root.AddGroup(&cobra.Group{ID: primaryGroup, Title: "Primary Commands:"})
 
-	exec := cmd.NewExecCmd()
-	envs := cmd.NewEnvsCmd()
+	initCmd := cmd.NewInitCmd()
 	newCmd := cmd.NewNewCmd()
 	tree := cmd.NewTreeCmd()
-	for _, c := range []*cobra.Command{exec, envs, newCmd, tree} {
+	envs := cmd.NewEnvsCmd()
+	exec := cmd.NewExecCmd()
+	for _, c := range []*cobra.Command{initCmd, newCmd, tree, envs, exec} {
 		c.GroupID = primaryGroup
 	}
 
 	root.AddCommand(
-		exec,
-		envs,
+		// Primary, in intended order.
+		initCmd,
 		newCmd,
 		tree,
+		envs,
+		exec,
+		// Everything else.
 		cmd.NewInstallCmd(),
 		cmd.NewUninstallCmd(),
 		cmd.NewGetCmd(),
 		cmd.NewInspectCmd(),
-		cmd.NewInitCmd(),
 		cmd.NewEditCmd(),
 		cmd.NewConfigCmd(),
 		cmd.NewRawCmd(),
