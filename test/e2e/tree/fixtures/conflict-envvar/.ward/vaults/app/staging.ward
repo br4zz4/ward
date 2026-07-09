@@ -1,0 +1,3 @@
+app:
+  staging:
+    token: staging-token

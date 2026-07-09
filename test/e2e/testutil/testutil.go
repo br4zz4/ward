@@ -90,6 +90,29 @@ func RunWithStdin(t *testing.T, bin, dir, input string, args ...string) int {
 	return 0
 }
 
+// RunWithStdinFull executes the ward binary with stdin piped from input,
+// capturing stdout, stderr and the exit code.
+func RunWithStdinFull(t *testing.T, bin, dir, input string, args ...string) (stdout, stderr string, code int) {
+	t.Helper()
+	var outBuf, errBuf bytes.Buffer
+	c := exec.Command(bin, args...)
+	c.Dir = dir
+	c.Stdin = strings.NewReader(input)
+	c.Stdout = &outBuf
+	c.Stderr = &errBuf
+	err := c.Run()
+	stdout = outBuf.String()
+	stderr = errBuf.String()
+	if err != nil {
+		if ee, ok := err.(*exec.ExitError); ok {
+			code = ee.ExitCode()
+		} else {
+			code = 1
+		}
+	}
+	return
+}
+
 // RunCmd runs an arbitrary OS command and returns exit code.
 func RunCmd(t *testing.T, name string, args ...string) int {
 	t.Helper()
