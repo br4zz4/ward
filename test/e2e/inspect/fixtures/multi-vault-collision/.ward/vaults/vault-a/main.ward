@@ -1,0 +1,3 @@
+vault-a:
+  main:
+    secret_key: key-from-a

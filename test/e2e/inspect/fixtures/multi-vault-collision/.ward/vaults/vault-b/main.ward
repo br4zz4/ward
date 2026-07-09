@@ -1,0 +1,3 @@
+vault-b:
+  main:
+    secret_key: key-from-b

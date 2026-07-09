@@ -1,4 +1,4 @@
 vault-a:
   main:
-    secret_key: key-from-a
-    region: us-east-1
+    secret_key_a: key-from-a
+    region_a: us-east-1

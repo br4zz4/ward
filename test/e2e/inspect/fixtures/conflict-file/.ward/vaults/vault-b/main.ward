@@ -1,4 +1,4 @@
 vault-b:
   main:
-    secret_key: key-from-b
-    region: eu-west-1
+    secret_key_b: key-from-b
+    region_b: eu-west-1

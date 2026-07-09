@@ -41,23 +41,56 @@ func TestInspect_clean_shows_checkmark(t *testing.T) {
 	}
 }
 
-// ── multi-vault (formerly conflict-file) ─────────────────────────────────────
+// ── multi-vault ──────────────────────────────────────────────────────────────
 
 func TestInspect_multi_vault_clean(t *testing.T) {
+	// two vaults with distinct keys → no conflict, no collision
 	_, _, code := testutil.Run(t, bin, fix("conflict-file"), "inspect")
 	if code != 0 {
-		t.Fatalf("expected exit 0 for multi-vault fixture, got %d", code)
+		t.Fatalf("expected exit 0 for a clean multi-vault fixture, got %d", code)
 	}
 }
 
-// ── conflict-envvar ──────────────────────────────────────────────────────────
-// inspect only detects file conflicts, not env var collisions
+func TestInspect_multi_vault_collision_fails(t *testing.T) {
+	// two vaults defining the same leaf name → Type-2 env var collision
+	_, stderr, code := testutil.Run(t, bin, fix("multi-vault-collision"), "inspect")
+	if code == 0 {
+		t.Fatal("expected non-zero exit for a cross-vault env var collision")
+	}
+	if !testutil.Contains(testutil.StripANSI(stderr), "env var collision") {
+		t.Errorf("expected env var collision message, got: %q", stderr)
+	}
+}
 
-func TestInspect_conflict_envvar_exits_zero(t *testing.T) {
-	// env var collision is not a merge conflict — inspect passes
-	_, _, code := testutil.Run(t, bin, fix("conflict-envvar"), "inspect")
+// ── conflict-envvar (Type-2 env var collision) ───────────────────────────────
+// inspect surfaces env var collisions and exits non-zero, like envs/exec.
+
+func TestInspect_conflict_envvar_fails(t *testing.T) {
+	// act
+	_, stderr, code := testutil.Run(t, bin, fix("conflict-envvar"), "inspect")
+
+	// assert
+	if code == 0 {
+		t.Fatal("expected non-zero exit for env var collision")
+	}
+	if !testutil.Contains(testutil.StripANSI(stderr), "env var collision") {
+		t.Errorf("expected env var collision message, got: %q", stderr)
+	}
+}
+
+func TestInspect_conflict_envvar_scoped_leaf_ok(t *testing.T) {
+	// scoping to one side of the collision disambiguates → clean
+	_, _, code := testutil.Run(t, bin, fix("conflict-envvar"), "inspect", "app.staging")
 	if code != 0 {
-		t.Fatalf("inspect should pass for env var collision (not a merge conflict), got %d", code)
+		t.Fatalf("expected exit 0 when scoped to a single side, got %d", code)
+	}
+}
+
+func TestInspect_conflict_envvar_scoped_parent_fails(t *testing.T) {
+	// scoping to the shared parent still contains both sides → collision
+	_, _, code := testutil.Run(t, bin, fix("conflict-envvar"), "inspect", "app")
+	if code == 0 {
+		t.Fatal("expected non-zero exit when scoped to the shared parent")
 	}
 }
 
