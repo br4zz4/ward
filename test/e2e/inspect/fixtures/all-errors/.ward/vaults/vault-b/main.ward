@@ -1,0 +1,3 @@
+vault-b:
+  main:
+    token: token-from-b
