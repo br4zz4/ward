@@ -2,7 +2,7 @@
 // side by side with a released `ward` (e.g. one installed via brew) without
 // clobbering it. Run with: go generate ./cmd/ward
 //
-//go:generate sh -c "go build -o \"$HOME/.local/bin/ward-dev\" . && echo 'installed ward-dev -> ~/.local/bin/ward-dev'"
+//go:generate sh -c "go build -ldflags \"-X main.version=dev-$(TZ=America/Sao_Paulo date +%Y%m%d-%H%M%S)\" -o \"$HOME/.local/bin/ward-dev\" . && echo 'installed ward-dev -> ~/.local/bin/ward-dev'"
 package main
 
 import (
