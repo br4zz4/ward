@@ -2,7 +2,7 @@
 
 > TLDR: `ward set` deve falhar quando o dot-path aponta para um grupo (nó com filhos), evitando sobrescrever e perder todas as chaves filhas.
 
-**Status:** proposed
+**Status:** completed
 **Created:** 2026-07-10
 **Owner:** @oporpino
 

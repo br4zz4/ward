@@ -3,6 +3,8 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"sort"
+	"strings"
 
 	"github.com/br4zz4/ward/internal/secrets"
 	"github.com/spf13/cobra"
@@ -25,6 +27,10 @@ func NewSetCmd() *cobra.Command {
 			// A leaf lives in exactly one file. More than one → Type-1 conflict.
 			targets := secrets.FilesMatching(ed.files, dotPath, secrets.IsLeaf)
 			ed.abortOnAmbiguity(dotPath, targets)
+
+			if setPathIsGroup(ed.files, dotPath) {
+				fatal(groupPathError(ed.files, dotPath))
+			}
 
 			targetPath, created := resolveSetTarget(targets, dotPath, vault.Path, ed.cfgPath)
 
@@ -64,6 +70,37 @@ func reportSet(dotPath, targetPath string, created bool) {
 // setLeaf sets value at the nested dot-path, creating intermediate maps as needed.
 func setLeaf(data map[string]interface{}, dotPath, value string) {
 	secrets.NewTree(data).Set(dotPath, value)
+}
+
+// setPathIsGroup reports whether dotPath resolves to a group (has children) in any loaded file.
+func setPathIsGroup(files []secrets.ParsedFile, dotPath string) bool {
+	for _, pf := range files {
+		if secrets.NewTree(pf.Data).Kind(dotPath) == secrets.KindGroup {
+			return true
+		}
+	}
+	return false
+}
+
+// groupPathError builds the error message listing the child keys that would be lost.
+func groupPathError(files []secrets.ParsedFile, dotPath string) error {
+	var children []string
+	seen := map[string]bool{}
+	for _, pf := range files {
+		node := secrets.NewTree(pf.Data)
+		if node.Kind(dotPath) != secrets.KindGroup {
+			continue
+		}
+		for _, child := range node.Children(dotPath) {
+			if !seen[child] {
+				seen[child] = true
+				children = append(children, child)
+			}
+		}
+	}
+	sort.Strings(children)
+	return fmt.Errorf("%s is a group — setting it would overwrite and lose its keys: %s",
+		dotPath, strings.Join(children, ", "))
 }
 
 // resolveTargetFiles returns the files whose data defines the exact leaf dot-path.

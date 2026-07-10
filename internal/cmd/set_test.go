@@ -166,6 +166,73 @@ func TestSet_new_key_preserves_existing_keys_in_file(t *testing.T) {
 	}
 }
 
+func TestSet_group_path_is_rejected(t *testing.T) {
+	// arrange: file has app.staging.{token, db_host} — app.staging is a group
+	root := t.TempDir()
+	vaultRelDir := "vault"
+	vaultAbsDir := filepath.Join(root, vaultRelDir)
+	wardFile := filepath.Join(vaultAbsDir, "staging.ward")
+	if err := os.MkdirAll(vaultAbsDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(wardFile, []byte("app:\n  staging:\n    token: secret\n    db_host: localhost\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	cfgPath := filepath.Join(root, ".ward", "config.yaml")
+	if err := os.MkdirAll(filepath.Dir(cfgPath), 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := &config.Config{Vaults: []config.Source{{Path: vaultAbsDir, Name: "app"}}}
+	eng := ward.NewEngine(cfg, sops.MockDecryptor{})
+	files, err := eng.LoadFiles()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// act: check whether app.staging is a group in any loaded file
+	isGroup := setPathIsGroup(files, "app.staging")
+
+	// assert
+	if !isGroup {
+		t.Fatal("expected app.staging to be detected as a group")
+	}
+}
+
+func TestSet_leaf_path_is_not_rejected(t *testing.T) {
+	// arrange
+	files := []secrets.ParsedFile{
+		{File: "a.ward", Data: map[string]interface{}{
+			"app": map[string]interface{}{"staging": map[string]interface{}{"token": "x"}},
+		}},
+	}
+
+	// act
+	isGroup := setPathIsGroup(files, "app.staging.token")
+
+	// assert
+	if isGroup {
+		t.Fatal("expected app.staging.token (a leaf) not to be flagged as group")
+	}
+}
+
+func TestSet_absent_path_is_not_rejected(t *testing.T) {
+	// arrange: path does not exist yet — should be allowed (new key)
+	files := []secrets.ParsedFile{
+		{File: "a.ward", Data: map[string]interface{}{
+			"app": map[string]interface{}{"staging": map[string]interface{}{"token": "x"}},
+		}},
+	}
+
+	// act
+	isGroup := setPathIsGroup(files, "app.staging.new_key")
+
+	// assert
+	if isGroup {
+		t.Fatal("expected absent path not to be flagged as group")
+	}
+}
+
 func TestSetLeaf_preserves_sibling_keys_at_same_level(t *testing.T) {
 	// arrange: file already has two siblings at the same level
 	data := map[string]interface{}{

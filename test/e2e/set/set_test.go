@@ -133,6 +133,27 @@ func TestSet_new_key_preserves_sibling_keys_in_same_file(t *testing.T) {
 	}
 }
 
+func TestSet_group_path_fails_with_children_listed(t *testing.T) {
+	// arrange: group fixture has app.main.db.{host, port} — app.main.db is a group
+	dir := t.TempDir()
+	copyFixture(t, fix("group"), dir)
+
+	// act: try to set a value at a group path (3 segments, passes requireLeafDepth)
+	_, stderr, code := testutil.Run(t, bin, dir, "set", "app.main.db", "some-value")
+
+	// assert: must fail
+	if code == 0 {
+		t.Fatal("expected non-zero exit when setting a group path")
+	}
+	stripped := testutil.StripANSI(stderr)
+	if !testutil.Contains(stripped, "group") {
+		t.Errorf("expected error to mention 'group', got: %q", stripped)
+	}
+	if !testutil.Contains(stripped, "host") || !testutil.Contains(stripped, "port") {
+		t.Errorf("expected error to list child keys (host, port), got: %q", stripped)
+	}
+}
+
 func TestSet_type2_collision_writes_and_warns(t *testing.T) {
 	// arrange
 	dir := t.TempDir()

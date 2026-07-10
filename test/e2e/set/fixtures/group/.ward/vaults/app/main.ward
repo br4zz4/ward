@@ -1,0 +1,6 @@
+app:
+  main:
+    db:
+      host: localhost
+      port: "5432"
+    token: secret

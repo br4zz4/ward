@@ -48,6 +48,24 @@ func (t *Tree) Kind(dotPath string) NodeKind {
 	return KindLeaf
 }
 
+// Children returns the immediate child key names at dotPath, or nil if the path
+// is absent or is a leaf.
+func (t *Tree) Children(dotPath string) []string {
+	parent, key, ok := t.walkToParent(dotPath, false)
+	if !ok {
+		return nil
+	}
+	group, ok := parent[key].(map[string]interface{})
+	if !ok {
+		return nil
+	}
+	keys := make([]string, 0, len(group))
+	for k := range group {
+		keys = append(keys, k)
+	}
+	return keys
+}
+
 // Set writes value at the dot-path, creating intermediate groups as needed.
 func (t *Tree) Set(dotPath, value string) {
 	parent, key, _ := t.walkToParent(dotPath, true)
