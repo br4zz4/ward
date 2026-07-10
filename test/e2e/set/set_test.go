@@ -105,6 +105,34 @@ func TestSet_unknown_vault_fails(t *testing.T) {
 	}
 }
 
+func TestSet_new_key_preserves_sibling_keys_in_same_file(t *testing.T) {
+	// arrange: basic fixture has app.main.{name, token}
+	dir := t.TempDir()
+	copyFixture(t, fix("basic"), dir)
+
+	// act: add a brand-new key to the same file
+	_, _, code := testutil.Run(t, bin, dir, "set", "app.main.password", "s3cr3t")
+
+	// assert: the new key was written
+	if code != 0 {
+		t.Fatalf("set exit %d", code)
+	}
+	out, _, _ := testutil.Run(t, bin, dir, "get", "app.main.password")
+	if !testutil.Contains(out, "s3cr3t") {
+		t.Errorf("expected password=s3cr3t, got: %q", out)
+	}
+
+	// assert: pre-existing sibling keys must still be present
+	out, _, _ = testutil.Run(t, bin, dir, "get", "app.main.token")
+	if !testutil.Contains(out, "original") {
+		t.Errorf("expected token=original to be preserved, got: %q", out)
+	}
+	out, _, _ = testutil.Run(t, bin, dir, "get", "app.main.name")
+	if !testutil.Contains(out, "my-service") {
+		t.Errorf("expected name=my-service to be preserved, got: %q", out)
+	}
+}
+
 func TestSet_type2_collision_writes_and_warns(t *testing.T) {
 	// arrange
 	dir := t.TempDir()

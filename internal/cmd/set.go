@@ -29,7 +29,7 @@ func NewSetCmd() *cobra.Command {
 			targetPath, created := resolveSetTarget(targets, dotPath, vault.Path, ed.cfgPath)
 
 			tree := secrets.NewTree(nil)
-			if !created {
+			if _, err := os.Stat(targetPath); err == nil {
 				tree = ed.load(targetPath)
 			}
 			tree.Set(dotPath, value)
