@@ -116,6 +116,57 @@ func (e *Engine) InspectScoped(scopePrefix string, prefixed bool) error {
 	return nil
 }
 
+// InspectAllResult holds all detected issues across the three error categories.
+// Unlike InspectScoped, collection does not short-circuit on the first error type.
+type InspectAllResult struct {
+	ConflictErr    *secrets.ConflictError
+	EnvConflictErr *secrets.EnvConflictError
+}
+
+// InspectAll runs all checks without short-circuiting, so every error category
+// is always reported even when multiple types are present.
+// When prefixed is true, Type-2 env var collisions are not checked (same
+// semantics as InspectScoped).
+func (e *Engine) InspectAll(scopePrefix string, prefixed bool) (InspectAllResult, error) {
+	files, err := e.load()
+	if err != nil {
+		return InspectAllResult{}, err
+	}
+
+	var result InspectAllResult
+
+	// Type-1: same dot-path defined in multiple files.
+	// Use override mode to get a full tree even when conflicts exist, then
+	// capture the conflict error separately.
+	if _, mergeErr := secrets.Merge(files, config.MergeModeError, scopePrefix); mergeErr != nil {
+		if ce, ok := mergeErr.(*secrets.ConflictError); ok {
+			result.ConflictErr = ce
+		} else {
+			return InspectAllResult{}, mergeErr
+		}
+	}
+
+	if prefixed {
+		return result, nil
+	}
+
+	// Type-2: distinct dot-paths collapsing to the same env var name.
+	// Use override merge to always produce a tree for env-var checking.
+	tree, err := secrets.Merge(files, config.MergeModeOverride, scopePrefix)
+	if err != nil {
+		return InspectAllResult{}, err
+	}
+	if _, envErr := secrets.ToFlatEnvEntries(tree, scopePrefix); envErr != nil {
+		if ece, ok := envErr.(*secrets.EnvConflictError); ok {
+			result.EnvConflictErr = ece
+		} else {
+			return InspectAllResult{}, envErr
+		}
+	}
+
+	return result, nil
+}
+
 // EnvVars resolves env vars from the merged result.
 // Flat leaf names (DATABASE_URL), or full path if --prefixed.
 func (e *Engine) EnvVars(r *MergeResult, prefixed bool) (map[string]secrets.EnvEntry, error) {
