@@ -294,6 +294,9 @@ func printTreeWithOrigin(node *secrets.Node, indent int, conflicts map[string]se
 			maxLen = visibleLen(l.text)
 		}
 	}
+	if maxLen > treeValueMaxCols+30 {
+		maxLen = treeValueMaxCols + 30
+	}
 
 	for _, l := range lines {
 		if l.originFile != "" {
@@ -408,7 +411,7 @@ func collectListLines(node *secrets.Node, indent int, conflicts map[string]secre
 			// Winner: key green, value light gray
 			last := c.Sources[len(c.Sources)-1]
 			*lines = append(*lines, listLine{
-				text:        fmt.Sprintf("%s%s%s:%s %s%v%s", indentStr, clrGreen, k, clrReset, clrGrayLight, child.Value, clrReset),
+				text:        fmt.Sprintf("%s%s%s:%s %s%s%s", indentStr, clrGreen, k, clrReset, clrGrayLight, truncateValue(fmt.Sprintf("%v", child.Value), treeValueMaxCols), clrReset),
 				originFile:  last.File,
 				originLine:  last.Line,
 				conflict:    true,
@@ -443,7 +446,7 @@ func collectListLines(node *secrets.Node, indent int, conflicts map[string]secre
 				valueColor = clrGray
 			}
 			*lines = append(*lines, listLine{
-				text:        fmt.Sprintf("%s%s%s%s:%s %s%v%s", indentStr, keyColor, k, colonColor, clrReset, valueColor, child.Value, clrReset),
+				text:        fmt.Sprintf("%s%s%s%s:%s %s%s%s", indentStr, keyColor, k, colonColor, clrReset, valueColor, truncateValue(fmt.Sprintf("%v", child.Value), treeValueMaxCols), clrReset),
 				originFile:  child.Origin.File,
 				originLine:  child.Origin.Line,
 				envConflict: isEnvConflict,
@@ -501,6 +504,17 @@ func formatOriginDim(o secrets.Origin) string {
 }
 
 // --- utilities ---------------------------------------------------------------
+
+const treeValueMaxCols = 120
+
+// truncateValue cuts s to max visible chars and appends "…" if it was longer.
+func truncateValue(s string, max int) string {
+	runes := []rune(s)
+	if len(runes) <= max {
+		return s
+	}
+	return string(runes[:max]) + "…"
+}
 
 // visibleLen returns the visible (non-ANSI) length of s.
 func visibleLen(s string) int {
