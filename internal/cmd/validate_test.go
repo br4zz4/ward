@@ -82,6 +82,24 @@ func TestValidateVaultStructure_wrong_subdir_key(t *testing.T) {
 	}
 }
 
+func TestValidateVaultStructure_file_secret_exempt(t *testing.T) {
+	// arrange: file-secret "service-account.json.ward" must not trigger a violation
+	dir := t.TempDir()
+	vaultDir := filepath.Join(dir, ".ward", "vaults", "myapp")
+	_ = os.MkdirAll(vaultDir, 0755)
+	_ = os.WriteFile(filepath.Join(vaultDir, "service-account.json.ward"), []byte("service_account_json: value\n"), 0644)
+	cfg := &config.Config{Vaults: []config.Source{{Name: "myapp", Path: ".ward/vaults/myapp"}}}
+
+	// act
+	_ = os.Chdir(dir)
+	violations := validateVaultStructure(cfg, ".ward/config.yaml")
+
+	// assert
+	if len(violations) != 0 {
+		t.Errorf("expected no violations for file-secret, got: %v", violations)
+	}
+}
+
 func TestValidateVaultStructure_encrypted_file_skipped(t *testing.T) {
 	// arrange
 	dir := t.TempDir()

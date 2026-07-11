@@ -68,7 +68,7 @@ func TestFileImport_key_readable_via_get(t *testing.T) {
 	testutil.Run(t, bin, dir, "file", "import", src, "app")
 
 	// act
-	out, _, code := testutil.Run(t, bin, dir, "get", "service_account_json")
+	out, _, code := testutil.Run(t, bin, dir, "get", "app.service_account_json")
 
 	// assert
 	if code != 0 {
