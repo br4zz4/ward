@@ -57,15 +57,13 @@ func NewInitCmd() *cobra.Command {
 				fatal(fmt.Errorf("creating .ward/: %w", err))
 			}
 
-			// 2. Generate age key and store as ward-<base64url> token
+			// 2. Generate age key (raw) — keep raw on disk until after encryption
 			if err := wardage.GenerateKey(".ward/.key"); err != nil {
 				fatal(err)
 			}
-			if token, err := encodeWardKey(".ward/.key"); err == nil {
-				if err := os.WriteFile(".ward/.key", []byte(token+"\n"), 0600); err != nil {
-					fatal(fmt.Errorf("writing token to .ward/.key: %w", err))
-				}
-			}
+			// Encode token now while the file still holds the raw age key
+			wardToken, tokenErr := encodeWardKey(".ward/.key")
+
 			configContent := fmt.Sprintf(wardConfigTemplate, projectName, projectName, projectName, projectName, projectName)
 			if err := writeIfAbsent(".ward/config.yaml", configContent); err != nil {
 				fatal(err)
@@ -77,6 +75,7 @@ func NewInitCmd() *cobra.Command {
 			}
 
 			// 4. Create .ward/vaults/<projectName>/ and encrypt the initial secrets file
+			// while .ward/.key still holds the raw age key
 			if err := os.MkdirAll(vaultDir, 0755); err != nil {
 				fatal(fmt.Errorf("creating %s/: %w", vaultDir, err))
 			}
@@ -85,8 +84,15 @@ func NewInitCmd() *cobra.Command {
 				fatal(err)
 			}
 
+			// Now replace raw key with the portable token
+			if tokenErr == nil {
+				if err := os.WriteFile(".ward/.key", []byte(wardToken+"\n"), 0600); err != nil {
+					fatal(fmt.Errorf("writing token to .ward/.key: %w", err))
+				}
+			}
+
 			// 5. Print summary and WARD_KEY token
-			token, err := encodeWardKey(".ward/.key")
+			token, err := wardToken, tokenErr
 			if err == nil {
 				clrCyanDark := "\033[36m"
 				ruler := func(label, clr string) {
