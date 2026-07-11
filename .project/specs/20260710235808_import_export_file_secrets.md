@@ -2,7 +2,7 @@
 
 > TLDR: Add `ward import` and `ward export` commands to store entire files as single secrets in a vault, with a dedicated `.ward` naming convention that preserves the original file extension.
 
-**Status:** proposed
+**Status:** in_progress
 **Created:** 2026-07-10
 **Owner:** @oporpino
 
@@ -46,7 +46,11 @@ service_account_json   (default)
 SERVICE_ACCOUNT_JSON   (with upcase active)
 ```
 
-### `ward import <file> [vault]`
+### `ward file import <file> <vault>`
+
+> Note: implemented as `ward file import/export` (subcommands of `file`) to avoid collision with the existing `ward import`/`ward export` commands, which handle raw YAML encryption of `.ward` files.
+
+### `ward import <file> [vault]` *(original design, superseded)*
 
 - Reads `<file>` from disk
 - Derives the key name: filename (without path) → replace `.` and `-` with `_`
