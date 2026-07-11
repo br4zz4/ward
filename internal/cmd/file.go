@@ -27,7 +27,7 @@ func newFileImportCmd() *cobra.Command {
 		Short: "Store a file as a single encrypted secret",
 		Args:  cobra.ExactArgs(2),
 		Run: func(_ *cobra.Command, args []string) {
-			srcPath, vaultName := args[0], args[1]
+			srcPath, vaultArg := args[0], args[1]
 
 			content, err := os.ReadFile(srcPath)
 			if err != nil {
@@ -44,23 +44,26 @@ func newFileImportCmd() *cobra.Command {
 				fatal(err)
 			}
 
-			vaultBase, subDir := splitVaultArg(vaultName)
+			vaultBase, subDir := splitVaultArg(vaultArg)
 			vaultPath := resolveVaultDir(cfg, vaultBase, cfgPath)
 			if vaultPath == "" {
 				fatal(fmt.Errorf("vault %q not found — use `ward vault list` to see available vaults", vaultBase))
 			}
+			targetDir := vaultPath
 			if subDir != "" {
-				vaultPath = filepath.Join(vaultPath, subDir)
+				targetDir = filepath.Join(vaultPath, filepath.FromSlash(strings.ReplaceAll(subDir, ".", "/")))
 			}
 
-			wardPath := filepath.Join(vaultPath, secrets.WardFilename(srcPath))
+			wardPath := filepath.Join(targetDir, secrets.WardFilename(srcPath))
 			if _, err := os.Stat(wardPath); err == nil {
 				fatal(fmt.Errorf("%s already exists — remove it first to re-import", wardPath))
 			}
 
-			key := secrets.FileKey(srcPath)
-			segments := append(strings.Split(vaultBase, "."), key)
-			yamlContent := nestedYAML(segments, string(content))
+			segments := fileYAMLSegments(vaultBase, subDir, srcPath)
+			yamlContent, err := marshalNested(segments, string(content))
+			if err != nil {
+				fatal(fmt.Errorf("encoding secret: %w", err))
+			}
 
 			eng, err := newEngine()
 			if err != nil {
@@ -131,25 +134,31 @@ func newFileExportCmd() *cobra.Command {
 	}
 }
 
-// nestedYAML builds a nested YAML string from segments, placing value at the leaf.
-// nestedYAML(["app", "service_account_json"], "...") →
-//
-//	app:
-//	  service_account_json: |
-//	    ...
-func nestedYAML(segments []string, value string) []byte {
-	var sb strings.Builder
-	for i, seg := range segments[:len(segments)-1] {
-		sb.WriteString(strings.Repeat("  ", i) + seg + ":\n")
+// fileYAMLSegments returns the YAML key path for a file-secret:
+// vault + subdir parts + leaf key derived from filename.
+// e.g. vault="app", subDir="credentials", file="sa.json" → ["app","credentials","service_account_json"]
+func fileYAMLSegments(vaultBase, subDir, srcPath string) []string {
+	segments := []string{vaultBase}
+	if subDir != "" {
+		segments = append(segments, strings.Split(subDir, ".")...)
 	}
-	leaf := segments[len(segments)-1]
-	indent := strings.Repeat("  ", len(segments)-1)
-	// Use literal block scalar for multiline-safe encoding.
-	sb.WriteString(indent + leaf + ": |\n")
-	for _, line := range strings.Split(value, "\n") {
-		sb.WriteString(indent + "  " + line + "\n")
+	return append(segments, secrets.FileKey(srcPath))
+}
+
+// marshalNested builds nested YAML where segments are map keys and value is the leaf.
+// e.g. ["app","creds","key"], "val" → app:\n  creds:\n    key: val\n
+func marshalNested(segments []string, value string) ([]byte, error) {
+	if len(segments) < 2 {
+		return nil, fmt.Errorf("segments must have at least two elements")
 	}
-	return []byte(sb.String())
+	var build func(segs []string) interface{}
+	build = func(segs []string) interface{} {
+		if len(segs) == 1 {
+			return map[string]string{segs[0]: value}
+		}
+		return map[string]interface{}{segs[0]: build(segs[1:])}
+	}
+	return yaml.Marshal(build(segments))
 }
 
 // splitVaultArg splits "app.main" into ("app", "main") and "app" into ("app", "").
@@ -208,7 +217,6 @@ func extractFileSecret(plain []byte, originalName string) (string, error) {
 	return strings.TrimRight(value, "\n"), nil
 }
 
-// deepFind recursively searches a nested map for the first leaf matching key.
 func deepFind(m map[string]interface{}, key string) (string, error) {
 	if v, ok := m[key]; ok {
 		return fmt.Sprintf("%v", v), nil
