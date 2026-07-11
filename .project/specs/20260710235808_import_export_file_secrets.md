@@ -66,8 +66,40 @@ SERVICE_ACCOUNT_JSON   (with upcase active)
 - `internal/cmd/import.go` — new `ward import` command
 - `internal/cmd/export.go` — new `ward export` command
 - `internal/cmd/root.go` — register both commands
+- `internal/secrets/filekey.go` — key derivation logic (filename → snake_case key)
 - `test/e2e/import/` — e2e tests for import
 - `test/e2e/export/` — e2e tests for export
+
+## Implementation Plan
+
+Ordered execution steps following the TDD cycle. Each step maps to one commit.
+
+1. **test:** key derivation from filename — files: `internal/secrets/filekey_test.go`
+2. **test:** `ward import` happy path and error cases (file not found, target exists) — files: `test/e2e/import/`
+3. **test:** `ward export` happy path and error cases (secret not found, dest exists) — files: `test/e2e/export/`
+4. **feat:** implement key derivation (`filekey.go`) and `ward import` command — files: `internal/secrets/filekey.go`, `internal/cmd/import.go`, `internal/cmd/root.go`
+5. **feat:** implement `ward export` command — files: `internal/cmd/export.go`, `internal/cmd/root.go`
+6. **refactor:** extract shared filename resolution logic, apply DRY/KISS, move unit tests to proper files — files: `internal/secrets/filekey.go`, `internal/cmd/import.go`, `internal/cmd/export.go`
+7. **perf:** *(skip — no database or algorithmic bottleneck expected)*
+
+Every phase requires at least one commit. Each step must leave the test suite green before moving to the next.
+
+### Phase philosophy and constraints
+
+**Phase 1 — Make it Tested (`test:` commit)**
+Write all tests before touching any production code. Confirm RED for the right reason.
+- Constraint: no production code in this phase.
+
+**Phase 2 — Make it Work (`feat:` commit)**
+Minimum code to turn every test GREEN. Duplication and naive implementations are acceptable.
+- Constraint: no refactoring, no optimization.
+
+**Phase 3 — Make it Better (`refactor:` commit)**
+Remove if/else chains, extract methods, apply DRY/SOLID/KISS, move unit tests to their proper files without changing content.
+- Constraint: tests must stay green. No new behavior.
+
+**Phase 4 — Make it Faster (`perf:` commit)**
+No measured bottleneck expected — skip this phase.
 
 ## How to verify
 
