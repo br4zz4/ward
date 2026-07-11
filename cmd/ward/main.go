@@ -90,6 +90,7 @@ func main() {
 		cmd.NewEditCmd(),
 		cmd.NewImportCmd(),
 		cmd.NewExportCmd(),
+		cmd.NewFileCmd(),
 		cmd.NewRawCmd(),
 		cmd.NewVaultCmd(),
 		cmd.NewInspectCmd(),
