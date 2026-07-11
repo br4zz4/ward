@@ -507,8 +507,10 @@ func formatOriginDim(o secrets.Origin) string {
 
 const treeValueMaxCols = 120
 
-// truncateValue cuts s to max visible chars and appends "…" if it was longer.
+// truncateValue collapses newlines to spaces and cuts s to max visible chars.
 func truncateValue(s string, max int) string {
+	s = strings.ReplaceAll(s, "\n", " ")
+	s = strings.TrimRight(s, " ")
 	runes := []rune(s)
 	if len(runes) <= max {
 		return s
