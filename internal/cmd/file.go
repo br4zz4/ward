@@ -128,7 +128,6 @@ func newFileExportCmd() *cobra.Command {
 	}
 }
 
-// resolveVaultDir returns the absolute directory path for the named vault, or "".
 func resolveVaultDir(cfg *config.Config, vaultName, cfgPath string) string {
 	projectRoot := filepath.Dir(filepath.Dir(cfgPath))
 	for _, src := range cfg.Vaults {
@@ -139,7 +138,6 @@ func resolveVaultDir(cfg *config.Config, vaultName, cfgPath string) string {
 	return ""
 }
 
-// locateFileSecret searches all vaults for a .ward file matching originalName.
 func locateFileSecret(originalName string) (string, error) {
 	cfgPath, err := resolvedConfigFile()
 	if err != nil {
@@ -164,8 +162,6 @@ func locateFileSecret(originalName string) (string, error) {
 	return "", fmt.Errorf("%s: file secret not found in any vault", originalName)
 }
 
-// extractFileSecret parses the YAML produced by file import and returns the
-// scalar value for the key derived from originalName.
 func extractFileSecret(plain []byte, originalName string) (string, error) {
 	var data map[string]string
 	if err := yaml.Unmarshal(plain, &data); err != nil {
