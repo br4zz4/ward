@@ -1,0 +1,4 @@
+vault-a:
+  main:
+    token: token-from-main
+    other_key: value-a

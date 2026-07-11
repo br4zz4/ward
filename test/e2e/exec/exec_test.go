@@ -32,8 +32,8 @@ func TestExec_injects_vars(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("exit %d", code)
 	}
-	if !testutil.Contains(out, "REGION=us-east-1") {
-		t.Errorf("expected REGION=us-east-1 injected, got: %q", out)
+	if !testutil.Contains(out, "region=us-east-1") {
+		t.Errorf("expected region=us-east-1 injected, got: %q", out)
 	}
 }
 
@@ -42,8 +42,8 @@ func TestExec_prefixed_injects_full_path(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("exit %d", code)
 	}
-	if !testutil.Contains(out, "DEPLOY_MAIN_REGION=us-east-1") {
-		t.Errorf("expected DEPLOY_MAIN_REGION=us-east-1, got: %q", out)
+	if !testutil.Contains(out, "deploy_main_region=us-east-1") {
+		t.Errorf("expected deploy_main_region=us-east-1, got: %q", out)
 	}
 }
 
@@ -102,8 +102,8 @@ func TestExec_conflict_envvar_prefixed_runs(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("exit %d", code)
 	}
-	if !testutil.Contains(out, "APP_STAGING_TOKEN=staging-token") {
-		t.Errorf("expected APP_STAGING_TOKEN injected, got: %q", out)
+	if !testutil.Contains(out, "app_staging_token=staging-token") {
+		t.Errorf("expected app_staging_token=staging-token injected, got: %q", out)
 	}
 }
 
@@ -112,8 +112,8 @@ func TestExec_conflict_envvar_hint_runs(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("exit %d", code)
 	}
-	if !testutil.Contains(out, "TOKEN=staging-token") {
-		t.Errorf("expected TOKEN=staging-token injected, got: %q", out)
+	if !testutil.Contains(out, "token=staging-token") {
+		t.Errorf("expected token=staging-token injected, got: %q", out)
 	}
 }
 

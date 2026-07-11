@@ -31,7 +31,7 @@ func TestEnvs_flat_keys_present(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("exit %d", code)
 	}
-	for _, key := range []string{"SECRET_KEY", "API_URL", "TIMEOUT"} {
+	for _, key := range []string{"secret_key", "api_url", "timeout"} {
 		if !testutil.Contains(testutil.StripANSI(out), key) {
 			t.Errorf("expected %s in output, got: %q", key, out)
 		}
@@ -53,8 +53,8 @@ func TestEnvs_prefixed_keys(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("exit %d", code)
 	}
-	if !testutil.Contains(testutil.StripANSI(out), "SERVICE_MAIN_SECRET_KEY") {
-		t.Errorf("expected SERVICE_MAIN_SECRET_KEY in prefixed output, got: %q", out)
+	if !testutil.Contains(testutil.StripANSI(out), "service_main_secret_key") {
+		t.Errorf("expected service_main_secret_key in prefixed output, got: %q", out)
 	}
 }
 
@@ -100,7 +100,7 @@ func TestEnvs_conflict_envvar_prefixed_succeeds(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("exit %d", code)
 	}
-	if !testutil.Contains(testutil.StripANSI(out), "APP_STAGING_SECRET_KEY") {
+	if !testutil.Contains(testutil.StripANSI(out), "app_staging_secret_key") {
 		t.Errorf("expected prefixed keys, got: %q", out)
 	}
 }
@@ -143,8 +143,8 @@ func TestEnvs_override_max_retries_present(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("exit %d", code)
 	}
-	if !testutil.Contains(testutil.StripANSI(out), "MAX_RETRIES") {
-		t.Errorf("expected MAX_RETRIES in output, got: %q", out)
+	if !testutil.Contains(testutil.StripANSI(out), "max_retries") {
+		t.Errorf("expected max_retries in output, got: %q", out)
 	}
 }
 
@@ -156,10 +156,10 @@ func TestEnvs_prefixed_both_envs_present(t *testing.T) {
 		t.Fatalf("exit %d", code)
 	}
 	clean := testutil.StripANSI(out)
-	if !testutil.Contains(clean, "APP_MAIN_STAGING_API_KEY") {
-		t.Errorf("expected APP_MAIN_STAGING_API_KEY, got: %q", out)
+	if !testutil.Contains(clean, "app_main_staging_api_key") {
+		t.Errorf("expected app_main_staging_api_key, got: %q", out)
 	}
-	if !testutil.Contains(clean, "APP_MAIN_PRODUCTION_API_KEY") {
-		t.Errorf("expected APP_MAIN_PRODUCTION_API_KEY, got: %q", out)
+	if !testutil.Contains(clean, "app_main_production_api_key") {
+		t.Errorf("expected app_main_production_api_key, got: %q", out)
 	}
 }

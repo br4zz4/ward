@@ -36,8 +36,8 @@ func TestInspect_clean_exits_zero(t *testing.T) {
 
 func TestInspect_clean_shows_checkmark(t *testing.T) {
 	out, _, _ := testutil.Run(t, bin, fix("clean"), "inspect")
-	if !testutil.Contains(testutil.StripANSI(out), "no conflicts") {
-		t.Errorf("expected no conflicts message, got: %q", out)
+	if !testutil.Contains(testutil.StripANSI(out), "0 conflicts") {
+		t.Errorf("expected clean summary with 0 counts, got: %q", out)
 	}
 }
 
@@ -118,5 +118,80 @@ func TestInspect_structure_violation_fails(t *testing.T) {
 	}
 	if !strings.Contains(stderr, "vault structure violations") {
 		t.Errorf("expected 'vault structure violations' in stderr, got: %s", stderr)
+	}
+}
+
+// ── summary footer ────────────────────────────────────────────────────────────
+
+func TestInspect_clean_shows_summary_footer(t *testing.T) {
+	// arrange + act
+	out, stderr, _ := testutil.Run(t, bin, fix("clean"), "inspect")
+	combined := testutil.StripANSI(out + stderr)
+
+	// assert: footer with all-zero counts
+	if !strings.Contains(combined, "0 conflicts") {
+		t.Errorf("expected '0 conflicts' in summary footer, got: %q", combined)
+	}
+	if !strings.Contains(combined, "0 env collisions") {
+		t.Errorf("expected '0 env collisions' in summary footer, got: %q", combined)
+	}
+	if !strings.Contains(combined, "0 structure errors") {
+		t.Errorf("expected '0 structure errors' in summary footer, got: %q", combined)
+	}
+}
+
+func TestInspect_env_collision_shows_summary_footer(t *testing.T) {
+	// arrange + act
+	_, stderr, code := testutil.Run(t, bin, fix("conflict-envvar"), "inspect")
+	clean := testutil.StripANSI(stderr)
+
+	// assert: non-zero exit and summary with env collision count
+	if code == 0 {
+		t.Fatal("expected non-zero exit for env var collision")
+	}
+	if !strings.Contains(clean, "env collision") {
+		t.Errorf("expected 'env collision' count in summary footer, got: %q", clean)
+	}
+}
+
+func TestInspect_structure_violation_shows_summary_footer(t *testing.T) {
+	// arrange
+	dir := t.TempDir()
+	testutil.RunCmd(t, "cp", "-r", fix("structure-violation")+"/.", dir)
+
+	// act
+	_, stderr, code := testutil.Run(t, bin, dir, "inspect")
+	clean := testutil.StripANSI(stderr)
+
+	// assert: non-zero exit and summary with structure error count
+	if code == 0 {
+		t.Fatal("expected non-zero exit for structure violation")
+	}
+	if !strings.Contains(clean, "structure error") {
+		t.Errorf("expected 'structure error' count in summary footer, got: %q", clean)
+	}
+}
+
+func TestInspect_all_errors_shows_combined_summary(t *testing.T) {
+	// arrange
+	dir := t.TempDir()
+	testutil.RunCmd(t, "cp", "-r", fix("all-errors")+"/.", dir)
+
+	// act
+	_, stderr, code := testutil.Run(t, bin, dir, "inspect")
+	clean := testutil.StripANSI(stderr)
+
+	// assert: non-zero exit and summary contains all three error types
+	if code == 0 {
+		t.Fatal("expected non-zero exit for fixture with all error types")
+	}
+	if !strings.Contains(clean, "conflict") {
+		t.Errorf("expected 'conflict' count in summary, got: %q", clean)
+	}
+	if !strings.Contains(clean, "env collision") {
+		t.Errorf("expected 'env collision' count in summary, got: %q", clean)
+	}
+	if !strings.Contains(clean, "structure error") {
+		t.Errorf("expected 'structure error' count in summary, got: %q", clean)
 	}
 }
