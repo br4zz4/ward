@@ -9,7 +9,6 @@ import (
 	"github.com/br4zz4/ward/internal/config"
 	"github.com/br4zz4/ward/internal/secrets"
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
 )
 
 func NewFileCmd() *cobra.Command {
@@ -59,12 +58,6 @@ func newFileImportCmd() *cobra.Command {
 				fatal(fmt.Errorf("%s already exists — remove it first to re-import", wardPath))
 			}
 
-			segments := fileYAMLSegments(vaultBase, subDir, srcPath)
-			yamlContent, err := marshalNested(segments, string(content))
-			if err != nil {
-				fatal(fmt.Errorf("encoding secret: %w", err))
-			}
-
 			eng, err := newEngine()
 			if err != nil {
 				fatal(err)
@@ -74,7 +67,7 @@ func newFileImportCmd() *cobra.Command {
 				fatal(fmt.Errorf("creating directory: %w", err))
 			}
 
-			if err := eng.Encrypt(wardPath, yamlContent); err != nil {
+			if err := eng.Encrypt(wardPath, content); err != nil {
 				fatal(fmt.Errorf("encrypting %s: %w", wardPath, err))
 			}
 
@@ -111,54 +104,22 @@ func newFileExportCmd() *cobra.Command {
 				fatal(err)
 			}
 
-			plain, err := eng.Decrypt(wardFile)
+			content, err := eng.Decrypt(wardFile)
 			if err != nil {
 				fatal(fmt.Errorf("decrypting %s: %w", wardFile, err))
-			}
-
-			content, err := extractFileSecret(plain, originalName)
-			if err != nil {
-				fatal(err)
 			}
 
 			if err := os.MkdirAll(destDir, 0755); err != nil {
 				fatal(fmt.Errorf("creating directory: %w", err))
 			}
 
-			if err := os.WriteFile(destPath, []byte(content), 0600); err != nil {
+			if err := os.WriteFile(destPath, content, 0600); err != nil {
 				fatal(fmt.Errorf("writing %s: %w", destPath, err))
 			}
 
 			fmt.Fprintf(os.Stderr, "ward: exported %s → %s\n", wardFile, destPath)
 		},
 	}
-}
-
-// fileYAMLSegments returns the YAML key path for a file-secret:
-// vault + subdir parts + leaf key derived from filename.
-// e.g. vault="app", subDir="credentials", file="sa.json" → ["app","credentials","service_account_json"]
-func fileYAMLSegments(vaultBase, subDir, srcPath string) []string {
-	segments := []string{vaultBase}
-	if subDir != "" {
-		segments = append(segments, strings.Split(subDir, ".")...)
-	}
-	return append(segments, secrets.FileKey(srcPath))
-}
-
-// marshalNested builds nested YAML where segments are map keys and value is the leaf.
-// e.g. ["app","creds","key"], "val" → app:\n  creds:\n    key: val\n
-func marshalNested(segments []string, value string) ([]byte, error) {
-	if len(segments) < 2 {
-		return nil, fmt.Errorf("segments must have at least two elements")
-	}
-	var build func(segs []string) interface{}
-	build = func(segs []string) interface{} {
-		if len(segs) == 1 {
-			return map[string]string{segs[0]: value}
-		}
-		return map[string]interface{}{segs[0]: build(segs[1:])}
-	}
-	return yaml.Marshal(build(segments))
 }
 
 // splitVaultArg splits "app.main" into ("app", "main") and "app" into ("app", "").
@@ -204,29 +165,3 @@ func locateFileSecret(originalName string) (string, error) {
 	return "", fmt.Errorf("%s: file secret not found in any vault", originalName)
 }
 
-func extractFileSecret(plain []byte, originalName string) (string, error) {
-	var data map[string]interface{}
-	if err := yaml.Unmarshal(plain, &data); err != nil {
-		return "", fmt.Errorf("parsing secret: %w", err)
-	}
-	key := secrets.FileKey(originalName)
-	value, err := deepFind(data, key)
-	if err != nil {
-		return "", fmt.Errorf("key %q not found in secret", key)
-	}
-	return strings.TrimRight(value, "\n"), nil
-}
-
-func deepFind(m map[string]interface{}, key string) (string, error) {
-	if v, ok := m[key]; ok {
-		return fmt.Sprintf("%v", v), nil
-	}
-	for _, v := range m {
-		if nested, ok := v.(map[string]interface{}); ok {
-			if found, err := deepFind(nested, key); err == nil {
-				return found, nil
-			}
-		}
-	}
-	return "", fmt.Errorf("not found")
-}

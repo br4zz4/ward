@@ -2,6 +2,7 @@ package secrets
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -14,17 +15,34 @@ type LineMap map[string]int
 
 // ParsedFile holds the decoded content of a .ward file before merging.
 type ParsedFile struct {
-	File    string
-	Data    map[string]interface{}
-	Lines   LineMap // dot-path → line number
+	File     string
+	Data     map[string]interface{}
+	Lines    LineMap  // dot-path → line number
 	RawLines []string // source lines for snippet display
 }
 
 // Load decrypts and parses a .ward file into a ParsedFile.
-func Load(path string, dec sops.Decryptor) (ParsedFile, error) {
+// vaultName and vaultRoot identify the vault; used to derive the key prefix
+// for file-secrets so they merge at the correct dot-path.
+func Load(path, vaultName, vaultRoot string, dec sops.Decryptor) (ParsedFile, error) {
 	raw, err := dec.Decrypt(path)
 	if err != nil {
 		return ParsedFile{}, fmt.Errorf("decrypting %s: %w", path, err)
+	}
+
+	// File-secrets store raw content, not YAML structure.
+	// Their dot-path is: vaultName + subdir segments + key derived from filename.
+	if orig, ok := OriginalFilename(path); ok {
+		key := FileKey(orig)
+		prefix := append([]string{vaultName}, fileSecretSubdir(path, vaultRoot)...)
+		data := nestedMap(prefix, key, strings.TrimRight(string(raw), "\n"))
+		dotPath := strings.Join(append(prefix, key), ".")
+		return ParsedFile{
+			File:     path,
+			Data:     data,
+			Lines:    LineMap{dotPath: 1},
+			RawLines: strings.Split(string(raw), "\n"),
+		}, nil
 	}
 
 	var node yaml.Node
@@ -41,6 +59,35 @@ func Load(path string, dec sops.Decryptor) (ParsedFile, error) {
 	rawLines := strings.Split(string(raw), "\n")
 
 	return ParsedFile{File: path, Data: data, Lines: lines, RawLines: rawLines}, nil
+}
+
+// fileSecretSubdir returns the subdirectory segments between the vault root and
+// the file-secret's directory. e.g. vault root ".ward/vaults/app",
+// file ".ward/vaults/app/credentials/sa.json.ward" → ["credentials"].
+func fileSecretSubdir(filePath, vaultRoot string) []string {
+	if vaultRoot == "" {
+		return nil
+	}
+	absFile, err := filepath.Abs(filePath)
+	if err != nil {
+		return nil
+	}
+	rel, err := filepath.Rel(vaultRoot, filepath.Dir(absFile))
+	if err != nil || rel == "." {
+		return nil
+	}
+	return strings.Split(rel, string(filepath.Separator))
+}
+
+// nestedMap wraps value under prefix segments + key as nested maps.
+// e.g. prefix=["app","credentials"], key="sa_json", value="..." →
+// map["app"]map["credentials"]map["sa_json"]"..."
+func nestedMap(prefix []string, key, value string) map[string]interface{} {
+	leaf := map[string]interface{}{key: value}
+	for i := len(prefix) - 1; i >= 0; i-- {
+		leaf = map[string]interface{}{prefix[i]: leaf}
+	}
+	return leaf
 }
 
 // extractNode recursively walks a yaml.Node, populating data and lines.
@@ -74,10 +121,15 @@ func extractNode(node *yaml.Node, prefix string, data map[string]interface{}, li
 }
 
 // LoadAll loads all files using the given decryptor.
-func LoadAll(paths []string, dec sops.Decryptor) ([]ParsedFile, error) {
+// vaultFor maps each file path to its (vaultName, vaultRoot) for file-secret prefix derivation.
+func LoadAll(paths []string, vaultFor func(path string) (string, string), dec sops.Decryptor) ([]ParsedFile, error) {
 	files := make([]ParsedFile, 0, len(paths))
 	for _, p := range paths {
-		pf, err := Load(p, dec)
+		name, root := "", ""
+		if vaultFor != nil {
+			name, root = vaultFor(p)
+		}
+		pf, err := Load(p, name, root, dec)
 		if err != nil {
 			return nil, err
 		}

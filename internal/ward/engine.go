@@ -6,6 +6,8 @@ package ward
 import (
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/br4zz4/ward/internal/config"
 	"github.com/br4zz4/ward/internal/secrets"
@@ -243,11 +245,47 @@ func (e *Engine) load() ([]secrets.ParsedFile, error) {
 	if err != nil {
 		return nil, fmt.Errorf("discovering files: %w", err)
 	}
-	files, err := secrets.LoadAll(paths, e.dec)
+	vaultFor := buildVaultRootIndex(e.cfg)
+	vaultRootFor := func(path string) (string, string) {
+		vi := vaultFor(path)
+		return vi.name, vi.root
+	}
+	files, err := secrets.LoadAll(paths, vaultRootFor, e.dec)
 	if err != nil {
 		return nil, fmt.Errorf("loading files: %w", err)
 	}
 	return files, nil
+}
+
+type vaultInfo struct {
+	name string
+	root string // absolute path
+}
+
+// buildVaultRootIndex returns a function that maps an absolute file path to
+// its vault info (name + root), used to derive file-secret key prefixes.
+func buildVaultRootIndex(cfg *config.Config) func(string) vaultInfo {
+	infos := make([]vaultInfo, len(cfg.Vaults))
+	for i, v := range cfg.Vaults {
+		abs, err := filepath.Abs(v.Path)
+		if err != nil {
+			abs = v.Path
+		}
+		infos[i] = vaultInfo{name: v.Name, root: abs}
+	}
+	return func(path string) vaultInfo {
+		absPath, err := filepath.Abs(path)
+		if err != nil {
+			return vaultInfo{}
+		}
+		for _, info := range infos {
+			rel, err := filepath.Rel(info.root, absPath)
+			if err == nil && !strings.HasPrefix(rel, "..") {
+				return info
+			}
+		}
+		return vaultInfo{}
+	}
 }
 
 
