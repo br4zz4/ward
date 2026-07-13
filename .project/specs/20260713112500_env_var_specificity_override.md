@@ -35,13 +35,20 @@ The expected behavior is the same as regular secret override: a more specific pa
 ## How to verify
 
 ```bash
-# two file-secrets at different depths → no collision, deeper wins
+# file-secrets at different depths → no collision, deeper wins
 ward-dev file import sa.json app
 ward-dev file import sa.json app.other
 ward-dev envs
-# → service_account_json = <value from app.other.service_account_json>
+# → service_account_json = <value from app.other.service_account_json>  (overrides)
 
-# two secrets at same depth → still collision error
+# regular secrets at different depths → same behavior
+# .ward/vaults/app/secrets.ward:       app: { secrets: { database_url: "base" } }
+# .ward/vaults/app/prod/secrets.ward:  app: { prod: { secrets: { database_url: "prod" } } }
+ward-dev envs
+# → database_url = prod  (app.prod.secrets.database_url overrides app.secrets.database_url)
+
+# two secrets at same depth → still a collision error
+# app.secrets.database_url and app.other.database_url  (both depth 3)
 ward-dev envs
 # → ✗ env var collision
 ```
