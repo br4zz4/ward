@@ -69,6 +69,13 @@ func printEnvEntries(entries map[string]secrets.EnvEntry) {
 		return keys[i] < keys[j]
 	})
 
+	termWidth := terminalWidth()
+	const envsOriginReserve = 55
+	valMaxCols := termWidth - envsOriginReserve - 20 // leave room for key + "  =  "
+	if valMaxCols < 20 {
+		valMaxCols = 20
+	}
+
 	// Compute column widths: key and value.
 	maxKey := 0
 	maxVal := 0
@@ -76,7 +83,7 @@ func printEnvEntries(entries map[string]secrets.EnvEntry) {
 		if len(k) > maxKey {
 			maxKey = len(k)
 		}
-		if v := fmt.Sprintf("%v", entries[k].Value); len(v) > maxVal {
+		if v := truncateValue(fmt.Sprintf("%v", entries[k].Value), valMaxCols); len(v) > maxVal {
 			maxVal = len(v)
 		}
 	}
@@ -84,7 +91,7 @@ func printEnvEntries(entries map[string]secrets.EnvEntry) {
 	for _, k := range keys {
 		e := entries[k]
 		keyPad := strings.Repeat(" ", maxKey-len(k))
-		valStr := fmt.Sprintf("%v", e.Value)
+		valStr := truncateValue(fmt.Sprintf("%v", e.Value), valMaxCols)
 		valPad := strings.Repeat(" ", maxVal-len(valStr))
 		color := clrGreen
 		if e.Overrides {

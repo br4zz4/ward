@@ -218,3 +218,79 @@ func TestToFlatEnvEntries_empty(t *testing.T) {
 		t.Errorf("expected empty map")
 	}
 }
+
+func TestToFlatEnvEntries_deeper_path_shadows_shallower(t *testing.T) {
+	// arrange: app.service_account_json and app.other.service_account_json
+	// deeper (app.other.service_account_json) must win silently — no collision error
+	tree := map[string]*Node{
+		"app": {Children: map[string]*Node{
+			"service_account_json": {Value: "shallow"},
+			"other": {Children: map[string]*Node{
+				"service_account_json": {Value: "deep"},
+			}},
+		}},
+	}
+
+	// act
+	got, err := ToFlatEnvEntries(tree, "")
+
+	// assert
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+	if got["service_account_json"].Value != "deep" {
+		t.Errorf("expected deeper value to win, got %q", got["service_account_json"].Value)
+	}
+}
+
+func TestToFlatEnvEntries_deeper_path_shadows_regular_secret(t *testing.T) {
+	// arrange: app.database_url and app.production.database_url — same leaf name, different depth
+	tree := map[string]*Node{
+		"app": {Children: map[string]*Node{
+			"database_url": {Value: "base"},
+			"production": {Children: map[string]*Node{
+				"database_url": {Value: "prod"},
+			}},
+		}},
+	}
+
+	// act
+	got, err := ToFlatEnvEntries(tree, "")
+
+	// assert
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+	if got["database_url"].Value != "prod" {
+		t.Errorf("expected deeper value to win, got %q", got["database_url"].Value)
+	}
+}
+
+func TestToFlatEnvEntries_same_depth_unrelated_is_collision(t *testing.T) {
+	// arrange: app.one.token and app.two.token — same depth, unrelated paths → collision
+	tree := map[string]*Node{
+		"app": {Children: map[string]*Node{
+			"one": {Children: map[string]*Node{
+				"token": {Value: "aaa"},
+			}},
+			"two": {Children: map[string]*Node{
+				"token": {Value: "bbb"},
+			}},
+		}},
+	}
+
+	// act
+	_, err := ToFlatEnvEntries(tree, "")
+
+	// assert
+	if err == nil {
+		t.Fatal("expected collision error for same-depth unrelated paths")
+	}
+	ce, ok := err.(*EnvConflictError)
+	if !ok {
+		t.Fatalf("expected EnvConflictError, got %T", err)
+	}
+	if len(ce.Conflicts) != 1 {
+		t.Errorf("expected 1 conflict, got %d", len(ce.Conflicts))
+	}
+}

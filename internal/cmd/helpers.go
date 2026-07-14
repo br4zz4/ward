@@ -7,6 +7,8 @@ import (
 	"sort"
 	"strings"
 
+	"golang.org/x/term"
+
 	"github.com/br4zz4/ward/internal/config"
 	wardage "github.com/br4zz4/ward/internal/age"
 	"github.com/br4zz4/ward/internal/secrets"
@@ -288,20 +290,36 @@ func printTreeWithOrigin(node *secrets.Node, indent int, conflicts map[string]se
 	var lines []listLine
 	collectListLines(node, indent, conflicts, prefix, envCollisions, &lines)
 
+	termWidth := terminalWidth()
+	// Reserve space for "  ← path:line" at the right side.
+	const originReserve = 55
+	valueColMax := termWidth - originReserve
+	if valueColMax < 20 {
+		valueColMax = 20
+	}
+
 	maxLen := 0
 	for _, l := range lines {
-		if l.originFile != "" && visibleLen(l.text) > maxLen {
-			maxLen = visibleLen(l.text)
+		if l.originFile != "" {
+			vl := visibleLen(l.text)
+			if vl > maxLen {
+				maxLen = vl
+			}
 		}
 	}
-	if maxLen > treeValueMaxCols+30 {
-		maxLen = treeValueMaxCols + 30
+	if maxLen > valueColMax {
+		maxLen = valueColMax
 	}
 
 	for _, l := range lines {
 		if l.originFile != "" {
-			vl := visibleLen(l.text)
-			pad := maxLen - vl + 6
+			text := l.text
+			vl := visibleLen(text)
+			if vl > maxLen {
+				text = truncateANSI(text, maxLen)
+				vl = maxLen
+			}
+			pad := maxLen - vl + 4
 			if pad < 1 {
 				pad = 1
 			}
@@ -336,7 +354,7 @@ func printTreeWithOrigin(node *secrets.Node, indent int, conflicts map[string]se
 				originStr += fmt.Sprintf(" %s(overridden)%s", clrOrange, clrReset)
 			}
 
-			fmt.Printf("%s%s%s←%s %s\n", l.text, padding, statusClr, clrReset, originStr)
+			fmt.Printf("%s%s%s←%s %s\n", text, padding, statusClr, clrReset, originStr)
 		} else {
 			fmt.Println(l.text)
 		}
@@ -507,13 +525,56 @@ func formatOriginDim(o secrets.Origin) string {
 
 const treeValueMaxCols = 120
 
-// truncateValue cuts s to max visible chars and appends "…" if it was longer.
+func terminalWidth() int {
+	w, _, err := term.GetSize(int(os.Stdout.Fd()))
+	if err != nil || w < 40 {
+		w, _, err = term.GetSize(int(os.Stderr.Fd()))
+	}
+	if err != nil || w < 40 {
+		return 80
+	}
+	return w
+}
+
+// truncateValue collapses newlines to spaces and cuts s to max visible chars.
 func truncateValue(s string, max int) string {
+	s = strings.ReplaceAll(s, "\n", " ")
+	s = strings.TrimRight(s, " ")
 	runes := []rune(s)
 	if len(runes) <= max {
 		return s
 	}
 	return string(runes[:max]) + "…"
+}
+
+// truncateANSI truncates s to max visible (non-ANSI) characters, preserving ANSI codes.
+func truncateANSI(s string, max int) string {
+	var out strings.Builder
+	visible := 0
+	inEsc := false
+	for i := 0; i < len(s); {
+		b := s[i]
+		if b == '\033' {
+			inEsc = true
+		}
+		if inEsc {
+			out.WriteByte(b)
+			if b == 'm' {
+				inEsc = false
+			}
+			i++
+			continue
+		}
+		r, size := []rune(s[i:])[0], len(string([]rune(s[i:])[0]))
+		if visible >= max {
+			out.WriteString("…")
+			break
+		}
+		out.WriteRune(r)
+		visible++
+		i += size
+	}
+	return out.String()
 }
 
 // visibleLen returns the visible (non-ANSI) length of s.

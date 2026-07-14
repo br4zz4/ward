@@ -50,6 +50,13 @@ func validateVaultStructure(cfg *config.Config, cfgPath string) []string {
 				return nil
 			}
 
+			// File-secrets (e.g. service-account.json.ward) are exempt from
+			// key path structure checks — they carry a single flat key derived
+			// from the original filename, not a vault hierarchy.
+			if _, isFileSecret := secrets.OriginalFilename(path); isFileSecret {
+				return nil
+			}
+
 			// Check 2: YAML key path must match vault name + subdir segments + file stem
 			expected := expectedFileDotPath(vault.Name, vaultAbs, path)
 			expectedSegments := strings.Split(expected, ".")
