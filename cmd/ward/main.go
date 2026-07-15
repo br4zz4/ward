@@ -29,6 +29,7 @@ func main() {
 	}
 
 	var configPath string
+	var dirPath string
 	var mcpMode bool
 
 	root := &cobra.Command{
@@ -37,11 +38,16 @@ func main() {
 		Long:    "Hierarchical secrets manager.",
 		Version: version,
 		PersistentPreRun: func(_ *cobra.Command, _ []string) {
+			if err := cmd.ApplyDirFlag(dirPath); err != nil {
+				fmt.Fprintln(os.Stderr, "ward:", err)
+				os.Exit(1)
+			}
 			cmd.SetConfigFile(configPath)
 		},
 	}
 
 	root.PersistentFlags().StringVarP(&configPath, "config", "c", "", "config file (default: auto-detect .ward/config.yaml)")
+	root.PersistentFlags().StringVarP(&dirPath, "dir", "d", "", "project directory (default: current directory)")
 	// --mcp is intercepted before command dispatch (see the os.Args scan above);
 	// declaring it here makes it visible in the Flags section of --help.
 	root.PersistentFlags().BoolVar(&mcpMode, "mcp", false, "start in MCP server mode (for AI integrations)")
