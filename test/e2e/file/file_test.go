@@ -32,7 +32,7 @@ func copyFixture(t *testing.T, src, dst string) {
 	}
 }
 
-// --- ward file import ---
+// --- ward file add ---
 
 func TestFileImport_creates_ward_file(t *testing.T) {
 	// arrange
@@ -44,7 +44,7 @@ func TestFileImport_creates_ward_file(t *testing.T) {
 	}
 
 	// act
-	_, stderr, code := testutil.Run(t, bin, dir, "file", "import", src, "app")
+	_, stderr, code := testutil.Run(t, bin, dir, "file", "add", src, "app")
 
 	// assert
 	if code != 0 {
@@ -65,7 +65,7 @@ func TestFileImport_key_readable_via_get(t *testing.T) {
 	if err := os.WriteFile(src, []byte(content), 0600); err != nil {
 		t.Fatal(err)
 	}
-	testutil.Run(t, bin, dir, "file", "import", src, "app")
+	testutil.Run(t, bin, dir, "file", "add", src, "app")
 
 	// act
 	out, _, code := testutil.Run(t, bin, dir, "get", "app.service_account_json")
@@ -87,10 +87,10 @@ func TestFileImport_errors_if_target_exists(t *testing.T) {
 	if err := os.WriteFile(src, []byte(`{"type":"service_account"}`), 0600); err != nil {
 		t.Fatal(err)
 	}
-	testutil.Run(t, bin, dir, "file", "import", src, "app")
+	testutil.Run(t, bin, dir, "file", "add", src, "app")
 
 	// act — import again, same file
-	_, stderr, code := testutil.Run(t, bin, dir, "file", "import", src, "app")
+	_, stderr, code := testutil.Run(t, bin, dir, "file", "add", src, "app")
 
 	// assert
 	if code == 0 {
@@ -107,7 +107,7 @@ func TestFileImport_errors_if_source_not_found(t *testing.T) {
 	copyFixture(t, fix("basic"), dir)
 
 	// act
-	_, stderr, code := testutil.Run(t, bin, dir, "file", "import", "nonexistent.json", "app")
+	_, stderr, code := testutil.Run(t, bin, dir, "file", "add", "nonexistent.json", "app")
 
 	// assert
 	if code == 0 {
@@ -128,7 +128,7 @@ func TestFileImport_errors_if_vault_not_found(t *testing.T) {
 	}
 
 	// act
-	_, stderr, code := testutil.Run(t, bin, dir, "file", "import", src, "nonexistent-vault")
+	_, stderr, code := testutil.Run(t, bin, dir, "file", "add", src, "nonexistent-vault")
 
 	// assert
 	if code == 0 {
@@ -139,7 +139,7 @@ func TestFileImport_errors_if_vault_not_found(t *testing.T) {
 	}
 }
 
-// --- ward file export ---
+// --- ward file extract ---
 
 func TestFileExport_restores_original_file(t *testing.T) {
 	// arrange
@@ -150,12 +150,12 @@ func TestFileExport_restores_original_file(t *testing.T) {
 	if err := os.WriteFile(src, []byte(content), 0600); err != nil {
 		t.Fatal(err)
 	}
-	testutil.Run(t, bin, dir, "file", "import", src, "app")
+	testutil.Run(t, bin, dir, "file", "add", src, "app")
 
 	outDir := t.TempDir()
 
 	// act
-	_, stderr, code := testutil.Run(t, bin, dir, "file", "export", "service-account.json", outDir)
+	_, stderr, code := testutil.Run(t, bin, dir, "file", "extract", "service-account.json", outDir)
 
 	// assert
 	if code != 0 {
@@ -179,11 +179,11 @@ func TestFileExport_defaults_to_cwd(t *testing.T) {
 	if err := os.WriteFile(src, []byte(content), 0600); err != nil {
 		t.Fatal(err)
 	}
-	testutil.Run(t, bin, dir, "file", "import", src, "app")
+	testutil.Run(t, bin, dir, "file", "add", src, "app")
 	os.Remove(src)
 
 	// act — no dest arg, should write to CWD (dir)
-	_, stderr, code := testutil.Run(t, bin, dir, "file", "export", "service-account.json")
+	_, stderr, code := testutil.Run(t, bin, dir, "file", "extract", "service-account.json")
 
 	// assert
 	if code != 0 {
@@ -204,7 +204,7 @@ func TestFileExport_errors_if_secret_not_found(t *testing.T) {
 	copyFixture(t, fix("basic"), dir)
 
 	// act
-	_, stderr, code := testutil.Run(t, bin, dir, "file", "export", "nonexistent.json")
+	_, stderr, code := testutil.Run(t, bin, dir, "file", "extract", "nonexistent.json")
 
 	// assert
 	if code == 0 {
@@ -224,10 +224,10 @@ func TestFileExport_errors_if_dest_exists(t *testing.T) {
 	if err := os.WriteFile(src, []byte(content), 0600); err != nil {
 		t.Fatal(err)
 	}
-	testutil.Run(t, bin, dir, "file", "import", src, "app")
+	testutil.Run(t, bin, dir, "file", "add", src, "app")
 
 	// act — export to same dir where source file still exists
-	_, stderr, code := testutil.Run(t, bin, dir, "file", "export", "service-account.json", dir)
+	_, stderr, code := testutil.Run(t, bin, dir, "file", "extract", "service-account.json", dir)
 
 	// assert
 	if code == 0 {

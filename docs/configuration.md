@@ -100,7 +100,7 @@ ward exec qwert.environments.staging -- deploy
 
 ## File secrets
 
-Files (JSON, YAML, XML, PEM, etc.) can be stored as a single encrypted secret using `ward file import`. The entire file content is treated as an opaque blob — it is never parsed.
+Files (JSON, YAML, XML, PEM, etc.) can be stored as a single encrypted secret using `ward file add`. The entire file content is treated as an opaque blob — it is never parsed.
 
 ### Naming convention
 
@@ -125,30 +125,30 @@ The dot-path in the tree is determined by where the file sits in the vault direc
 .ward/vaults/app/credentials/service-account.json.ward  →  app.credentials.service_account_json
 ```
 
-### ward file import
+### ward file add
 
 ```sh
-ward file import <file> <vault>[.subdir]
+ward file add <file> <vault>[.subdir]
 ```
 
 Stores the file as a single encrypted secret. Creates the subdir if it does not exist. Errors if the target already exists.
 
 ```sh
-ward file import service-account.json app
-ward file import service-account.json app.credentials
+ward file add service-account.json app
+ward file add service-account.json app.credentials
 ```
 
-### ward file export
+### ward file extract
 
 ```sh
-ward file export <filename> [dest]
+ward file extract <filename> [dest]
 ```
 
 Restores the original file to disk. `dest` defaults to the current directory. Searches all vaults. Errors if the destination file already exists.
 
 ```sh
-ward file export service-account.json
-ward file export service-account.json /tmp/restored
+ward file extract service-account.json
+ward file extract service-account.json /tmp/restored
 ```
 
 ### As env var

@@ -225,6 +225,61 @@ func Serve() error {
 	)
 
 	s.AddTool(
+		mcp.NewTool("ward_file_add",
+			mcp.WithDescription("Store a file's raw content as a single encrypted secret under the given vault and optional subdir"),
+			mcp.WithString("filename", mcp.Required(), mcp.Description("original filename including extension, e.g. service-account.json")),
+			mcp.WithString("content", mcp.Required(), mcp.Description("raw file content to store")),
+			mcp.WithString("vault", mcp.Required(), mcp.Description("vault name and optional subdir, e.g. app or app.credentials")),
+		),
+		func(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			filename := req.GetString("filename", "")
+			content := req.GetString("content", "")
+			vault := req.GetString("vault", "")
+
+			tmp, err := os.CreateTemp("", filename)
+			if err != nil {
+				return fail(err), nil
+			}
+			defer os.Remove(tmp.Name())
+			if _, err := tmp.WriteString(content); err != nil {
+				return fail(err), nil
+			}
+			tmp.Close()
+
+			out, err := run("file", "add", tmp.Name(), vault)
+			if err != nil {
+				return fail(err), nil
+			}
+			return ok(out), nil
+		},
+	)
+
+	s.AddTool(
+		mcp.NewTool("ward_file_extract",
+			mcp.WithDescription("Retrieve a file secret's raw content by original filename"),
+			mcp.WithString("filename", mcp.Required(), mcp.Description("original filename including extension, e.g. service-account.json")),
+		),
+		func(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			filename := req.GetString("filename", "")
+
+			tmp, err := os.MkdirTemp("", "ward-file-extract-*")
+			if err != nil {
+				return fail(err), nil
+			}
+			defer os.RemoveAll(tmp)
+
+			if _, err := run("file", "extract", filename, tmp); err != nil {
+				return fail(err), nil
+			}
+			data, err := os.ReadFile(tmp + "/" + filename)
+			if err != nil {
+				return fail(err), nil
+			}
+			return ok(string(data)), nil
+		},
+	)
+
+	s.AddTool(
 		mcp.NewTool("ward_set",
 			mcp.WithDescription("Set a single secret at a full dot-path"),
 			mcp.WithString("path", mcp.Required(), mcp.Description("full dot-path of the secret, e.g. myapp.staging.secret_key")),
@@ -319,6 +374,8 @@ ward export [dot-path]       # export as shell export statements
 ward set <dot-path> <value>  # set a single secret at a full dot-path
 ward unset <dot-path>        # remove a single secret at a full dot-path
 ward import <file.ward>      # read YAML from stdin and encrypt into the given .ward file
+ward file add <f> <vault> # store a file as a single encrypted secret (e.g. sa.json → app)
+ward file extract <filename>  # restore a file secret to disk by original filename
 ward new <name>              # create a new .ward file
 ward config <key> [value]    # read or write ward configuration
 ` + "```" + `

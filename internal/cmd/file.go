@@ -16,14 +16,14 @@ func NewFileCmd() *cobra.Command {
 		Use:   "file",
 		Short: "Import and export files as secrets",
 	}
-	cmd.AddCommand(newFileImportCmd(), newFileExportCmd())
+	cmd.AddCommand(newFileAddCmd(), newFileExtractCmd())
 	return cmd
 }
 
-func newFileImportCmd() *cobra.Command {
+func newFileAddCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "import <file> <vault>[.subdir]",
-		Short: "Store a file as a single encrypted secret",
+		Use:   "add <file> <vault>[.subdir]",
+		Short: "Add a file as a single encrypted secret",
 		Args:  cobra.ExactArgs(2),
 		Run: func(_ *cobra.Command, args []string) {
 			srcPath, vaultArg := args[0], args[1]
@@ -76,10 +76,10 @@ func newFileImportCmd() *cobra.Command {
 	}
 }
 
-func newFileExportCmd() *cobra.Command {
+func newFileExtractCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "export <filename> [dest]",
-		Short: "Restore a file secret to disk",
+		Use:   "extract <filename> [dest]",
+		Short: "Extract a file secret to disk",
 		Args:  cobra.RangeArgs(1, 2),
 		Run: func(_ *cobra.Command, args []string) {
 			originalName := filepath.Base(args[0])
