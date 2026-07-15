@@ -58,7 +58,7 @@ func TestRotateKey_reencrypts_ward_files_with_new_key(t *testing.T) {
 	}
 
 	// act
-	if _, err := rotateKey(keyPath, []string{vaultDir}); err != nil {
+	if _, err := rotateKey(keyPath, keyPath, []string{vaultDir}); err != nil {
 		t.Fatalf("rotateKey failed: %v", err)
 	}
 
@@ -94,7 +94,7 @@ func TestRotateKey_creates_backup_of_old_key(t *testing.T) {
 	wardDir := filepath.Join(projectDir, ".ward")
 
 	// act
-	if _, err := rotateKey(keyPath, []string{vaultDir}); err != nil {
+	if _, err := rotateKey(keyPath, keyPath, []string{vaultDir}); err != nil {
 		t.Fatalf("rotateKey failed: %v", err)
 	}
 
@@ -128,7 +128,7 @@ func TestRotateKey_no_ward_new_files_remain_on_success(t *testing.T) {
 	vaultDir := filepath.Join(filepath.Dir(filepath.Dir(keyPath)), ".ward", "vaults", "myapp")
 
 	// act
-	if _, err := rotateKey(keyPath, []string{vaultDir}); err != nil {
+	if _, err := rotateKey(keyPath, keyPath, []string{vaultDir}); err != nil {
 		t.Fatalf("rotateKey failed: %v", err)
 	}
 
@@ -153,7 +153,7 @@ func TestRotateKey_handles_file_secrets(t *testing.T) {
 	vaultDir := filepath.Join(projectDir, ".ward", "vaults", "myapp")
 
 	// act
-	if _, err := rotateKey(keyPath, []string{vaultDir}); err != nil {
+	if _, err := rotateKey(keyPath, keyPath, []string{vaultDir}); err != nil {
 		t.Fatalf("rotateKey failed: %v", err)
 	}
 
@@ -187,7 +187,7 @@ func TestRotateKey_rollback_on_encrypt_failure(t *testing.T) {
 	// act: simulate failure by making the vault dir read-only so writes fail
 	// We add a second vault dir that does not exist to trigger a discover error
 	badVaultDir := filepath.Join(projectDir, "nonexistent", "vault")
-	_, err = rotateKey(keyPath, []string{vaultDir, badVaultDir})
+	_, err = rotateKey(keyPath, keyPath, []string{vaultDir, badVaultDir})
 
 	// assert: rotateKey returned an error
 	if err == nil {
@@ -244,7 +244,7 @@ func TestRotateKey_backup_timestamp_format(t *testing.T) {
 	before := time.Now().UTC()
 
 	// act
-	if _, err := rotateKey(keyPath, []string{vaultDir}); err != nil {
+	if _, err := rotateKey(keyPath, keyPath, []string{vaultDir}); err != nil {
 		t.Fatalf("rotateKey failed: %v", err)
 	}
 
