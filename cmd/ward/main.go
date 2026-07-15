@@ -94,6 +94,7 @@ func main() {
 		cmd.NewRawCmd(),
 		cmd.NewVaultCmd(),
 		cmd.NewInspectCmd(),
+		cmd.NewRotateKeyCmd(),
 	)...)
 	all = append(all, group(groupSetup,
 		cmd.NewConfigCmd(),
