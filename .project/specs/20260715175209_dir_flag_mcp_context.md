@@ -2,7 +2,7 @@
 
 > TLDR: Add `--dir/-d` flag to the CLI and an optional `dir` parameter to all MCP tools so agents can target any ward project without relying on the working directory.
 
-**Status:** proposed
+**Status:** completed
 **Created:** 2026-07-15
 **Owner:** @oporpino
 
