@@ -40,12 +40,13 @@ func NewRotateKeyCmd() *cobra.Command {
 				vaultPaths[i] = v.Path
 			}
 
-			if err := rotateKey(keyFile, vaultPaths); err != nil {
+			bkpPath, err := rotateKey(keyFile, vaultPaths)
+			if err != nil {
 				fatal(err)
 			}
 
 			fmt.Println("Key rotated successfully.")
-			fmt.Printf("Old key backed up to: %s/.key.bkp-<timestamp>\n", filepath.Dir(keyFile))
+			fmt.Printf("Old key backed up to: %s\n", bkpPath)
 		},
 	}
 }
@@ -54,23 +55,24 @@ func NewRotateKeyCmd() *cobra.Command {
 // It uses a staging strategy: writes .ward.new files first, then atomically
 // swaps them in only after all re-encryptions succeed. If anything fails,
 // all staging files are deleted and the original key is preserved.
-func rotateKey(keyFile string, vaultDirs []string) error {
+// Returns the path of the old key backup file on success.
+func rotateKey(keyFile string, vaultDirs []string) (string, error) {
 	wardFiles, err := secrets.Discover(vaultDirs)
 	if err != nil {
-		return fmt.Errorf("discovering vault files: %w", err)
+		return "", fmt.Errorf("discovering vault files: %w", err)
 	}
 
 	// generate new key in a temp file
 	tmpKey, err := os.CreateTemp(filepath.Dir(keyFile), ".key-new-*")
 	if err != nil {
-		return fmt.Errorf("creating temp key: %w", err)
+		return "", fmt.Errorf("creating temp key: %w", err)
 	}
 	tmpKeyPath := tmpKey.Name()
 	tmpKey.Close()
 	defer os.Remove(tmpKeyPath) // cleaned up after rename or on error
 
 	if err := wardage.GenerateKeyForce(tmpKeyPath); err != nil {
-		return fmt.Errorf("generating new key: %w", err)
+		return "", fmt.Errorf("generating new key: %w", err)
 	}
 
 	oldEnc := wardage.AgeArmorDecryptor{KeyFile: keyFile}
@@ -85,18 +87,18 @@ func rotateKey(keyFile string, vaultDirs []string) error {
 		}
 	}
 
-	// phase 1: re-encrypt each file to a .ward.new staging file
+	// re-encrypt each file to a .ward.new staging file
 	for _, wardFile := range wardFiles {
 		plain, err := oldEnc.Decrypt(wardFile)
 		if err != nil {
 			rollback()
-			return fmt.Errorf("decrypting %s: %w", wardFile, err)
+			return "", fmt.Errorf("decrypting %s: %w", wardFile, err)
 		}
 
 		stagingPath := wardFile + ".new"
 		if err := newEnc.Encrypt(stagingPath, plain); err != nil {
 			rollback()
-			return fmt.Errorf("encrypting %s: %w", wardFile, err)
+			return "", fmt.Errorf("encrypting %s: %w", wardFile, err)
 		}
 		stagingFiles = append(stagingFiles, stagingPath)
 	}
@@ -108,26 +110,26 @@ func rotateKey(keyFile string, vaultDirs []string) error {
 	oldKeyData, err := os.ReadFile(keyFile)
 	if err != nil {
 		rollback()
-		return fmt.Errorf("reading current key: %w", err)
+		return "", fmt.Errorf("reading current key: %w", err)
 	}
 	if err := os.WriteFile(bkpPath, oldKeyData, 0600); err != nil {
 		rollback()
-		return fmt.Errorf("writing key backup: %w", err)
+		return "", fmt.Errorf("writing key backup: %w", err)
 	}
 
 	if err := os.Rename(tmpKeyPath, keyFile); err != nil {
 		os.Remove(bkpPath)
 		rollback()
-		return fmt.Errorf("installing new key: %w", err)
+		return "", fmt.Errorf("installing new key: %w", err)
 	}
 
 	for i, stagingPath := range stagingFiles {
 		target := wardFiles[i]
 		if err := os.Rename(stagingPath, target); err != nil {
 			// at this point the key is already swapped — best effort cleanup
-			return fmt.Errorf("renaming %s: %w", stagingPath, err)
+			return "", fmt.Errorf("renaming %s: %w", stagingPath, err)
 		}
 	}
 
-	return nil
+	return bkpPath, nil
 }
