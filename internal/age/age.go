@@ -71,6 +71,11 @@ func GenerateKey(path string) error {
 	if _, err := os.Stat(path); err == nil {
 		return nil
 	}
+	return GenerateKeyForce(path)
+}
+
+// GenerateKeyForce generates a new age key at path, overwriting any existing file.
+func GenerateKeyForce(path string) error {
 	id, err := age.GenerateX25519Identity()
 	if err != nil {
 		return fmt.Errorf("generating age key: %w", err)
