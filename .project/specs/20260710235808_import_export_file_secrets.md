@@ -2,7 +2,7 @@
 
 > TLDR: Add `ward import` and `ward export` commands to store entire files as single secrets in a vault, with a dedicated `.ward` naming convention that preserves the original file extension.
 
-**Status:** in_progress
+**Status:** completed
 **Created:** 2026-07-10
 **Owner:** @oporpino
 
