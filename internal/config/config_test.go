@@ -293,6 +293,67 @@ vaults:
 	}
 }
 
+func TestLoad_per_vault_key_auto_detected(t *testing.T) {
+	dir := t.TempDir()
+	wardDir := filepath.Join(dir, ".ward")
+	if err := os.MkdirAll(wardDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(wardDir, "commons.key"), []byte("AGE-SECRET-KEY-1FAKE"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	orig, _ := os.Getwd()
+	t.Cleanup(func() { os.Chdir(orig) })
+	os.Chdir(dir)
+
+	cfgPath := writeConfig(t, dir, `
+vaults:
+  - name: myapp
+    path: .ward/vaults/myapp
+  - name: commons
+    path: .ward/vaults/commons
+`)
+	cfg, err := Load(cfgPath)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.Vaults[0].Encryption.KeyFile != "" {
+		t.Errorf("myapp: expected no key_file (no .ward/myapp.key), got %q", cfg.Vaults[0].Encryption.KeyFile)
+	}
+	if cfg.Vaults[1].Encryption.KeyFile != ".ward/commons.key" {
+		t.Errorf("commons: expected .ward/commons.key, got %q", cfg.Vaults[1].Encryption.KeyFile)
+	}
+}
+
+func TestLoad_per_vault_key_not_set_when_explicit_key_file(t *testing.T) {
+	dir := t.TempDir()
+	wardDir := filepath.Join(dir, ".ward")
+	if err := os.MkdirAll(wardDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(wardDir, "myapp.key"), []byte("AGE-SECRET-KEY-1FAKE"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	orig, _ := os.Getwd()
+	t.Cleanup(func() { os.Chdir(orig) })
+	os.Chdir(dir)
+
+	cfgPath := writeConfig(t, dir, `
+vaults:
+  - name: myapp
+    path: .ward/vaults/myapp
+    encryption:
+      key_file: .ward/custom.key
+`)
+	cfg, err := Load(cfgPath)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.Vaults[0].Encryption.KeyFile != ".ward/custom.key" {
+		t.Errorf("expected explicit key_file to be preserved, got %q", cfg.Vaults[0].Encryption.KeyFile)
+	}
+}
+
 func TestLoad_rejects_duplicate_vault_paths(t *testing.T) {
 	// arrange
 	dir := t.TempDir()
