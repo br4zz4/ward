@@ -142,14 +142,21 @@ func resolveKeyFile(cfg *config.Config) (string, error) {
 		return keyFile, nil
 	}
 
-	// 2. key_env — user-defined env var name containing raw age key content
+	// 2. key_env — user-defined env var name; accepts both raw age key and ward- token
 	if cfg.Encryption.KeyEnv != "" {
-		content := os.Getenv(cfg.Encryption.KeyEnv)
+		content := strings.TrimSpace(os.Getenv(cfg.Encryption.KeyEnv))
 		if content == "" {
 			fatalKeyError(
 				fmt.Sprintf("env var %s%s%s is empty or not set", clrYellow, cfg.Encryption.KeyEnv, clrReset),
 				fmt.Sprintf("set %s%s%s to the contents of your age key", clrYellow, cfg.Encryption.KeyEnv, clrReset),
 			)
+		}
+		if strings.HasPrefix(content, "ward-") {
+			keyFile, err := writeTempKey(content)
+			if err != nil {
+				return "", fmt.Errorf("decoding %s: %w", cfg.Encryption.KeyEnv, err)
+			}
+			return keyFile, nil
 		}
 		keyFile, err := writeTempKeyRaw([]byte(content))
 		if err != nil {
@@ -192,12 +199,19 @@ func resolveKeyFileForVault(v config.Source) (string, error) {
 		return keyFile, nil
 	}
 	if v.Encryption.KeyEnv != "" {
-		content := os.Getenv(v.Encryption.KeyEnv)
+		content := strings.TrimSpace(os.Getenv(v.Encryption.KeyEnv))
 		if content == "" {
 			fatalKeyError(
 				fmt.Sprintf("env var %s%s%s is empty or not set", clrYellow, v.Encryption.KeyEnv, clrReset),
 				fmt.Sprintf("set %s%s%s to the contents of your age key", clrYellow, v.Encryption.KeyEnv, clrReset),
 			)
+		}
+		if strings.HasPrefix(content, "ward-") {
+			keyFile, err := writeTempKey(content)
+			if err != nil {
+				return "", fmt.Errorf("decoding %s: %w", v.Encryption.KeyEnv, err)
+			}
+			return keyFile, nil
 		}
 		keyFile, err := writeTempKeyRaw([]byte(content))
 		if err != nil {
