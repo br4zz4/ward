@@ -51,6 +51,40 @@ A list of directories to discover `.ward` files in. Each vault is walked recursi
 
 `sources:` is accepted as a legacy alias — it is automatically migrated to `vaults:` on load.
 
+Each vault can declare its own `encryption` block to use a separate key:
+
+```yaml
+vaults:
+  - name: myapp
+    path: .ward/vaults/myapp
+    encryption:
+      key_file: .ward/myapp.key   # vault-specific key file
+  - name: commons
+    path: ../.commons/ward/vaults/commons
+    encryption:
+      key_env: WARD_KEY_COMMONS   # vault-specific env var
+```
+
+When a vault has no `encryption` block, ward applies the following resolution order:
+
+1. `WARD_KEY_<NAME>` env var (e.g. `WARD_KEY_COMMONS`) — always checked first
+2. `.ward/<name>.key` file — auto-detected when present (e.g. `.ward/commons.key`)
+3. Global `WARD_KEY` env var — fallback for all vaults
+4. Global `encryption.key_env` or `encryption.key_file` from the config
+
+The vault `encryption` fields follow the same rules as the global `encryption` block:
+
+| Field | Description |
+|---|---|
+| `key_file` | Path to the vault's key file. Gitignore this. |
+| `key_env` | Name of an env var holding this vault's key. Takes precedence over `key_file`. |
+
+**CI usage with multiple vaults:**
+
+```sh
+WARD_KEY_MYAPP=ward-xxx WARD_KEY_COMMONS=ward-yyy ward envs
+```
+
 ---
 
 ### default_dir

@@ -272,6 +272,24 @@ vaults:
 
 `sources:` is accepted as a legacy alias for `vaults:`.
 
+Each vault can use its own key by adding an `encryption` block:
+
+```yaml
+vaults:
+  - name: myapp
+    path: .ward/vaults/myapp
+  - name: commons
+    path: ../.commons/ward/vaults/commons
+    encryption:
+      key_file: .ward/commons.key
+```
+
+When no `encryption` block is set on a vault, ward resolves its key in order:
+
+1. `WARD_KEY_<NAME>` env var (e.g. `WARD_KEY_COMMONS`)
+2. `.ward/<name>.key` file — auto-detected when present
+3. Global `WARD_KEY` / `encryption` config
+
 ### default_dir
 
 Where `ward new <bare-name>` places new files. Defaults to `.ward/vault`.
@@ -287,6 +305,12 @@ default_dir: secrets
 ```sh
 export WARD_KEY=ward-AAAA...
 ward exec myapp.environments.staging -- deploy
+```
+
+For multiple vaults with separate keys, use `WARD_KEY_<NAME>` per vault:
+
+```sh
+WARD_KEY_MYAPP=ward-xxx WARD_KEY_COMMONS=ward-yyy ward exec myapp.staging -- deploy
 ```
 
 ---

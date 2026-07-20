@@ -81,11 +81,15 @@ func newEngine() (*ward.Engine, error) {
 		return nil, fmt.Errorf("loading %s: %w", cfgPath, err)
 	}
 	resolvedConfig = cfgPath // ensure cache is set
-	dec, err := decryptorFor(cfg)
+	vaultDecs, err := BuildVaultDecryptors(cfg)
 	if err != nil {
 		return nil, err
 	}
-	return ward.NewEngine(cfg, dec), nil
+	globalDec, err := decryptorFor(cfg)
+	if err != nil {
+		return nil, err
+	}
+	return ward.NewEngineWithVaultDecryptors(cfg, globalDec, vaultDecs), nil
 }
 
 // decryptorFor returns the appropriate Decryptor based on the config.
@@ -106,6 +110,24 @@ func decryptorFor(cfg *config.Config) (sops.Decryptor, error) {
 	default:
 		return nil, fmt.Errorf("unknown encryption engine %q (supported: age+armor, sops+age)", cfg.Encryption.Engine)
 	}
+}
+
+// BuildVaultDecryptors returns a map of vault name → Decryptor, one per vault.
+// Each vault uses its own key when configured; otherwise falls back to the global decryptor.
+func BuildVaultDecryptors(cfg *config.Config) (map[string]sops.Decryptor, error) {
+	globalDec, err := decryptorFor(cfg)
+	if err != nil {
+		return nil, err
+	}
+	result := make(map[string]sops.Decryptor, len(cfg.Vaults))
+	for _, v := range cfg.Vaults {
+		dec, err := decryptorForVault(v, cfg, globalDec)
+		if err != nil {
+			return nil, err
+		}
+		result[v.Name] = dec
+	}
+	return result, nil
 }
 
 // resolveKeyFile resolves the age key file path from config/env, writing temp files as needed.
@@ -155,6 +177,75 @@ func resolveKeyFile(cfg *config.Config) (string, error) {
 	}
 
 	return "", nil
+}
+
+// resolveKeyFileForVault resolves the key for a specific vault.
+// Priority: WARD_KEY_<NAME> env var → vault-level key_env → vault-level key_file → falls through to global.
+// Returns "" when no vault-specific key is configured (caller should fall back to global).
+func resolveKeyFileForVault(v config.Source) (string, error) {
+	envName := "WARD_KEY_" + strings.ToUpper(v.Name)
+	if token := os.Getenv(envName); token != "" {
+		keyFile, err := writeTempKey(token)
+		if err != nil {
+			return "", fmt.Errorf("decoding %s: %w", envName, err)
+		}
+		return keyFile, nil
+	}
+	if v.Encryption.KeyEnv != "" {
+		content := os.Getenv(v.Encryption.KeyEnv)
+		if content == "" {
+			fatalKeyError(
+				fmt.Sprintf("env var %s%s%s is empty or not set", clrYellow, v.Encryption.KeyEnv, clrReset),
+				fmt.Sprintf("set %s%s%s to the contents of your age key", clrYellow, v.Encryption.KeyEnv, clrReset),
+			)
+		}
+		keyFile, err := writeTempKeyRaw([]byte(content))
+		if err != nil {
+			return "", fmt.Errorf("writing temp key from %s: %w", v.Encryption.KeyEnv, err)
+		}
+		return keyFile, nil
+	}
+	if v.Encryption.KeyFile != "" {
+		if _, err := os.Stat(v.Encryption.KeyFile); err != nil {
+			fatalKeyError(
+				fmt.Sprintf("key file %s%s%s not found", clrCyan, v.Encryption.KeyFile, clrReset),
+				fmt.Sprintf("run %sward init%s to generate it, or copy your key here", clrBold, clrReset),
+			)
+		}
+		data, err := os.ReadFile(v.Encryption.KeyFile)
+		if err != nil {
+			return "", fmt.Errorf("reading key file: %w", err)
+		}
+		if strings.HasPrefix(strings.TrimSpace(string(data)), "ward-") {
+			return writeTempKey(strings.TrimSpace(string(data)))
+		}
+		return v.Encryption.KeyFile, nil
+	}
+	return "", nil
+}
+
+// decryptorForVault returns a Decryptor for a specific vault, falling back to the
+// global decryptor when no vault-specific key is configured.
+func decryptorForVault(v config.Source, cfg *config.Config, globalDec sops.Decryptor) (sops.Decryptor, error) {
+	keyFile, err := resolveKeyFileForVault(v)
+	if err != nil {
+		return nil, err
+	}
+	if keyFile == "" {
+		return globalDec, nil
+	}
+	engine := cfg.Encryption.Engine
+	if v.Encryption.Engine != "" {
+		engine = v.Encryption.Engine
+	}
+	switch engine {
+	case "sops+age":
+		return sops.SopsDecryptor{KeyFile: keyFile}, nil
+	case "age+armor", "":
+		return wardage.AgeArmorDecryptor{KeyFile: keyFile}, nil
+	default:
+		return nil, fmt.Errorf("unknown encryption engine %q (supported: age+armor, sops+age)", engine)
+	}
 }
 
 // writeTempKey decodes a ward-<base64url> token and writes it to a temp file.

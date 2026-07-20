@@ -17,13 +17,19 @@ import (
 // Engine orchestrates secret discovery, loading, merging and env-var resolution.
 // The zero value is not usable; construct via NewEngine.
 type Engine struct {
-	cfg *config.Config
-	dec sops.Decryptor
+	cfg      *config.Config
+	dec      sops.Decryptor            // global fallback
+	vaultDec map[string]sops.Decryptor // per-vault decryptors (keyed by vault name)
 }
 
-// NewEngine returns an Engine backed by cfg and dec.
+// NewEngine returns an Engine backed by cfg and a global decryptor.
 func NewEngine(cfg *config.Config, dec sops.Decryptor) *Engine {
 	return &Engine{cfg: cfg, dec: dec}
+}
+
+// NewEngineWithVaultDecryptors returns an Engine with per-vault decryptors.
+func NewEngineWithVaultDecryptors(cfg *config.Config, dec sops.Decryptor, vaultDec map[string]sops.Decryptor) *Engine {
+	return &Engine{cfg: cfg, dec: dec, vaultDec: vaultDec}
 }
 
 // MergeResult is the outcome of a load-and-merge operation.
@@ -211,10 +217,24 @@ func (e *Engine) SourcePaths() []string {
 	return sourcePaths(e.cfg)
 }
 
+// decryptorFor returns the decryptor for the vault that owns path.
+// Falls back to the global decryptor when no per-vault decryptor is configured.
+func (e *Engine) decryptorFor(path string) sops.Decryptor {
+	if len(e.vaultDec) > 0 {
+		vi := buildVaultRootIndex(e.cfg)(path)
+		if vi.name != "" {
+			if dec, ok := e.vaultDec[vi.name]; ok {
+				return dec
+			}
+		}
+	}
+	return e.dec
+}
+
 // Decrypt returns the plain-text YAML bytes of a .ward file using the
 // configured decryptor. For plain (unencrypted) files this is a passthrough.
 func (e *Engine) Decrypt(path string) ([]byte, error) {
-	return e.dec.Decrypt(path)
+	return e.decryptorFor(path).Decrypt(path)
 }
 
 // Encrypt writes content back to path using the configured encryptor.
@@ -226,7 +246,8 @@ type Encryptor interface {
 // Encrypt re-encrypts plaintext and writes it to path.
 // Falls back to a plain write when no real encryptor is configured.
 func (e *Engine) Encrypt(path string, plaintext []byte) error {
-	if enc, ok := e.dec.(Encryptor); ok {
+	dec := e.decryptorFor(path)
+	if enc, ok := dec.(Encryptor); ok {
 		return enc.Encrypt(path, plaintext)
 	}
 	return os.WriteFile(path, plaintext, 0644)
@@ -250,7 +271,10 @@ func (e *Engine) load() ([]secrets.ParsedFile, error) {
 		vi := vaultFor(path)
 		return vi.name, vi.root
 	}
-	files, err := secrets.LoadAll(paths, vaultRootFor, e.dec)
+	decFor := func(path string) sops.Decryptor {
+		return e.decryptorFor(path)
+	}
+	files, err := secrets.LoadAll(paths, vaultRootFor, decFor)
 	if err != nil {
 		return nil, fmt.Errorf("loading files: %w", err)
 	}
