@@ -435,8 +435,33 @@ echo ".ward.key" >> .gitignore
 ` + "```" + `yaml
 # .ward/config.yaml
 vaults:
-  - path: ./.ward/vault
-  - path: ../.commons/ward/vaults/shared
+  - name: myapp
+    path: ./.ward/vault
+  - name: commons
+    path: ../.commons/ward/vaults/shared
+` + "```" + `
+
+Each vault can use its own encryption key. Resolution order per vault (highest priority first):
+
+1. ` + "`" + `WARD_KEY_<NAME>` + "`" + ` env var (e.g. ` + "`" + `WARD_KEY_COMMONS` + "`" + `)
+2. ` + "`" + `.ward/<name>.key` + "`" + ` file — auto-detected when present
+3. Global ` + "`" + `WARD_KEY` + "`" + ` env var / ` + "`" + `encryption` + "`" + ` config
+
+` + "```" + `yaml
+vaults:
+  - name: myapp
+    path: .ward/vaults/myapp
+    encryption:
+      key_file: .ward/myapp.key      # explicit key file
+  - name: commons
+    path: ../.commons/ward/vaults/commons
+    encryption:
+      key_env: WARD_KEY_COMMONS      # explicit env var
+` + "```" + `
+
+` + "```" + `sh
+# CI with multiple vault keys
+WARD_KEY_MYAPP=ward-xxx WARD_KEY_COMMONS=ward-yyy ward envs
 ` + "```" + `
 
 ## Claude Code skills
