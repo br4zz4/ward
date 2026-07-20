@@ -51,7 +51,7 @@ company:
 		t.Fatalf("expected 2 files, got %d: %v", len(paths), paths)
 	}
 
-	files, err := secrets.LoadAll(paths, nil, dec)
+	files, err := secrets.LoadAll(paths, nil, func(_ string) sops.Decryptor { return dec })
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}
@@ -111,7 +111,7 @@ infra:
 `)
 
 	paths, _ := secrets.Discover([]string{dir})
-	files, _ := secrets.LoadAll(paths, nil, dec)
+	files, _ := secrets.LoadAll(paths, nil, func(_ string) sops.Decryptor { return dec })
 
 	var anchor secrets.ParsedFile
 	for _, f := range files {
@@ -158,7 +158,7 @@ company:
 `)
 
 	paths, _ := secrets.Discover([]string{dir})
-	files, _ := secrets.LoadAll(paths, nil, dec)
+	files, _ := secrets.LoadAll(paths, nil, func(_ string) sops.Decryptor { return dec })
 	sorted := secrets.SortBySpecificity(files)
 
 	_, err := secrets.Merge(sorted, config.MergeModeError, "")
@@ -180,7 +180,7 @@ func TestIntegration_conflict_same_level(t *testing.T) {
 `)
 
 	paths, _ := secrets.Discover([]string{dir})
-	files, _ := secrets.LoadAll(paths, nil, dec)
+	files, _ := secrets.LoadAll(paths, nil, func(_ string) sops.Decryptor { return dec })
 	sorted := secrets.SortBySpecificity(files)
 
 	_, err := secrets.Merge(sorted, config.MergeModeError, "")
@@ -198,7 +198,7 @@ func TestIntegration_leaf_origin_tracked(t *testing.T) {
 `)
 
 	paths, _ := secrets.Discover([]string{dir})
-	files, _ := secrets.LoadAll(paths, nil, dec)
+	files, _ := secrets.LoadAll(paths, nil, func(_ string) sops.Decryptor { return dec })
 	sorted := secrets.SortBySpecificity(files)
 
 	tree, err := secrets.Merge(sorted, config.MergeModeError, "")

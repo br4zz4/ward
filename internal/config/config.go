@@ -32,8 +32,9 @@ type Encryption struct {
 }
 
 type Source struct {
-	Name string `yaml:"name,omitempty"`
-	Path string `yaml:"path"`
+	Name       string     `yaml:"name,omitempty"`
+	Path       string     `yaml:"path"`
+	Encryption Encryption `yaml:"encryption,omitempty"`
 }
 
 type Config struct {
@@ -127,6 +128,18 @@ func Load(path string) (*Config, error) {
 	for i := range cfg.Vaults {
 		if cfg.Vaults[i].Name == "" {
 			cfg.Vaults[i].Name = filepath.Base(strings.TrimSuffix(cfg.Vaults[i].Path, "/"))
+		}
+	}
+
+	// auto-detect per-vault key when no explicit encryption is set on the vault
+	for i := range cfg.Vaults {
+		v := &cfg.Vaults[i]
+		if v.Encryption.KeyEnv != "" || v.Encryption.KeyFile != "" {
+			continue
+		}
+		candidate := filepath.Join(".ward", v.Name+".key")
+		if _, err := os.Stat(candidate); err == nil {
+			v.Encryption.KeyFile = candidate
 		}
 	}
 

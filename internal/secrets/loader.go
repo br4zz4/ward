@@ -120,15 +120,17 @@ func extractNode(node *yaml.Node, prefix string, data map[string]interface{}, li
 	}
 }
 
-// LoadAll loads all files using the given decryptor.
+// LoadAll loads all files using per-file decryptors.
 // vaultFor maps each file path to its (vaultName, vaultRoot) for file-secret prefix derivation.
-func LoadAll(paths []string, vaultFor func(path string) (string, string), dec sops.Decryptor) ([]ParsedFile, error) {
+// decFor maps each file path to its Decryptor (allows per-vault keys).
+func LoadAll(paths []string, vaultFor func(path string) (string, string), decFor func(path string) sops.Decryptor) ([]ParsedFile, error) {
 	files := make([]ParsedFile, 0, len(paths))
 	for _, p := range paths {
 		name, root := "", ""
 		if vaultFor != nil {
 			name, root = vaultFor(p)
 		}
+		dec := decFor(p)
 		pf, err := Load(p, name, root, dec)
 		if err != nil {
 			return nil, err
