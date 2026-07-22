@@ -142,6 +142,18 @@ func resolveKeyFile(cfg *config.Config) (string, error) {
 		return keyFile, nil
 	}
 
+	// 1b. WARD_KEY_<VAULT> — single-vault shorthand, no config needed
+	if len(cfg.Vaults) == 1 {
+		envName := "WARD_KEY_" + strings.ToUpper(cfg.Vaults[0].Name)
+		if token := os.Getenv(envName); token != "" {
+			keyFile, err := writeTempKey(token)
+			if err != nil {
+				return "", fmt.Errorf("decoding %s: %w", envName, err)
+			}
+			return keyFile, nil
+		}
+	}
+
 	// 2. key_env — user-defined env var name; accepts both raw age key and ward- token
 	if cfg.Encryption.KeyEnv != "" {
 		content := strings.TrimSpace(os.Getenv(cfg.Encryption.KeyEnv))
