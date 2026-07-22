@@ -434,3 +434,35 @@ func TestExpandPath_bad_command_returns_error(t *testing.T) {
 		t.Fatal("expected error from unknown command in substitution")
 	}
 }
+
+func TestLoad_vault_path_expands_env_var(t *testing.T) {
+	dir := t.TempDir()
+	vaultDir := filepath.Join(dir, "myvault")
+	if err := os.MkdirAll(vaultDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("WARD_TEST_VAULT", vaultDir)
+
+	path := writeTemp(t, `vaults:
+  - name: test
+    path: $WARD_TEST_VAULT
+`)
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.Vaults[0].Path != vaultDir {
+		t.Errorf("expected %q, got %q", vaultDir, cfg.Vaults[0].Path)
+	}
+}
+
+func TestLoad_vault_path_expand_error_propagates(t *testing.T) {
+	path := writeTemp(t, `vaults:
+  - name: test
+    path: $(ward_nonexistent_cmd_xyz)/vault
+`)
+	_, err := Load(path)
+	if err == nil {
+		t.Fatal("expected error from failing command substitution in vault path")
+	}
+}

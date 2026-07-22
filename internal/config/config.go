@@ -138,6 +138,15 @@ func Load(path string) (*Config, error) {
 	}
 	cfg.Sources = nil // avoid double-serialization
 
+	// expand shell expressions in vault paths
+	for i := range cfg.Vaults {
+		expanded, err := expandPath(cfg.Vaults[i].Path)
+		if err != nil {
+			return nil, fmt.Errorf("vault %q path: %w", cfg.Vaults[i].Name, err)
+		}
+		cfg.Vaults[i].Path = expanded
+	}
+
 	// backward-compat: derive name from path when absent
 	for i := range cfg.Vaults {
 		if cfg.Vaults[i].Name == "" {
