@@ -46,7 +46,7 @@ func TestMerge_different_dotpaths_coexist(t *testing.T) {
 	writeFile(t, dir, "b.ward", "app:\n  db:\n    host: localhost\n    port: \"5432\"\n")
 
 	paths, _ := secrets.Discover([]string{dir})
-	files, _ := secrets.LoadAll(paths, sops.MockDecryptor{})
+	files, _ := secrets.LoadAll(paths, nil, func(string) sops.Decryptor { return sops.MockDecryptor{} })
 	tree, err := secrets.Merge(files, config.MergeModeError, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -69,7 +69,7 @@ func TestMerge_same_dotpath_conflicts(t *testing.T) {
 	writeFile(t, dir, "b.ward", "app:\n  secret_key: key-b\n")
 
 	paths, _ := secrets.Discover([]string{dir})
-	files, _ := secrets.LoadAll(paths, sops.MockDecryptor{})
+	files, _ := secrets.LoadAll(paths, nil, func(string) sops.Decryptor { return sops.MockDecryptor{} })
 	_, err := secrets.Merge(files, config.MergeModeError, "")
 	if err == nil {
 		t.Fatal("expected conflict error")
@@ -93,7 +93,7 @@ func TestMerge_three_file_conflict_accumulates(t *testing.T) {
 	writeFile(t, dir, "c.ward", "k: v3\n")
 
 	paths, _ := secrets.Discover([]string{dir})
-	files, _ := secrets.LoadAll(paths, sops.MockDecryptor{})
+	files, _ := secrets.LoadAll(paths, nil, func(string) sops.Decryptor { return sops.MockDecryptor{} })
 	_, err := secrets.Merge(files, config.MergeModeError, "")
 	ce, ok := err.(*secrets.ConflictError)
 	if !ok {
@@ -113,7 +113,7 @@ func TestMerge_scope_prefix_ignores_outside_conflicts(t *testing.T) {
 	writeFile(t, dir, "b.ward", "app:\n  api_key: key-b\n")
 
 	paths, _ := secrets.Discover([]string{dir})
-	files, _ := secrets.LoadAll(paths, sops.MockDecryptor{})
+	files, _ := secrets.LoadAll(paths, nil, func(string) sops.Decryptor { return sops.MockDecryptor{} })
 
 	// scoped to app.db — conflict on app.api_key should not block
 	tree, err := secrets.Merge(files, config.MergeModeError, "app.db")
@@ -131,7 +131,7 @@ func TestMerge_scope_prefix_blocks_inside_conflicts(t *testing.T) {
 	writeFile(t, dir, "b.ward", "app:\n  staging:\n    token: token-b\n")
 
 	paths, _ := secrets.Discover([]string{dir})
-	files, _ := secrets.LoadAll(paths, sops.MockDecryptor{})
+	files, _ := secrets.LoadAll(paths, nil, func(string) sops.Decryptor { return sops.MockDecryptor{} })
 
 	_, err := secrets.Merge(files, config.MergeModeError, "app.staging")
 	if err == nil {
