@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -94,6 +95,19 @@ func FindConfigFile() (cfgPath, originalDir string, err error) {
 	}
 
 	return "", "", fmt.Errorf("reading %s: %w", DefaultConfigFile, os.ErrNotExist)
+}
+
+func expandPath(path string) (string, error) {
+	if !strings.Contains(path, "$") {
+		return path, nil
+	}
+	cmd := exec.Command("/bin/sh", "-c", `set -e; eval _p=$WARD_EXPAND_PATH; printf '%s' "$_p"`)
+	cmd.Env = append(os.Environ(), "WARD_EXPAND_PATH="+path)
+	out, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("expanding vault path %q: %w", path, err)
+	}
+	return string(out), nil
 }
 
 func Load(path string) (*Config, error) {

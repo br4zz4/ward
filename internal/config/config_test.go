@@ -374,3 +374,63 @@ vaults:
 		t.Errorf("unexpected error: %v", err)
 	}
 }
+
+func TestExpandPath_no_dollar_passthrough(t *testing.T) {
+	got, err := expandPath("/some/static/path")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != "/some/static/path" {
+		t.Errorf("expected passthrough, got %q", got)
+	}
+}
+
+func TestExpandPath_dollar_var(t *testing.T) {
+	t.Setenv("WARD_TEST_DIR", "/tmp/testdir")
+	got, err := expandPath("$WARD_TEST_DIR/vault")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != "/tmp/testdir/vault" {
+		t.Errorf("expected /tmp/testdir/vault, got %q", got)
+	}
+}
+
+func TestExpandPath_braced_var(t *testing.T) {
+	t.Setenv("WARD_TEST_DIR", "/tmp/testdir")
+	got, err := expandPath("${WARD_TEST_DIR}/vault")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != "/tmp/testdir/vault" {
+		t.Errorf("expected /tmp/testdir/vault, got %q", got)
+	}
+}
+
+func TestExpandPath_command_substitution(t *testing.T) {
+	got, err := expandPath("$(echo /tmp)/vault")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != "/tmp/vault" {
+		t.Errorf("expected /tmp/vault, got %q", got)
+	}
+}
+
+func TestExpandPath_undefined_var_empty(t *testing.T) {
+	os.Unsetenv("WARD_UNDEFINED_XYZ")
+	got, err := expandPath("$WARD_UNDEFINED_XYZ/vault")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != "/vault" {
+		t.Errorf("expected /vault (empty var), got %q", got)
+	}
+}
+
+func TestExpandPath_bad_command_returns_error(t *testing.T) {
+	_, err := expandPath("$(ward_nonexistent_cmd_xyz)/vault")
+	if err == nil {
+		t.Fatal("expected error from unknown command in substitution")
+	}
+}
