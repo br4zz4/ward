@@ -51,7 +51,17 @@ A list of directories to discover `.ward` files in. Each vault is walked recursi
 
 `sources:` is accepted as a legacy alias — it is automatically migrated to `vaults:` on load.
 
-Each vault can declare its own `encryption` block to use a separate key:
+**vault `path` field supports shell expansion** — `$VAR`, `${VAR}`, and `$(cmd)` are expanded at load time using `sh`. This makes configs portable across machines:
+
+```yaml
+vaults:
+  - name: myproject
+    path: .ward/vaults/myproject
+  - name: commons
+    path: $COMMONS_DIR/.ward/vaults/commons
+```
+
+Each vault can also declare its own `encryption` block to use a separate key:
 
 ```yaml
 vaults:

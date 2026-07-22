@@ -272,6 +272,16 @@ vaults:
 
 `sources:` is accepted as a legacy alias for `vaults:`.
 
+Vault `path` fields support shell expansion — `$VAR`, `${VAR}`, and `$(cmd)` are expanded at load time using `sh`, making configs portable across machines:
+
+```yaml
+vaults:
+  - name: myproject
+    path: .ward/vaults/myproject
+  - name: commons
+    path: $COMMONS_DIR/.ward/vaults/commons
+```
+
 Each vault can use its own key by adding an `encryption` block:
 
 ```yaml
