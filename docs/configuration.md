@@ -67,7 +67,7 @@ vaults:
 
 When a vault has no `encryption` block, ward applies the following resolution order:
 
-1. `WARD_KEY_<NAME>` env var (e.g. `WARD_KEY_COMMONS`) — always checked first
+1. `WARD_KEY_<NAME>` env var (e.g. `WARD_KEY_COMMONS`) — always checked first, works with single or multiple vaults
 2. `.ward/<name>.key` file — auto-detected when present (e.g. `.ward/commons.key`)
 3. Global `WARD_KEY` env var — fallback for all vaults
 4. Global `encryption.key_env` or `encryption.key_file` from the config
@@ -79,7 +79,13 @@ The vault `encryption` fields follow the same rules as the global `encryption` b
 | `key_file` | Path to the vault's key file. Gitignore this. |
 | `key_env` | Name of an env var holding this vault's key. Takes precedence over `key_file`. |
 
-**CI usage with multiple vaults:**
+**CI usage — single vault:**
+
+```sh
+WARD_KEY_MYAPP=ward-xxx ward envs
+```
+
+**CI usage — multiple vaults:**
 
 ```sh
 WARD_KEY_MYAPP=ward-xxx WARD_KEY_COMMONS=ward-yyy ward envs

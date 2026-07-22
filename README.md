@@ -286,7 +286,7 @@ vaults:
 
 When no `encryption` block is set on a vault, ward resolves its key in order:
 
-1. `WARD_KEY_<NAME>` env var (e.g. `WARD_KEY_COMMONS`)
+1. `WARD_KEY_<NAME>` env var (e.g. `WARD_KEY_COMMONS`) — works with single or multiple vaults
 2. `.ward/<name>.key` file — auto-detected when present
 3. Global `WARD_KEY` / `encryption` config
 
@@ -307,9 +307,13 @@ export WARD_KEY=ward-AAAA...
 ward exec myapp.environments.staging -- deploy
 ```
 
-For multiple vaults with separate keys, use `WARD_KEY_<NAME>` per vault:
+Use `WARD_KEY_<NAME>` for single or multiple vaults — no config needed:
 
 ```sh
+# single vault
+WARD_KEY_MYAPP=ward-xxx ward exec myapp.staging -- deploy
+
+# multiple vaults
 WARD_KEY_MYAPP=ward-xxx WARD_KEY_COMMONS=ward-yyy ward exec myapp.staging -- deploy
 ```
 
