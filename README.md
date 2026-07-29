@@ -46,6 +46,11 @@ conflict: cannot merge key "database_url" — defined in multiple files at the s
 
 ---
 
+## Requirements
+
+- macOS 12 (Monterey) or later
+- Linux (amd64 or arm64)
+
 ## Installation
 
 **macOS (Homebrew)**
