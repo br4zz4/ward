@@ -3,9 +3,6 @@
 // clobbering it. Run with: go generate ./cmd/ward
 //
 //go:generate sh -c "go build -ldflags \"-X main.version=dev-$(TZ=America/Sao_Paulo date +%Y%m%d-%H%M%S)\" -o \"$HOME/.local/bin/ward-dev\" . && echo 'installed ward-dev -> ~/.local/bin/ward-dev'"
-
-//go:debug x509usefallback=1
-
 package main
 
 import (
