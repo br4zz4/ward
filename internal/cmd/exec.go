@@ -34,6 +34,7 @@ func NewExecCmd() *cobra.Command {
 			if err != nil {
 				fatal(err)
 			}
+			printEngineWarnings(eng)
 
 			envVars, err := resolveEnvVars(eng, result, dotPath, prefixed)
 			if err != nil {

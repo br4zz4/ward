@@ -34,6 +34,7 @@ func runTree(args []string) {
 	if err != nil {
 		fatal(err)
 	}
+	printEngineWarnings(eng)
 
 	// Build conflict map: dot-path → Conflict (for full source info).
 	conflicts := map[string]secrets.Conflict{}

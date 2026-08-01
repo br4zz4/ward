@@ -33,6 +33,7 @@ func NewGetCmd() *cobra.Command {
 			if err != nil {
 				fatal(err)
 			}
+			printEngineWarnings(eng)
 
 			node, err := eng.GetAtPath(result, dotPath)
 			if err != nil {

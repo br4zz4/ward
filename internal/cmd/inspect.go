@@ -68,6 +68,7 @@ func runInspectAll(dotPath string, prefixed bool) inspectResult {
 	if err != nil {
 		fatal(err)
 	}
+	printEngineWarnings(eng)
 	result.conflictErr = all.ConflictErr
 	if all.EnvConflictErr != nil {
 		all.EnvConflictErr.Cmd = "inspect"

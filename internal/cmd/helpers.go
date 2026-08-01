@@ -325,6 +325,13 @@ func spaces(n int) string {
 	return string(b)
 }
 
+// printEngineWarnings writes any load-time warnings (e.g. skipped vaults) to stderr.
+func printEngineWarnings(eng *ward.Engine) {
+	for _, w := range eng.Warnings() {
+		fmt.Fprintf(os.Stderr, "  %s⚠ %s%s\n", clrYellow, w, clrReset)
+	}
+}
+
 // fatal prints err to stderr and exits 1.
 func fatal(err error) {
 	fmt.Fprintln(os.Stderr, "ward:", err)

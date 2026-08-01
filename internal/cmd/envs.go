@@ -33,6 +33,7 @@ func NewEnvsCmd() *cobra.Command {
 			if err != nil {
 				fatal(err)
 			}
+			printEngineWarnings(eng)
 
 			entries, err := resolveEnvEntries(eng, result, dotPath, prefixed)
 			if err != nil {
