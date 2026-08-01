@@ -113,6 +113,34 @@ default_dir: secrets
 
 ---
 
+## File types
+
+ward discovers every `*.ward` file under each vault. There are three kinds:
+
+| Name | Encrypted? | Content |
+|------|-----------|---------|
+| `main.ward`, `config.ward` | **yes (required)** | structured YAML, merged into the tree |
+| `sa.json.ward`, `token.key.ward` | yes (required) | raw file stored as a single secret |
+| `config.plain.ward` | **no (never)** | structured YAML, plaintext, safe to read without a key |
+
+Every encrypted `.ward` file must be an age-armored blob. A `.ward` file that is
+plaintext on disk (and is not a `.plain.ward`) is an error — encrypt it, or rename
+it to `.plain.ward` if it is intentionally public.
+
+`.plain.ward` is treated as a single extension: `config.plain.ward` merges at the
+same dot-path as `config.ward` would (`<vault>.config.…`) — the `.plain` marker
+never appears in the tree or env var names.
+
+### Missing keys
+
+- A vault whose encrypted files cannot be decrypted (no key) is **skipped** with a
+  `⚠ missing key for vault <name>` warning on stderr; the other vaults still render.
+  That vault's `.plain.ward` files are still read.
+- If **no** key resolves anywhere and at least one encrypted file exists, the command
+  fails: `no encryption key found — set WARD_KEY or provide .ward/<vault>.key`.
+
+---
+
 ## Key management
 
 ### ward init

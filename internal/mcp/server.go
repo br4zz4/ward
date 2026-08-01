@@ -382,6 +382,7 @@ Files are encrypted with age keys. The key lives in .ward/<vault>.key (local) or
 - **dot-path**: e.g. myapp.environments.staging — addresses a node in the merged tree
 - **merge**: files at deeper ancestry levels override parent values (child wins)
 - **config**: .ward/config.yaml defines vaults and key location
+- **.plain.ward**: structured plaintext file (never encrypted), read without a key
 
 ## Targeting a project (IMPORTANT for agents)
 

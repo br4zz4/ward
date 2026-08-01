@@ -24,6 +24,8 @@ ward exec myapp.environments.staging -- your-app
 
 Each `.ward` file is an encrypted YAML document. `ward` discovers all files under your configured vaults, determines which are ancestors of your target, merges them from least to most specific, and exposes the result as env vars.
 
+**File types:** ward recognises three kinds of `.ward` files: encrypted structured files (`secrets.ward`), encrypted raw file-secrets (`sa.json.ward`), and plaintext structured files (`config.plain.ward`). `.ward` files must be encrypted — use `.plain.ward` for public, plaintext config.
+
 **Ancestry is determined by content structure, not file path.** A file is an ancestor if its map-branch structure is compatible with the target's — meaning it covers the same root key and doesn't declare conflicting branches.
 
 **Leaf files override ancestors.** If `secrets.ward` sets `name: acme` and `staging.ward` sets `name: acme staging`, the merged result is `acme staging`, tracked back to `staging.ward`.
