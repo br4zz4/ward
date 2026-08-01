@@ -374,7 +374,7 @@ func Serve() error {
 const wardDocs = `# ward — hierarchical secrets manager
 
 ward merges encrypted YAML files (.ward) into a single secrets tree, resolved by dot-path.
-Files are encrypted with age keys. The key lives in .ward.key (local) or WARD_KEY (CI).
+Files are encrypted with age keys. The key lives in .ward/<vault>.key (local) or WARD_KEY (CI).
 
 ## Core concepts
 
@@ -426,8 +426,8 @@ ward config <key> [value]    # read or write ward configuration
 ## Project setup
 
 ` + "```" + `sh
-ward init                    # creates .ward/config.yaml, .ward.key, first vault file
-echo ".ward.key" >> .gitignore
+ward init                    # creates .ward/config.yaml, .ward/<vault>.key, first vault file
+# ward init also adds .ward/<vault>.key to .gitignore automatically
 ` + "```" + `
 
 ## Multiple vaults (monorepo)

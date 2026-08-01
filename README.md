@@ -125,7 +125,7 @@ ward exec myapp.environments.staging -- env | grep DATABASE
 
 ### `ward init`
 
-Initialise ward in the current directory. Creates `.ward/config.yaml`, generates a `.ward.key` encryption key, and creates an initial `.ward/vault/secrets.ward`.
+Initialise ward in the current directory. Creates `.ward/config.yaml`, generates a `.ward/<vault>.key` encryption key (named after the vault, e.g. `.ward/myapp.key`), and creates an initial `.ward/vaults/<vault>/secrets.ward`.
 
 Prints the `WARD_KEY` token to copy to CI or a secrets manager.
 
@@ -241,7 +241,7 @@ Open `.ward/config.yaml` in `$EDITOR`.
 
 ```yaml
 encryption:
-  key_file: .ward.key        # encryption key file (gitignored); or use key_env
+  key_file: .ward/myapp.key  # encryption key file (gitignored); or use key_env
 
 vaults:
   - path: ./.ward/vault      # directories to discover .ward files in

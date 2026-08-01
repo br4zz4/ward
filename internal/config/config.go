@@ -166,6 +166,13 @@ func Load(path string) (*Config, error) {
 		}
 	}
 
+	// promote a single-vault named key to the global key so commands that only
+	// consult the global encryption (e.g. rotate-key) resolve it
+	if cfg.Encryption.KeyFile == "" && cfg.Encryption.KeyEnv == "" &&
+		len(cfg.Vaults) == 1 && cfg.Vaults[0].Encryption.KeyFile != "" {
+		cfg.Encryption.KeyFile = cfg.Vaults[0].Encryption.KeyFile
+	}
+
 	// check for duplicate vault names
 	seenNames := make(map[string]bool)
 	for _, src := range cfg.Vaults {

@@ -68,7 +68,7 @@ func canonicalKeyFile(cfg *config.Config) string {
 // rotateKey re-encrypts all .ward files in vaultDirs with a new age key.
 //
 // keyFile is the resolved key (may be a temp file when the canonical stores a ward- token).
-// canonicalKeyPath is the on-disk file to back up and update (always .ward/.key or equivalent).
+// canonicalKeyPath is the on-disk file to back up and update (e.g. .ward/<vault>.key).
 //
 // Strategy: write .ward.new staging files first, then at the commit point backup the canonical
 // key, install the new raw key there, and rename all staging files. Rolls back on any failure

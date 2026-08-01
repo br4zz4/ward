@@ -6,7 +6,7 @@ Created by `ward init`. Can also be passed explicitly with `-c`.
 
 ```yaml
 encryption:
-  key_file: .ward.key        # path to encryption key file (gitignored)
+  key_file: .ward/myapp.key  # path to encryption key file (gitignored)
   key_env: WARD_KEY          # or: name of env var holding the encryption key
 
 on_conflict: error           # error (default) | override
@@ -121,7 +121,9 @@ default_dir: secrets
 ward init
 ```
 
-Generates a fresh encryption key at `.ward.key`, adds it to `.gitignore`, creates `.ward/config.yaml` and an initial `.ward/vault/secrets.ward`. Prints a `WARD_KEY` token for use in CI.
+Generates a fresh encryption key at `.ward/<vault>.key` (named after the vault, e.g. `.ward/myapp.key`), adds it to `.gitignore`, creates `.ward/config.yaml` and an initial `.ward/vaults/<vault>/secrets.ward`. Prints a `WARD_KEY` token for use in CI.
+
+The bare `.ward/.key` and `.ward.key` paths are still honoured as fallbacks when present, so existing projects keep working.
 
 ### WARD_KEY token
 
@@ -140,10 +142,10 @@ ward exec qwert.environments.staging -- deploy
 
 ### Gitignore
 
-`ward init` adds `.ward.key` to `.gitignore` automatically. If managing manually:
+`ward init` adds the generated `.ward/<vault>.key` to `.gitignore` automatically. If managing manually:
 
 ```gitignore
-.ward.key
+.ward/*.key
 ```
 
 ---

@@ -19,8 +19,8 @@ import (
 const wardConfigTemplate = `# ward configuration — https://github.com/br4zz4/ward/blob/main/docs/configuration.md
 
 # encryption:
-#   key_file: .ward/.key   # path to encryption key — add to .gitignore
-#   key_env: WARD_KEY     # or: env var holding the key (takes precedence)
+#   key_file: .ward/%s.key   # path to encryption key — add to .gitignore
+#   key_env: WARD_KEY        # or: env var holding the key (takes precedence)
 
 
 # vaults:
@@ -45,12 +45,13 @@ func NewInitCmd() *cobra.Command {
 				fmt.Fprintf(os.Stderr, "\n  %s✗ ward already initialised%s\n\n", clrLightRed+clrBold, clrReset)
 				fmt.Fprintf(os.Stderr, "  A %s.ward/%s directory already exists here.\n", clrCyan, clrReset)
 				fmt.Fprintf(os.Stderr, "  Remove it first before running %sward init%s again:\n\n", clrCyan, clrReset)
-				fmt.Fprintf(os.Stderr, "    %srm -rf .ward .ward/.key%s\n\n", clrYellow, clrReset)
+				fmt.Fprintf(os.Stderr, "    %srm -rf .ward%s\n\n", clrYellow, clrReset)
 				os.Exit(1)
 			}
 
 			projectName := currentDirName()
 			vaultDir := fmt.Sprintf(".ward/vaults/%s", projectName)
+			keyFile := fmt.Sprintf(".ward/%s.key", projectName)
 
 			// 1. Create .ward/ directory and config
 			if err := os.MkdirAll(".ward", 0755); err != nil {
@@ -58,36 +59,36 @@ func NewInitCmd() *cobra.Command {
 			}
 
 			// 2. Generate age key (raw) — keep raw on disk until after encryption
-			if err := wardage.GenerateKey(".ward/.key"); err != nil {
+			if err := wardage.GenerateKey(keyFile); err != nil {
 				fatal(err)
 			}
 			// Encode token now while the file still holds the raw age key
-			wardToken, tokenErr := encodeWardKey(".ward/.key")
+			wardToken, tokenErr := encodeWardKey(keyFile)
 
-			configContent := fmt.Sprintf(wardConfigTemplate, projectName, projectName, projectName, projectName, projectName)
+			configContent := fmt.Sprintf(wardConfigTemplate, projectName, projectName, projectName, projectName, projectName, projectName)
 			if err := writeIfAbsent(".ward/config.yaml", configContent); err != nil {
 				fatal(err)
 			}
 
-			// 3. Add .ward/.key to .gitignore
-			if err := ensureGitignore(".ward/.key"); err != nil {
+			// 3. Add the key file to .gitignore
+			if err := ensureGitignore(keyFile); err != nil {
 				fatal(err)
 			}
 
 			// 4. Create .ward/vaults/<projectName>/ and encrypt the initial secrets file
-			// while .ward/.key still holds the raw age key
+			// while the key file still holds the raw age key
 			if err := os.MkdirAll(vaultDir, 0755); err != nil {
 				fatal(fmt.Errorf("creating %s/: %w", vaultDir, err))
 			}
 			stub := initSecretsStub(projectName)
-			if err := encryptIfAbsent(vaultDir+"/secrets.ward", stub, ".ward/.key"); err != nil {
+			if err := encryptIfAbsent(vaultDir+"/secrets.ward", stub, keyFile); err != nil {
 				fatal(err)
 			}
 
 			// Now replace raw key with the portable token
 			if tokenErr == nil {
-				if err := os.WriteFile(".ward/.key", []byte(wardToken+"\n"), 0600); err != nil {
-					fatal(fmt.Errorf("writing token to .ward/.key: %w", err))
+				if err := os.WriteFile(keyFile, []byte(wardToken+"\n"), 0600); err != nil {
+					fatal(fmt.Errorf("writing token to %s: %w", keyFile, err))
 				}
 			}
 
@@ -112,7 +113,7 @@ func NewInitCmd() *cobra.Command {
 					}
 					fmt.Printf("      %s%s%s%s%s\n", clrCyan, name, clrReset, spaces(pad), desc)
 				}
-				printFileRow(".ward/.key", "encryption key — "+clrOrange+"keep private, never commit"+clrReset)
+				printFileRow(keyFile, "encryption key — "+clrOrange+"keep private, never commit"+clrReset)
 				printFileRow(".ward/config.yaml", "config — "+clrGreen+"commit this"+clrReset)
 				printFileRow(vaultDir+"/", "encrypted secrets — "+clrGreen+"safe to commit"+clrReset)
 				fmt.Println()

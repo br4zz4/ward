@@ -66,7 +66,7 @@ func TestRotateKey_creates_key_backup(t *testing.T) {
 	// arrange
 	dir := t.TempDir()
 	wardProject(t, dir)
-	originalKey, err := os.ReadFile(filepath.Join(dir, ".ward", ".key"))
+	originalKey, err := os.ReadFile(filepath.Join(dir, ".ward", vaultName(dir)+".key"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,7 +104,7 @@ func TestRotateKey_new_key_differs_from_old(t *testing.T) {
 	// arrange
 	dir := t.TempDir()
 	wardProject(t, dir)
-	keyPath := filepath.Join(dir, ".ward", ".key")
+	keyPath := filepath.Join(dir, ".ward", vaultName(dir)+".key")
 	originalKey, err := os.ReadFile(keyPath)
 	if err != nil {
 		t.Fatal(err)
