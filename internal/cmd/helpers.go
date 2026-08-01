@@ -100,7 +100,7 @@ func decryptorFor(cfg *config.Config) (sops.Decryptor, error) {
 		return nil, err
 	}
 	if keyFile == "" {
-		return sops.MockDecryptor{}, nil
+		return sops.RequireKeyDecryptor{}, nil
 	}
 	switch cfg.Encryption.Engine {
 	case "sops+age":

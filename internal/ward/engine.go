@@ -220,6 +220,9 @@ func (e *Engine) SourcePaths() []string {
 // decryptorFor returns the decryptor for the vault that owns path.
 // Falls back to the global decryptor when no per-vault decryptor is configured.
 func (e *Engine) decryptorFor(path string) sops.Decryptor {
+	if secrets.IsPlainFile(path) {
+		return sops.PlainDecryptor{}
+	}
 	if len(e.vaultDec) > 0 {
 		vi := buildVaultRootIndex(e.cfg)(path)
 		if vi.name != "" {
