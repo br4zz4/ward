@@ -183,3 +183,42 @@ func TestOriginalFilename_strips_path(t *testing.T) {
 		t.Errorf("expected service-account.json, got %q", got)
 	}
 }
+
+func TestIsPlainFile(t *testing.T) {
+	cases := map[string]bool{
+		"config.plain.ward":       true,
+		"a/b/config.plain.ward":   true,
+		"main.ward":               false,
+		"sa.json.ward":            false,
+		"notplain.ward":           false,
+		"plain.ward":              false, // no name before .plain
+	}
+	for in, want := range cases {
+		if got := secrets.IsPlainFile(in); got != want {
+			t.Errorf("IsPlainFile(%q) = %v, want %v", in, got, want)
+		}
+	}
+}
+
+func TestStripWardSuffix(t *testing.T) {
+	cases := map[string]string{
+		"config.plain.ward":     "config",
+		"a/b/config.plain.ward": "config",
+		"main.ward":             "main",
+		"sa.json.ward":          "sa.json",
+	}
+	for in, want := range cases {
+		if got := secrets.StripWardSuffix(in); got != want {
+			t.Errorf("StripWardSuffix(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestOriginalFilename_plain_is_not_file_secret(t *testing.T) {
+	if _, ok := secrets.OriginalFilename("config.plain.ward"); ok {
+		t.Error("expected .plain.ward to not be a file-secret")
+	}
+	if _, ok := secrets.OriginalFilename("sa.json.ward"); !ok {
+		t.Error("expected sa.json.ward to still be a file-secret")
+	}
+}
