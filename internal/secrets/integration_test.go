@@ -211,3 +211,28 @@ func TestIntegration_leaf_origin_tracked(t *testing.T) {
 		t.Error("expected origin to be set")
 	}
 }
+
+func TestLoad_plain_ward_is_structured(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.plain.ward")
+	content := "app:\n  config:\n    port: \"8080\"\n"
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+	pf, err := secrets.Load(path, "app", dir, sops.MockDecryptor{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// structured: nested map, not a single raw value
+	appNode, ok := pf.Data["app"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected structured app map, got %T", pf.Data["app"])
+	}
+	cfgNode, ok := appNode["config"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected structured config map, got %T", appNode["config"])
+	}
+	if cfgNode["port"] != "8080" {
+		t.Errorf("expected port 8080, got %v", cfgNode["port"])
+	}
+}

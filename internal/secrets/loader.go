@@ -32,7 +32,7 @@ func Load(path, vaultName, vaultRoot string, dec sops.Decryptor) (ParsedFile, er
 
 	// File-secrets store raw content, not YAML structure.
 	// Their dot-path is: vaultName + subdir segments + key derived from filename.
-	if orig, ok := OriginalFilename(path); ok {
+	if orig, ok := OriginalFilename(path); ok && !IsPlainFile(path) {
 		key := FileKey(orig)
 		prefix := append([]string{vaultName}, fileSecretSubdir(path, vaultRoot)...)
 		data := nestedMap(prefix, key, strings.TrimRight(string(raw), "\n"))
