@@ -118,3 +118,34 @@ func TestValidateVaultStructure_encrypted_file_skipped(t *testing.T) {
 		t.Errorf("expected no violations for encrypted file, got: %v", violations)
 	}
 }
+
+func TestExpectedFileDotPath_plain_strips_suffix(t *testing.T) {
+	vaultAbs := "/proj/.ward/vaults/app"
+	file := filepath.Join(vaultAbs, "config.plain.ward")
+	got := expectedFileDotPath("app", vaultAbs, file)
+	if got != "app.config" {
+		t.Errorf("expected app.config, got %q", got)
+	}
+}
+
+func TestExpectedFileDotPath_plain_with_subdir(t *testing.T) {
+	vaultAbs := "/proj/.ward/vaults/app"
+	file := filepath.Join(vaultAbs, "svc", "db.plain.ward")
+	got := expectedFileDotPath("app", vaultAbs, file)
+	if got != "app.svc.db" {
+		t.Errorf("expected app.svc.db, got %q", got)
+	}
+}
+
+func TestLeadingKeyPath_reads_plain_ward(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "config.plain.ward")
+	os.WriteFile(p, []byte("app:\n  config:\n    x: \"1\"\n"), 0644)
+	got, err := leadingKeyPath(p, 2)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != "app.config" {
+		t.Errorf("expected app.config, got %q", got)
+	}
+}

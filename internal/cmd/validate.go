@@ -114,7 +114,12 @@ func expectedFileDotPath(vaultName, vaultAbs, filePath string) string {
 	if err != nil {
 		return vaultName
 	}
-	rel = strings.TrimSuffix(rel, ".ward")
+	dir := filepath.Dir(rel)
+	base := secrets.StripWardSuffix(rel)
+	rel = base
+	if dir != "." {
+		rel = filepath.Join(dir, base)
+	}
 	parts := strings.Split(rel, string(filepath.Separator))
 	segments := append([]string{vaultName}, parts...)
 	return strings.Join(segments, ".")
