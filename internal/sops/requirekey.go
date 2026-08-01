@@ -2,8 +2,6 @@ package sops
 
 import (
 	"fmt"
-	"path/filepath"
-	"strings"
 )
 
 // RequireKeyDecryptor is the fallback used when no encryption key is available.
@@ -13,7 +11,7 @@ import (
 type RequireKeyDecryptor struct{}
 
 func (RequireKeyDecryptor) Decrypt(path string) ([]byte, error) {
-	if strings.HasSuffix(filepath.Base(path), ".plain.ward") {
+	if isPlainWardName(path) {
 		return PlainDecryptor{}.Decrypt(path)
 	}
 	return nil, &NoKeyError{Path: path}
