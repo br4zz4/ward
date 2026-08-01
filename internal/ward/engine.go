@@ -20,6 +20,7 @@ type Engine struct {
 	cfg      *config.Config
 	dec      sops.Decryptor            // global fallback
 	vaultDec map[string]sops.Decryptor // per-vault decryptors (keyed by vault name)
+	warnings []string
 }
 
 // NewEngine returns an Engine backed by cfg and a global decryptor.
@@ -217,6 +218,12 @@ func (e *Engine) SourcePaths() []string {
 	return sourcePaths(e.cfg)
 }
 
+// Warnings returns human-readable warnings collected during the last load
+// (e.g. vaults skipped because no key was available).
+func (e *Engine) Warnings() []string {
+	return e.warnings
+}
+
 // decryptorFor returns the decryptor for the vault that owns path.
 // Falls back to the global decryptor when no per-vault decryptor is configured.
 func (e *Engine) decryptorFor(path string) sops.Decryptor {
@@ -277,10 +284,38 @@ func (e *Engine) load() ([]secrets.ParsedFile, error) {
 	decFor := func(path string) sops.Decryptor {
 		return e.decryptorFor(path)
 	}
-	files, err := secrets.LoadAll(paths, vaultRootFor, decFor)
-	if err != nil {
-		return nil, fmt.Errorf("loading files: %w", err)
+
+	files, skips := secrets.LoadAllLenient(paths, vaultRootFor, decFor)
+
+	e.warnings = nil
+	var keySkips, otherSkips []secrets.LoadSkip
+	for _, s := range skips {
+		if sops.IsNoKeyError(s.Err) {
+			keySkips = append(keySkips, s)
+		} else {
+			otherSkips = append(otherSkips, s)
+		}
 	}
+
+	// A non-key error (malformed YAML, plain file that is encrypted, etc.) is fatal.
+	if len(otherSkips) > 0 {
+		return nil, fmt.Errorf("loading %s: %w", otherSkips[0].Path, otherSkips[0].Err)
+	}
+
+	// Encrypted files with no key: if NOTHING loaded, that's fatal; otherwise warn per vault.
+	if len(keySkips) > 0 {
+		if len(files) == 0 {
+			return nil, fmt.Errorf("no encryption key found — set WARD_KEY or provide .ward/<vault>.key")
+		}
+		byVault := map[string]int{}
+		for _, s := range keySkips {
+			byVault[vaultFor(s.Path).name]++
+		}
+		for name, n := range byVault {
+			e.warnings = append(e.warnings, fmt.Sprintf("missing key for vault %s — %d file(s) skipped", name, n))
+		}
+	}
+
 	return files, nil
 }
 

@@ -139,3 +139,30 @@ func LoadAll(paths []string, vaultFor func(path string) (string, string), decFor
 	}
 	return files, nil
 }
+
+// LoadSkip records a file that could not be loaded and was skipped.
+type LoadSkip struct {
+	Path string
+	Err  error
+}
+
+// LoadAllLenient is like LoadAll but, instead of aborting on the first file
+// error, collects failures as skips and returns the successfully loaded files.
+// Non-file errors (e.g. malformed YAML) are also reported as skips.
+func LoadAllLenient(paths []string, vaultFor func(path string) (string, string), decFor func(path string) sops.Decryptor) ([]ParsedFile, []LoadSkip) {
+	files := make([]ParsedFile, 0, len(paths))
+	var skips []LoadSkip
+	for _, p := range paths {
+		name, root := "", ""
+		if vaultFor != nil {
+			name, root = vaultFor(p)
+		}
+		pf, err := Load(p, name, root, decFor(p))
+		if err != nil {
+			skips = append(skips, LoadSkip{Path: p, Err: err})
+			continue
+		}
+		files = append(files, pf)
+	}
+	return files, skips
+}
