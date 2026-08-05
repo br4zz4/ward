@@ -27,6 +27,19 @@ func dirArgs(dir string, args ...string) []string {
 	return append([]string{"-d", dir}, args...)
 }
 
+// execArgs assembles ward exec args: optional -d dir, --prefixed, zero-or-more
+// scopes, then -- and the command tokens.
+func execArgs(dir string, scopes []string, prefixed bool, command string) []string {
+	args := []string{"exec"}
+	if prefixed {
+		args = append(args, "--prefixed")
+	}
+	args = append(args, scopes...)
+	args = append(args, "--")
+	args = append(args, strings.Fields(command)...)
+	return dirArgs(dir, args...)
+}
+
 func run(args ...string) (string, error) {
 	bin, err := os.Executable()
 	if err != nil {
@@ -81,7 +94,7 @@ func Serve() error {
 	s.AddTool(
 		mcp.NewTool("ward_get",
 			mcp.WithDescription("Return the merged value at a dot-path (or full tree if no path given)"),
-			mcp.WithString("path", mcp.Description("dot-path to a secret, e.g. project.staging.secret_key")),
+			mcp.WithString("path", mcp.Description("scope to a secret: 'commons:infra.KEY' (one vault) or 'infra.KEY' (searches all vaults; ambiguous = error)")),
 			mcp.WithString("dir", mcp.Description("project directory containing .ward/config.yaml (default: current directory)")),
 		),
 		func(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -100,7 +113,7 @@ func Serve() error {
 	s.AddTool(
 		mcp.NewTool("ward_tree",
 			mcp.WithDescription("Show merged tree with source file and line for each value"),
-			mcp.WithString("path", mcp.Description("optional dot-path to scope the view")),
+			mcp.WithString("path", mcp.Description("optional scope: 'commons:infra.staging' (one vault) or 'infra.staging' (overlay)")),
 			mcp.WithString("dir", mcp.Description("project directory containing .ward/config.yaml (default: current directory)")),
 		),
 		func(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -119,7 +132,7 @@ func Serve() error {
 	s.AddTool(
 		mcp.NewTool("ward_envs",
 			mcp.WithDescription("Show environment variables that would be injected by ward exec"),
-			mcp.WithString("path", mcp.Description("optional dot-path to scope env vars")),
+			mcp.WithString("path", mcp.Description("optional scope to select env vars; note: 'ward secrets' is the canonical command name now")),
 			mcp.WithBoolean("prefixed", mcp.Description("use full dot-path names as env var keys")),
 			mcp.WithString("dir", mcp.Description("project directory containing .ward/config.yaml (default: current directory)")),
 		),
@@ -193,15 +206,23 @@ func Serve() error {
 
 	s.AddTool(
 		mcp.NewTool("ward_exec",
-			mcp.WithDescription("Execute a command with ward secrets injected as environment variables"),
-			mcp.WithString("command", mcp.Required(), mcp.Description("command and arguments to run, e.g. 'rails server'")),
+			mcp.WithDescription("Execute a command with ward secrets injected as env vars. "+
+				"Optionally scope which secrets are injected with 'scope' — a vault-qualified "+
+				"path 'commons:infra.staging' (one vault) or 'infra.staging' (overlay across all "+
+				"vaults). Space-separate multiple scopes. See ward_docs."),
+			mcp.WithString("command", mcp.Required(), mcp.Description("command and arguments, e.g. 'rails server'")),
+			mcp.WithString("scope", mcp.Description("scope(s) to inject: 'commons:infra.staging' (one vault) "+
+				"or 'infra.staging' (overlay all vaults); space-separate multiple")),
+			mcp.WithBoolean("prefixed", mcp.Description("use full dot-path names as env var keys")),
 			mcp.WithString("dir", mcp.Description("project directory containing .ward/config.yaml (default: current directory)")),
 		),
 		func(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			command := req.GetString("command", "")
-			parts := strings.Fields(command)
-			args := append([]string{"exec", "--"}, parts...)
-			out, err := run(dirArgs(req.GetString("dir", ""), args...)...)
+			var scopes []string
+			if s := strings.TrimSpace(req.GetString("scope", "")); s != "" {
+				scopes = strings.Fields(s)
+			}
+			args := execArgs(req.GetString("dir", ""), scopes, req.GetBool("prefixed", false), req.GetString("command", ""))
+			out, err := run(args...)
 			if err != nil {
 				return fail(err), nil
 			}
@@ -301,7 +322,7 @@ func Serve() error {
 	s.AddTool(
 		mcp.NewTool("ward_set",
 			mcp.WithDescription("Set a single secret at a full dot-path"),
-			mcp.WithString("path", mcp.Required(), mcp.Description("full dot-path of the secret, e.g. myapp.staging.secret_key")),
+			mcp.WithString("path", mcp.Required(), mcp.Description("scope of the secret to set: 'commons:infra.KEY' (colon qualifies the vault)")),
 			mcp.WithString("value", mcp.Required(), mcp.Description("value to set")),
 			mcp.WithString("dir", mcp.Description("project directory containing .ward/config.yaml (default: current directory)")),
 		),
@@ -319,7 +340,7 @@ func Serve() error {
 	s.AddTool(
 		mcp.NewTool("ward_unset",
 			mcp.WithDescription("Remove a single secret at a full dot-path"),
-			mcp.WithString("path", mcp.Required(), mcp.Description("full dot-path of the secret to remove")),
+			mcp.WithString("path", mcp.Required(), mcp.Description("scope of the secret to remove: 'commons:infra.KEY'")),
 			mcp.WithString("dir", mcp.Description("project directory containing .ward/config.yaml (default: current directory)")),
 		),
 		func(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -379,10 +400,24 @@ Files are encrypted with age keys. The key lives in .ward/<vault>.key (local) or
 ## Core concepts
 
 - **vault**: a directory of .ward files (e.g. .ward/vault/)
-- **dot-path**: e.g. myapp.environments.staging — addresses a node in the merged tree
+- **scope**: e.g. commons:infra.staging or infra.staging — selects part of the merged tree (see below)
 - **merge**: files at deeper ancestry levels override parent values (child wins)
 - **config**: .ward/config.yaml defines vaults and key location
 - **.plain.ward**: structured plaintext file (never encrypted), read without a key
+
+## Scope (vault-qualified paths)
+
+A scope selects which part of the merged tree a command acts on:
+
+- commons:infra.staging — one vault (strict). Only that vault's subtree.
+- infra.staging — no vault. For exec/envs/secrets/tree this OVERLAYS the same
+  secret-path under EVERY vault, unioned (e.g. commons + trgclub); genuine
+  same-name collisions across vaults still error. For get (single value) it is a
+  single lookup — ambiguous across vaults is an error.
+- multiple scopes — space-separate to union explicit subtrees (exec/secrets).
+
+A plain dotted path like commons.infra.staging is treated as a secret-path, NOT as
+vault commons — to target a vault use the colon form commons:infra.staging.
 
 ## Targeting a project (IMPORTANT for agents)
 
@@ -409,11 +444,11 @@ Omit it only when the MCP server was started from inside the project root.
 ` + "```" + `sh
 ward get [dot-path]          # merged value at path (or full tree)
 ward tree [dot-path]         # merged tree with source file and line per value
-ward envs [dot-path]         # env vars that would be injected by ward exec
+ward secrets [scope]      # (envs is the deprecated alias)
 ward raw [file]              # decrypted raw YAML of a .ward file (all files when none given)
 ward inspect [dot-path]      # ancestry chain showing where each value comes from
 ward vaults                  # list all configured vault paths
-ward exec <dot-path> -- cmd  # run command with secrets injected as env vars
+ward exec [scope] -- cmd     # run command with secrets injected as env vars
 ward export [dot-path]       # export as shell export statements
 ward set <dot-path> <value>  # set a single secret at a full dot-path
 ward unset <dot-path>        # remove a single secret at a full dot-path
