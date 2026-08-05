@@ -96,6 +96,7 @@ func TestView_multi_vault_succeeds(t *testing.T) {
 }
 
 func TestView_multi_vault_shows_both_values(t *testing.T) {
+	t.Setenv("COLUMNS", "200") // wide enough that short values are not truncated
 	out, _, code := testutil.Run(t, bin, fix("conflict-file"), "view")
 	if code != 0 {
 		t.Fatalf("exit %d", code)

@@ -12,6 +12,8 @@ dist/
 *.age
 *.key
 .ward.key
+# except throwaway keys used by e2e fixtures (must be committed so tests run anywhere)
+!test/e2e/**/*.key
 
 # Editor
 .DS_Store

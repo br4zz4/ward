@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 
 	"golang.org/x/term"
@@ -650,6 +651,11 @@ func formatOriginDim(o secrets.Origin) string {
 const treeValueMaxCols = 120
 
 func terminalWidth() int {
+	if c := os.Getenv("COLUMNS"); c != "" {
+		if w, err := strconv.Atoi(c); err == nil && w >= 40 {
+			return w
+		}
+	}
 	w, _, err := term.GetSize(int(os.Stdout.Fd()))
 	if err != nil || w < 40 {
 		w, _, err = term.GetSize(int(os.Stderr.Fd()))

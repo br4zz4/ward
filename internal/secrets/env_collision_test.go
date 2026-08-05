@@ -37,7 +37,7 @@ func TestEnvConflictError_envs_shows_envs_examples(t *testing.T) {
 	msg := stripANSI(err.Error())
 
 	// assert
-	if !strings.Contains(msg, "ward envs app.staging") {
+	if !strings.Contains(msg, "ward envs app:staging") {
 		t.Errorf("expected 'ward envs' scoped example, got:\n%s", msg)
 	}
 	if strings.Contains(msg, "ward exec") {
@@ -58,7 +58,7 @@ func TestEnvConflictError_exec_shows_exec_examples(t *testing.T) {
 	msg := stripANSI(err.Error())
 
 	// assert
-	if !strings.Contains(msg, "ward exec app.staging -- <cmd>") {
+	if !strings.Contains(msg, "ward exec app:staging -- <cmd>") {
 		t.Errorf("expected 'ward exec ... -- <cmd>' example, got:\n%s", msg)
 	}
 }

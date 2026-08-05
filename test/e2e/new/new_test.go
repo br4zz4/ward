@@ -27,6 +27,7 @@ func fix(name string) string { return testutil.FixtureDir("new", name) }
 
 func TestNew_creates_ward_file(t *testing.T) {
 	// arrange
+	t.Setenv("EDITOR", "true") // no-op editor so `new` doesn't block on a TTY
 	dir := t.TempDir()
 	testutil.RunCmd(t, "cp", "-r", fix("basic")+"/.", dir)
 	if err := os.MkdirAll(filepath.Join(dir, ".ward", "vaults", "basic"), 0755); err != nil {
@@ -69,6 +70,7 @@ func TestNew_aborted_does_not_create_file(t *testing.T) {
 
 func TestNew_duplicate_fails(t *testing.T) {
 	// arrange
+	t.Setenv("EDITOR", "true") // no-op editor so the first `new` doesn't block on a TTY
 	dir := t.TempDir()
 	testutil.RunCmd(t, "cp", "-r", fix("basic")+"/.", dir)
 	if err := os.MkdirAll(filepath.Join(dir, ".ward", "vaults", "basic"), 0755); err != nil {
