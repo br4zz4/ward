@@ -65,6 +65,34 @@ Everything respects each vault's key: a vault whose key is unavailable is skippe
 with a warning (existing lenient load), so an unqualified overlay only unions
 vaults the caller can decrypt.
 
+### Universal scope argument (all path commands)
+
+The `vault:secret-path` syntax is not exec-only. It becomes the uniform way every
+path-taking command identifies a vault, expressible three equivalent ways:
+
+1. **Positional** — `ward get commons:infra.KEY`
+2. **`-s`/`--scope` flag** — `ward get -s commons:infra.KEY` (same string as positional)
+3. **`--vault`/`--secret` flags** — `ward get --vault commons --secret infra.KEY`
+
+All three parse to the same `Scope{Vault, SecretPath}`. `--vault/--secret` and an
+inline scope (positional or `-s`) are mutually exclusive; combining them is an
+error. A central resolver turns whichever form was used into a `Scope`.
+
+**Uniform rule:** a colon qualifies a vault; a plain dot **never** identifies a
+vault. `commons.infra.KEY` is a bare secret-path, not "vault commons" — this is a
+compat break applied consistently across every command.
+
+Applies to: `get`, `set`, `unset`, `exec`, `envs`/`secrets`, `tree`, `inspect`.
+`file add` adopts `vault:subdir` in place of its old `vault.subdir` positional.
+
+Read vs write differ in overlay semantics:
+- **Read, multi-value** (`exec`, `envs`/`secrets`, `tree`): unqualified = overlay
+  union across vaults.
+- **Read, single-value** (`get`): unqualified = single lookup; exactly one vault
+  must have it, else ambiguity error. No overlay.
+- **Write** (`set`, `unset`, `file add`): must resolve to one vault/file; overlay
+  does not apply. Unqualified write that is ambiguous errors.
+
 ### Naming
 
 The argument is a **scope** (a.k.a. **scope-path**), replacing "dot-path" in

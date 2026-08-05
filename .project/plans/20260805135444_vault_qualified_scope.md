@@ -3,9 +3,12 @@
 > **Spec:** `.project/specs/20260805133522_unprefixed_shared_path_scope.md`
 > **Branch:** `feat/vault-qualified-scope`
 
-**Goal:** Make the `exec`/`envs`/`tree` scope argument actually select subtree(s)
-before flattening, with a `vault:secret-path` syntax where the vault is optional
-(absent = overlay across all vaults).
+**Goal:** Make the scope argument actually select subtree(s) before flattening,
+with a `vault:secret-path` syntax where the vault is optional (absent = overlay
+across all vaults for reads). The syntax is universal across every path command
+(`get/set/unset/exec/envs/secrets/tree/inspect`, plus `file add` as `vault:subdir`),
+accepted three ways: positional, `-s/--scope`, or `--vault`+`--secret`. A plain dot
+never identifies a vault (uniform compat break).
 
 **Architecture:** A new pure resolver in `internal/secrets` parses a scope into
 `(vault, secret-path)` and selects one-or-more subtree roots from the merged tree.
@@ -1295,6 +1298,98 @@ git commit -m "docs: ward_docs explica scope e overlay"
 
 ---
 
+## Task 17: Central scope-argument resolver
+
+**Files:**
+- Create: `internal/cmd/scope_arg.go`
+- Test: `internal/cmd/scope_arg_test.go`
+
+**Why:** Every path command must accept the scope three equivalent ways —
+positional `commons:infra.KEY`, `-s/--scope commons:infra.KEY`, or
+`--vault commons --secret infra.KEY`. Centralize the parsing so each command wires
+it identically. This task lands BEFORE the command edits (14, 15, 16, 18) that use
+it.
+
+**Produces:**
+- `type scopeFlags struct { scope, vault, secret string }`
+- `func registerScopeFlags(c *cobra.Command) *scopeFlags` — adds `-s/--scope`,
+  `--vault`, `--secret`.
+- `func resolveScopeArg(f *scopeFlags, positional []string) (secrets.Scope, error)`
+  — precedence and mutual-exclusion:
+  - If `--vault` or `--secret` set: must not also have positional or `-s`; build
+    `Scope{Vault: f.vault, SecretPath: f.secret}`.
+  - Else if `-s` set: must not also have positional; `secrets.ParseScope(f.scope)`.
+  - Else if positional present: `secrets.ParseScope(positional[0])`.
+  - Else: empty `Scope{}`.
+  - Conflicting combinations → error "use only one of: positional scope, --scope, or --vault/--secret".
+- `func (s secrets.Scope) FullDotPath() string` (add to `internal/secrets/scope.go`)
+  — `Vault + "." + SecretPath` when both set; `SecretPath` when no vault; used by
+  write commands to reconstruct the internal tree path.
+
+- [ ] **Step 1: Write the failing test**
+
+```go
+package cmd
+
+import (
+	"testing"
+	"github.com/br4zz4/ward/internal/secrets"
+)
+
+func TestResolveScopeArg_positional(t *testing.T) {
+	f := &scopeFlags{}
+	got, err := resolveScopeArg(f, []string{"commons:infra.KEY"})
+	if err != nil || got != (secrets.Scope{Vault: "commons", SecretPath: "infra.KEY"}) {
+		t.Fatalf("got %+v err %v", got, err)
+	}
+}
+
+func TestResolveScopeArg_scopeFlag(t *testing.T) {
+	f := &scopeFlags{scope: "commons:infra.KEY"}
+	got, _ := resolveScopeArg(f, nil)
+	if got.Vault != "commons" || got.SecretPath != "infra.KEY" {
+		t.Fatalf("got %+v", got)
+	}
+}
+
+func TestResolveScopeArg_vaultSecretFlags(t *testing.T) {
+	f := &scopeFlags{vault: "commons", secret: "infra.KEY"}
+	got, _ := resolveScopeArg(f, nil)
+	if got.Vault != "commons" || got.SecretPath != "infra.KEY" {
+		t.Fatalf("got %+v", got)
+	}
+}
+
+func TestResolveScopeArg_conflict_positional_and_flags(t *testing.T) {
+	f := &scopeFlags{vault: "commons", secret: "infra.KEY"}
+	if _, err := resolveScopeArg(f, []string{"trgclub:x"}); err == nil {
+		t.Fatal("expected mutual-exclusion error")
+	}
+}
+
+func TestResolveScopeArg_empty(t *testing.T) {
+	got, err := resolveScopeArg(&scopeFlags{}, nil)
+	if err != nil || got != (secrets.Scope{}) {
+		t.Fatalf("got %+v err %v", got, err)
+	}
+}
+
+func TestScope_FullDotPath(t *testing.T) {
+	if secrets.(Scope{Vault: "commons", SecretPath: "infra.KEY"}).FullDotPath() != "commons.infra.KEY" {
+		t.Fatal("qualified full path wrong")
+	}
+}
+```
+
+(Fix the last test's syntax to `(secrets.Scope{...}).FullDotPath()`; illustrative.)
+
+- [ ] **Step 2: Run** — `go test ./internal/cmd/ -run TestResolveScopeArg` → FAIL.
+- [ ] **Step 3: Implement** `scope_arg.go` + `FullDotPath` in scope.go.
+- [ ] **Step 4: Run** → PASS; `go build ./...`.
+- [ ] **Step 5: Commit** — `git commit -m "feat: resolver central de scope na cli"`.
+
+---
+
 ## Task 14: `ward secrets` command (envs rename)
 
 **Files:**
@@ -1410,66 +1505,37 @@ Task 11/12 briefs when dispatched.
 
 ---
 
-## Task 15: `ward set` explicit flags
+## Task 16: `get`, `unset`, `inspect` accept scope (colon + flags)
 
 **Files:**
-- Modify: `internal/cmd/set.go`
-- Modify: `test/e2e/set/` (or wherever set is tested)
+- Modify: `internal/cmd/get.go`, `internal/cmd/unset.go`, `internal/cmd/inspect.go`,
+  `internal/cmd/editor.go` (`vaultFor`), `internal/cmd/path_helpers.go`.
+- Modify: e2e for get/unset/inspect.
 
-**Rationale (user request):** allow explicit flags instead of a single positional
-dot-path, e.g. `ward set ssh_deploy_key --vault documentation --secret infra.KEY`.
-
-**DESIGN — needs a small decision before implementing.** The exact semantics of the
-positional + flags are ambiguous and must be settled first (brainstorm):
-- What is the positional (`ssh_deploy_key`) vs `--secret infra.KEY` vs `--vault`?
-  One reading: `--vault` picks the vault, `--secret` is the path within it, and the
-  positional is the value. Another: positional is a name, `--secret` the full path.
-- Keep the current `set <dot.path> <value>` form working (backward compat).
-
-Do not implement until the semantics are chosen. When ready, follow TDD: e2e test
-asserting the flag form writes to the right file/path, plus the positional form
-still works.
-
-- [ ] **Step 0: Settle semantics** (controller + user) — record the chosen grammar
-  here before writing tests.
-- [ ] **Steps 1–5:** TDD cycle per the chosen design.
-
----
-
-## Task 16: `get` and `set` accept `vault:secret-path`
-
-**Files:**
-- Modify: `internal/cmd/get.go`, `internal/cmd/set.go`
-- Modify: e2e for get/set.
-
-**Rationale (user request):** the `vault:secret-path` syntax must be universal —
-`get` and `set` should accept it too, not only exec/envs/tree.
+**Depends on:** Task 17 (resolver), Tasks 1–5 (scope core).
 
 **Semantics (decided):**
 
 `get`:
-- `commons:infra.KEY` → read from vault `commons` (qualified, strict).
-- `infra.KEY` (no vault) → single lookup: search every vault; exactly one hit →
-  return it; more than one → ambiguity error naming the vaults; zero → not found.
-- `commons.infra.KEY` (dot-only) → no longer targets a vault (compat break, uniform
-  with exec); treated as an unqualified secret-path → single-lookup search.
-- Overlay does NOT apply to `get` (it returns one value, not a union).
+- Qualified `commons:infra.KEY` (or `--vault commons --secret infra.KEY`) → read
+  from vault `commons`.
+- Unqualified `infra.KEY` → single lookup across every vault: exactly one hit →
+  return; >1 → ambiguity error naming vaults; 0 → not found.
+- No overlay (single value).
 
-`set`:
-- `commons:infra.KEY value` → write into vault `commons` (qualified).
-- Dot-only `commons.infra.KEY` → compat break: the leading segment is no longer a
-  vault; use the colon form to target a vault. (Uniform rule across ward: colon
-  qualifies a vault; a plain dot never identifies a vault.)
-- No overlay for set (writes are single-target).
+`unset` and `inspect`: same qualified/unqualified rules as their read/write nature.
+`unset` is a write → unqualified-and-ambiguous errors (must resolve to one file).
+`inspect` scopes like `tree`.
 
-**Implementation:** both parse the arg with `secrets.ParseScope`. When `Vault` is
-set, resolve within that vault's namespace; when empty, do the single-lookup search
-(get) or require disambiguation (set). Reuse the resolver where sensible.
+`editor.vaultFor` (used by set/unset) must stop using `firstSegment(dotPath)` as
+the vault. Instead take a resolved `secrets.Scope`: when `Vault` set, use it; when
+empty, find the single vault that defines the secret-path (error if ambiguous).
+`requireLeafDepth`/`fileStemPath` operate on the reconstructed full dot-path
+(`scope.FullDotPath()`), so they keep working.
 
-- [ ] **Step 1: Write the failing tests**
+- [ ] **Step 1: Write failing e2e tests**
 
 ```go
-// get e2e (fixture with commons + trgclub)
 func TestGet_qualified(t *testing.T) {
 	out, _, code := testutil.Run(t, bin, fixMV(), "get", "commons:infra.TF_VAR_aws_region")
 	if code != 0 || !testutil.Contains(out, "us-east-1") {
@@ -1477,8 +1543,14 @@ func TestGet_qualified(t *testing.T) {
 	}
 }
 
+func TestGet_vault_secret_flags(t *testing.T) {
+	out, _, code := testutil.Run(t, bin, fixMV(), "get", "--vault", "commons", "--secret", "infra.TF_VAR_aws_region")
+	if code != 0 || !testutil.Contains(out, "us-east-1") {
+		t.Fatalf("flag get failed: %q", out)
+	}
+}
+
 func TestGet_unqualified_single(t *testing.T) {
-	// a key that exists in only one vault → resolves
 	out, _, code := testutil.Run(t, bin, fixMV(), "get", "infra.TF_VAR_api_url")
 	if code != 0 || !testutil.Contains(out, "https://trg.example") {
 		t.Fatalf("unqualified single get failed: %q", out)
@@ -1486,14 +1558,42 @@ func TestGet_unqualified_single(t *testing.T) {
 }
 
 func TestGet_unqualified_ambiguous_errors(t *testing.T) {
-	// a key present in both vaults → ambiguity error
 	_, _, code := testutil.Run(t, bin, fixMV(), "get", "infra.TF_VAR_aws_region")
 	if code == 0 {
 		t.Fatal("ambiguous unqualified get must error")
 	}
 }
+```
 
-// set e2e
+Add matching unset/inspect tests (qualified resolves; unqualified-ambiguous errors
+for unset).
+
+- [ ] **Step 2** → FAIL. **Step 3** wire each command through `registerScopeFlags` +
+  `resolveScopeArg`; update `vaultFor`. **Step 4** → PASS + `go build ./...`.
+- [ ] **Step 5: Commit** — `git commit -m "feat: get/unset/inspect aceitam scope"`.
+
+---
+
+## Task 15: `set` scope + `--vault`/`--secret`/`-s` flags
+
+**Files:**
+- Modify: `internal/cmd/set.go`.
+- Modify: `test/e2e/set/`.
+
+**Depends on:** Task 17, Task 16 (`vaultFor` change).
+
+`set` accepts the scope three ways for its path, with the value as the trailing
+positional:
+- `ward set commons:infra.KEY value`
+- `ward set -s commons:infra.KEY value`
+- `ward set --vault commons --secret infra.KEY value`
+
+Dot-only `commons.infra.KEY` no longer targets a vault (compat break). Internally
+reconstruct `scope.FullDotPath()` and feed the existing set pipeline unchanged.
+
+- [ ] **Step 1: Write failing test**
+
+```go
 func TestSet_qualified_writes_to_vault(t *testing.T) {
 	dir := copyFixture(t, "set-mv")
 	_, _, code := testutil.Run(t, bin, dir, "set", "commons:infra.NEW_KEY", "v1")
@@ -1505,13 +1605,54 @@ func TestSet_qualified_writes_to_vault(t *testing.T) {
 		t.Errorf("set value not readable back: %q", out)
 	}
 }
+
+func TestSet_vault_secret_flags(t *testing.T) {
+	dir := copyFixture(t, "set-mv")
+	_, _, code := testutil.Run(t, bin, dir, "set", "--vault", "commons", "--secret", "infra.NEW2", "v2")
+	if code != 0 {
+		t.Fatalf("flag set failed exit %d", code)
+	}
+}
 ```
 
-Adapt fixture helpers (`fixMV`, `copyFixture`) to the project's existing test
-utilities; if set needs a writable copy, mirror how other set tests do it.
+- [ ] **Step 2–5:** TDD; commit `git commit -m "feat: set aceita scope e flags de vault"`.
 
-- [ ] **Step 2–5:** TDD cycle. Confirm both compat-break behaviors are covered by a
-  test asserting dot-only no longer resolves as a vault path for get and set.
+---
+
+## Task 18: `file add` adopts `vault:subdir`
+
+**Files:**
+- Modify: `internal/cmd/file.go` (`splitVaultArg`).
+- Modify: `test/e2e/file/`.
+
+Change the vault positional of `file add <file> <vault[:subdir]>` from dot-separated
+to colon-separated, uniform with the rest. `splitVaultArg` splits on `:` instead of
+the first `.`.
+
+- [ ] **Step 1: Write failing test** — `ward file add sa.json app:creds` stores under
+  `app.creds.*`; assert via `ward get app:creds.sa_json` or tree.
+- [ ] **Step 2–5:** TDD; commit `git commit -m "feat: file add usa vault:subdir"`.
+
+---
+
+## Task 19: Rewrite breaking tests
+
+**Files:**
+- Modify: `test/e2e/set/set_test.go`, `test/e2e/unset/unset_test.go`.
+
+Two existing tests assert the OLD dot-only-targets-vault behavior and will break by
+design:
+- `TestSet_unknown_vault_fails` — `ward set unknown.main.token x` expected a
+  "vault not found". Under the new rule `unknown.main.token` is a bare secret-path.
+  Rewrite to `ward set unknown:main.token x` (colon form) → still "vault not found".
+- `TestUnset_unknown_vault_fails` — same, use `unknown:main.token`.
+
+Also add a positive compat-break test: dot-only no longer resolves as a vault
+(e.g. an unqualified `set commons.infra.x` behaves as bare secret-path, not vault
+`commons`).
+
+- [ ] **Step 1–5:** update assertions, run the affected e2e packages green, commit
+  `git commit -m "test: ajusta testes ao scope com colon"`.
 
 ---
 
@@ -1590,26 +1731,45 @@ ward exec infra.staging -- env | grep TF_VAR   # union, no collision, production
 - exec/envs multi-scope CLI → Task 5.
 - All behavior-table rows + regression + compat break → Tasks 6–7.
 - tree scope/overlay → Task 8.
-- completion → Task 9.
+- completion (emit `vault:` forms) → Task 9.
 - docs (hierarchy, conflicts) + README + asdf → Task 10.
+- MCP scope in ward_exec + tool descriptions → Task 11.
+- ward_docs teaches scope → Task 12.
+- Central scope-arg resolver (positional | -s | --vault/--secret) → Task 17.
+- ward secrets rename (envs deprecated) → Task 14.
+- get/unset/inspect accept scope → Task 16.
+- set accepts scope + flags → Task 15.
+- file add vault:subdir → Task 18.
+- rewrite breaking set/unset tests → Task 19.
 
 **Open items to confirm during implementation:**
 - asdf plugin repo URL (Task 10) — verify or fall back to binary install docs.
 - `complete.go` helper names (Task 9) — adapt test to actual structure.
-- `placeAtPath` (Task 4) lives in `ward` package referencing `secrets.Node`;
-  confirm it compiles with the exported field access.
+- `placeAtPath` (Task 4) lives in `ward` package referencing `secrets.Node`.
+- Task 17's `FullDotPath` must feed `requireLeafDepth`/`fileStemPath` unchanged so
+  the write pipeline keeps working after the vault stops being the first dot-segment.
+- Completion (Task 9) and MCP docs (Task 12) should mention `secrets` is canonical
+  once Task 14 lands.
 
-**Parallelization:** Tasks 1→2→3→4→5 are a dependency chain (each consumes the
-prior). Tasks 6, 7, 8, 9, 10, 11, 12 all depend on 5 (11/12 because the MCP wraps
-the CLI binary) but are independent of each other. Suggested parallel wave after
-Task 5: {6, 7, 8, 9, 10, 11, 12}. Task 13 (integrate + release) runs last, after
-the whole suite is green.
+**Dependency graph / parallelization:**
+- Core chain (sequential): 1 → 2 → 3 → 4 → 5.
+- Resolver: 17 depends only on 1 (ParseScope) — can run right after 1, but is
+  needed by 14/15/16/18.
+- After 5, parallel wave A (read-scope + docs + MCP, independent files):
+  {6, 7, 8, 9, 10, 11, 12}.
+- After 17, parallel wave B (command wiring; watch shared files):
+  {14 (envs/secrets/main), 16 (get/unset/inspect/editor/path_helpers),
+   18 (file)}. Task 15 (set) depends on 16 (shared `vaultFor`/`editor.go`) → run 15
+  after 16. Task 19 (breaking tests) after 15+16 land.
+- Task 13 (integrate + release) last, whole suite green.
+- File-conflict note: 15 and 16 both touch `set.go`/`editor.go` → sequential.
+  14 touches `envs.go`/`main.go`; 16 touches `get.go` — independent.
 
-**MCP note:** the MCP cannot be implemented "first" in code terms — it shells out
-to the `ward` binary, so it needs Tasks 1–5 done. It ships in the **same push** as
-the CLI (Task 13), and the release/tag makes the updated binary reachable by the
-agents that consume the MCP. `ward_tree`/`ward_envs`/`ward_get` gain the syntax for
-free (they forward `path`); only `ward_exec` needs a new `scope` param (Task 11).
+**MCP note:** the MCP shells out to the `ward` binary, so it needs the CLI done. It
+ships in the same push (Task 13); the release/tag makes the updated binary reachable
+by agents. `ward_tree/envs/get/set/unset` forward their path and inherit the syntax;
+`ward_exec` gains a `scope` param (Task 11).
 
 **Integration:** rebase flow (Task 13) — linear history onto main, no PR, then tag
-`v0.3.0` for goreleaser.
+`v0.3.0` for goreleaser. Everything (reads, writes, flags, file add, MCP) ships in
+this one release.
