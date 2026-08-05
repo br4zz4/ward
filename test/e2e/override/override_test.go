@@ -30,7 +30,7 @@ func TestOverride_replaces_content(t *testing.T) {
 	copyFixture(t, fix("basic"), dir)
 
 	newContent := "app:\n  main:\n    name: updated\n    token: new-token\n"
-	cmd := testutil.RunWithStdin(t, bin, dir, newContent, "override", ".ward/vaults/app/main.ward")
+	cmd := testutil.RunWithStdin(t, bin, dir, newContent, "override", ".ward/vaults/app/main.plain.ward")
 	if cmd != 0 {
 		t.Fatalf("override exit %d", cmd)
 	}
@@ -57,7 +57,7 @@ func TestOverride_still_works_but_warns_deprecated(t *testing.T) {
 	copyFixture(t, fix("basic"), dir)
 
 	_, stderr, code := testutil.RunWithStdinFull(t, bin, dir,
-		"app:\n  main:\n    name: updated\n", "override", ".ward/vaults/app/main.ward")
+		"app:\n  main:\n    name: updated\n", "override", ".ward/vaults/app/main.plain.ward")
 	if code != 0 {
 		t.Fatalf("override should still work, exit %d", code)
 	}

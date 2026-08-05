@@ -37,7 +37,7 @@ func TestImport_replaces_content(t *testing.T) {
 	copyFixture(t, fix("basic"), dir)
 
 	newContent := "app:\n  main:\n    name: updated\n    token: new-token\n"
-	code := testutil.RunWithStdin(t, bin, dir, newContent, "import", ".ward/vaults/app/main.ward")
+	code := testutil.RunWithStdin(t, bin, dir, newContent, "import", ".ward/vaults/app/main.plain.ward")
 	if code != 0 {
 		t.Fatalf("import exit %d", code)
 	}
