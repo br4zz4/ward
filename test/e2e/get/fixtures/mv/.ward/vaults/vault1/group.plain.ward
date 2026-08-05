@@ -1,0 +1,4 @@
+vault1:
+  group:
+    key1: value1
+    shared_only: onlyvalue

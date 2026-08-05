@@ -26,7 +26,7 @@ func NewGetCmd() *cobra.Command {
 		if sc.Vault == "" && sc.SecretPath == "" {
 			fmt.Fprintf(os.Stderr, "\n  %s✗ missing scope%s\n\n", clrLightRed+clrBold, clrReset)
 			fmt.Fprintf(os.Stderr, "  usage: %sward get <scope>%s\n\n", clrCyan, clrReset)
-			fmt.Fprintf(os.Stderr, "  example: %sward get commons:infra.KEY%s\n\n", clrGray, clrReset)
+			fmt.Fprintf(os.Stderr, "  example: %sward get vault1:group.key1%s\n\n", clrGray, clrReset)
 			os.Exit(1)
 		}
 

@@ -113,48 +113,48 @@ func TestGet_conflict_envvar_other_path(t *testing.T) {
 // ── scope: qualified / unqualified / ambiguity ────────────────────────────────
 
 func TestGet_scope_qualified_colon(t *testing.T) {
-	out, _, code := testutil.Run(t, bin, fix("mv"), "get", "commons:infra.TF_VAR_aws_region")
+	out, _, code := testutil.Run(t, bin, fix("mv"), "get", "vault1:group.key1")
 	if code != 0 {
 		t.Fatalf("exit %d", code)
 	}
-	if !testutil.Contains(out, "us-east-1") {
-		t.Errorf("expected us-east-1, got: %q", out)
+	if !testutil.Contains(out, "value1") {
+		t.Errorf("expected value1, got: %q", out)
 	}
 }
 
 func TestGet_scope_qualified_flags(t *testing.T) {
-	out, _, code := testutil.Run(t, bin, fix("mv"), "get", "--vault", "commons", "--secret", "infra.TF_VAR_aws_region")
+	out, _, code := testutil.Run(t, bin, fix("mv"), "get", "--vault", "vault1", "--secret", "group.key1")
 	if code != 0 {
 		t.Fatalf("exit %d", code)
 	}
-	if !testutil.Contains(out, "us-east-1") {
-		t.Errorf("expected us-east-1, got: %q", out)
+	if !testutil.Contains(out, "value1") {
+		t.Errorf("expected value1, got: %q", out)
 	}
 }
 
 func TestGet_scope_unqualified_unique(t *testing.T) {
-	out, _, code := testutil.Run(t, bin, fix("mv"), "get", "infra.SHARED_ONLY")
+	out, _, code := testutil.Run(t, bin, fix("mv"), "get", "group.shared_only")
 	if code != 0 {
 		t.Fatalf("exit %d", code)
 	}
-	if !testutil.Contains(out, "x") {
-		t.Errorf("expected x, got: %q", out)
+	if !testutil.Contains(out, "onlyvalue") {
+		t.Errorf("expected onlyvalue, got: %q", out)
 	}
 }
 
 func TestGet_scope_unqualified_ambiguous_fails(t *testing.T) {
-	_, stderr, code := testutil.Run(t, bin, fix("mv"), "get", "infra.TF_VAR_aws_region")
+	_, stderr, code := testutil.Run(t, bin, fix("mv"), "get", "group.key1")
 	if code == 0 {
 		t.Fatal("expected non-zero exit for an ambiguous key across vaults")
 	}
 	clean := testutil.StripANSI(stderr)
-	if !testutil.Contains(clean, "commons") || !testutil.Contains(clean, "trgclub") {
+	if !testutil.Contains(clean, "vault1") || !testutil.Contains(clean, "vault2") {
 		t.Errorf("expected both vaults named in ambiguity error, got: %q", stderr)
 	}
 }
 
 func TestGet_scope_unknown_vault_fails(t *testing.T) {
-	_, _, code := testutil.Run(t, bin, fix("mv"), "get", "nope:infra.SHARED_ONLY")
+	_, _, code := testutil.Run(t, bin, fix("mv"), "get", "nope:group.shared_only")
 	if code == 0 {
 		t.Fatal("expected non-zero exit for an unknown vault")
 	}

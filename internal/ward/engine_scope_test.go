@@ -9,24 +9,24 @@ import (
 func mr() *MergeResult {
 	leaf := func(v string) *secrets.Node { return &secrets.Node{Value: v} }
 	return &MergeResult{Tree: map[string]*secrets.Node{
-		"commons": {Children: map[string]*secrets.Node{"infra": {Children: map[string]*secrets.Node{
-			"staging": {Children: map[string]*secrets.Node{"A": leaf("1")}}}}}},
-		"trgclub": {Children: map[string]*secrets.Node{"infra": {Children: map[string]*secrets.Node{
-			"staging": {Children: map[string]*secrets.Node{"B": leaf("2")}}}}}},
+		"vault1": {Children: map[string]*secrets.Node{"group": {Children: map[string]*secrets.Node{
+			"sub1": {Children: map[string]*secrets.Node{"key1": leaf("value1")}}}}}},
+		"vault2": {Children: map[string]*secrets.Node{"group": {Children: map[string]*secrets.Node{
+			"sub1": {Children: map[string]*secrets.Node{"key2": leaf("value2")}}}}}},
 	}}
 }
 
 func TestEnvVarsForScopes_overlay(t *testing.T) {
 	e := &Engine{}
-	got, err := e.EnvVarsForScopes(mr(), false, []string{"infra.staging"})
+	got, err := e.EnvVarsForScopes(mr(), false, []string{"group.sub1"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := got["A"]; !ok {
-		t.Error("expected A")
+	if _, ok := got["key1"]; !ok {
+		t.Error("expected key1")
 	}
-	if _, ok := got["B"]; !ok {
-		t.Error("expected B")
+	if _, ok := got["key2"]; !ok {
+		t.Error("expected key2")
 	}
 	if len(got) != 2 {
 		t.Errorf("expected 2 leaves, got %v", got)
@@ -35,11 +35,11 @@ func TestEnvVarsForScopes_overlay(t *testing.T) {
 
 func TestEnvVarsForScopes_prefixed(t *testing.T) {
 	e := &Engine{}
-	got, err := e.EnvVarsForScopes(mr(), true, []string{"commons:infra.staging"})
+	got, err := e.EnvVarsForScopes(mr(), true, []string{"vault1:group.sub1"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := got["commons_infra_staging_A"]; !ok {
+	if _, ok := got["vault1_group_sub1_key1"]; !ok {
 		t.Errorf("expected full-path key, got %v", got)
 	}
 }

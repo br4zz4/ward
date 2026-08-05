@@ -82,26 +82,26 @@ func TestNewFileStub_internal_vault_no_subdir(t *testing.T) {
 }
 
 func TestNewFileStub_external_vault_uses_vault_segments(t *testing.T) {
-	// vaultName = "commons", file inside external vault
-	// expected root key = commons
+	// vaultName = "vault2", file inside external vault
+	// expected root key = vault2
 	parent := t.TempDir()
-	projectDir := filepath.Join(parent, "myapp")
-	externalVault := filepath.Join(parent, ".commons", "stacks", "ruby")
+	projectDir := filepath.Join(parent, "vault1")
+	externalVault := filepath.Join(parent, ".other", "stacks", "ruby")
 
 	if err := os.MkdirAll(filepath.Join(projectDir, ".ward"), 0755); err != nil {
 		t.Fatal(err)
 	}
 
-	// Write relative vault path (../.commons/stacks/ruby) in config
+	// Write relative vault path (../.other/stacks/ruby) in config
 	vaultRelPath, _ := filepath.Rel(projectDir, externalVault)
-	cfgPath := writeWardYAML(t, projectDir, "  - name: commons\n    path: "+vaultRelPath+"\n")
+	cfgPath := writeWardYAML(t, projectDir, "  - name: vault2\n    path: "+vaultRelPath+"\n")
 
 	filePath := filepath.Join(externalVault, "staging.ward")
 
-	got := newFileStub("commons", filePath, cfgPath)
+	got := newFileStub("vault2", filePath, cfgPath)
 
-	if !strings.HasPrefix(got, "commons:\n") {
-		t.Errorf("expected root key 'commons', got:\n%s", got)
+	if !strings.HasPrefix(got, "vault2:\n") {
+		t.Errorf("expected root key 'vault2', got:\n%s", got)
 	}
 	if !strings.Contains(got, "staging:") {
 		t.Errorf("expected 'staging:' in stub, got:\n%s", got)
@@ -134,8 +134,8 @@ func TestResolveNewPath_slash_path_goes_to_vault(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, ".ward", "config.yaml")
 
-	got := resolveNewPath("infra/prod.ward", ".ward/vaults/myapp", cfgPath)
-	want := filepath.Join(dir, ".ward", "vaults", "myapp", "infra", "prod.ward")
+	got := resolveNewPath("group/prod.ward", ".ward/vaults/myapp", cfgPath)
+	want := filepath.Join(dir, ".ward", "vaults", "myapp", "group", "prod.ward")
 	if got != want {
 		t.Errorf("got %q, want %q", got, want)
 	}

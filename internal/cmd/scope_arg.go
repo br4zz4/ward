@@ -18,7 +18,7 @@ type scopeFlags struct {
 // binding used by resolveScopeArg.
 func registerScopeFlags(c *cobra.Command) *scopeFlags {
 	f := &scopeFlags{}
-	c.Flags().StringVarP(&f.scope, "scope", "s", "", "scope: vault:secret-path (e.g. commons:infra.KEY)")
+	c.Flags().StringVarP(&f.scope, "scope", "s", "", "scope: vault:secret-path (e.g. vault1:group.key1)")
 	c.Flags().StringVar(&f.vault, "vault", "", "vault name (use with --secret)")
 	c.Flags().StringVar(&f.secret, "secret", "", "secret-path within the vault (use with --vault)")
 	return f

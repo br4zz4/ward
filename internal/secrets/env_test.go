@@ -55,19 +55,19 @@ func TestToEnvVars_nested_preserves_case(t *testing.T) {
 
 func TestToEnvVars_preserves_case(t *testing.T) {
 	tree := map[string]*Node{
-		"TF_VAR_aws_region":            {Value: "us-east-1"},   // mixed: preserved as-is
-		"AWS_MANAGEMENT_ACCESS_KEY_ID": {Value: "AKIA123"},     // uppercase: preserved
-		"my_lower_key":                 {Value: "value"},        // lowercase: preserved
+		"Mixed_Key1":  {Value: "value1"}, // mixed: preserved as-is
+		"UPPER_KEY2":  {Value: "value2"}, // uppercase: preserved
+		"my_lower_key": {Value: "value3"}, // lowercase: preserved
 	}
 	env := ToEnvVars(tree)
-	if env["TF_VAR_aws_region"] != "us-east-1" {
-		t.Errorf("expected TF_VAR_aws_region=us-east-1, got %v", env)
+	if env["Mixed_Key1"] != "value1" {
+		t.Errorf("expected Mixed_Key1=value1, got %v", env)
 	}
-	if env["AWS_MANAGEMENT_ACCESS_KEY_ID"] != "AKIA123" {
-		t.Errorf("expected AWS_MANAGEMENT_ACCESS_KEY_ID=AKIA123, got %v", env)
+	if env["UPPER_KEY2"] != "value2" {
+		t.Errorf("expected UPPER_KEY2=value2, got %v", env)
 	}
-	if env["my_lower_key"] != "value" {
-		t.Errorf("expected my_lower_key=value, got %v", env)
+	if env["my_lower_key"] != "value3" {
+		t.Errorf("expected my_lower_key=value3, got %v", env)
 	}
 }
 
@@ -75,9 +75,9 @@ func TestToFlatEnvEntries_preserves_case(t *testing.T) {
 	tree := map[string]*Node{
 		"app": {
 			Children: map[string]*Node{
-				"TF_VAR_aws_region":  {Value: "us-east-1"}, // mixed case nested: preserved
-				"DATABASE_URL":       {Value: "postgres://x"}, // uppercase nested: preserved
-				"secret_key":         {Value: "abc"},           // lowercase nested: preserved
+				"Mixed_Key1": {Value: "value1"}, // mixed case nested: preserved
+				"UPPER_KEY2": {Value: "value2"}, // uppercase nested: preserved
+				"lower_key3": {Value: "value3"}, // lowercase nested: preserved
 			},
 		},
 	}
@@ -85,14 +85,14 @@ func TestToFlatEnvEntries_preserves_case(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if v, ok := got["TF_VAR_aws_region"]; !ok || v.Value != "us-east-1" {
-		t.Errorf("expected TF_VAR_aws_region=us-east-1, got %v", got)
+	if v, ok := got["Mixed_Key1"]; !ok || v.Value != "value1" {
+		t.Errorf("expected Mixed_Key1=value1, got %v", got)
 	}
-	if v, ok := got["DATABASE_URL"]; !ok || v.Value != "postgres://x" {
-		t.Errorf("expected DATABASE_URL=postgres://x, got %v", got)
+	if v, ok := got["UPPER_KEY2"]; !ok || v.Value != "value2" {
+		t.Errorf("expected UPPER_KEY2=value2, got %v", got)
 	}
-	if v, ok := got["secret_key"]; !ok || v.Value != "abc" {
-		t.Errorf("expected secret_key=abc, got %v", got)
+	if v, ok := got["lower_key3"]; !ok || v.Value != "value3" {
+		t.Errorf("expected lower_key3=value3, got %v", got)
 	}
 }
 
@@ -297,33 +297,33 @@ func TestToFlatEnvEntries_same_depth_unrelated_is_collision(t *testing.T) {
 
 func TestToFlatEnvEntriesScoped_overlay(t *testing.T) {
 	tree := mkTree()
-	roots, _ := ResolveScopes(tree, []Scope{{SecretPath: "infra.staging"}})
+	roots, _ := ResolveScopes(tree, []Scope{{SecretPath: "group.sub1"}})
 	got, err := ToFlatEnvEntriesScoped(roots)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := got["A"]; !ok {
-		t.Error("expected A from commons.infra.staging")
+	if _, ok := got["key1"]; !ok {
+		t.Error("expected key1 from vault1.group.sub1")
 	}
-	if _, ok := got["B"]; !ok {
-		t.Error("expected B from trgclub.infra.staging")
+	if _, ok := got["key2"]; !ok {
+		t.Error("expected key2 from vault2.group.sub1")
 	}
 	if len(got) != 2 {
-		t.Errorf("expected exactly 2 leaves (no production leak), got %v", got)
+		t.Errorf("expected exactly 2 leaves (no sub2 leak), got %v", got)
 	}
 }
 
 func TestToFlatEnvEntriesScoped_collision(t *testing.T) {
 	leaf := func(v string) *Node { return &Node{Value: v} }
 	tree := map[string]*Node{
-		"commons": {Children: map[string]*Node{"infra": {Children: map[string]*Node{
-			"staging": {Children: map[string]*Node{"A": leaf("1")}}}}}},
-		"trgclub": {Children: map[string]*Node{"infra": {Children: map[string]*Node{
-			"staging": {Children: map[string]*Node{"A": leaf("2")}}}}}},
+		"vault1": {Children: map[string]*Node{"group": {Children: map[string]*Node{
+			"sub1": {Children: map[string]*Node{"key1": leaf("value1")}}}}}},
+		"vault2": {Children: map[string]*Node{"group": {Children: map[string]*Node{
+			"sub1": {Children: map[string]*Node{"key1": leaf("value2")}}}}}},
 	}
-	roots, _ := ResolveScopes(tree, []Scope{{SecretPath: "infra.staging"}})
+	roots, _ := ResolveScopes(tree, []Scope{{SecretPath: "group.sub1"}})
 	if _, err := ToFlatEnvEntriesScoped(roots); err == nil {
-		t.Fatal("expected collision on A across two vaults")
+		t.Fatal("expected collision on key1 across two vaults")
 	}
 }
 
@@ -331,14 +331,14 @@ func TestToFlatEnvEntriesScoped_nested_no_dataloss(t *testing.T) {
 	leaf := func(v string) *Node { return &Node{Value: v} }
 	// dois roots com sub-mapa intermediário de mesmo nome "db" mas folhas distintas
 	tree := map[string]*Node{
-		"commons": {Children: map[string]*Node{"infra": {Children: map[string]*Node{
-			"staging": {Children: map[string]*Node{
+		"vault1": {Children: map[string]*Node{"group": {Children: map[string]*Node{
+			"sub1": {Children: map[string]*Node{
 				"db": {Children: map[string]*Node{"HOST_C": leaf("c")}}}}}}}},
-		"trgclub": {Children: map[string]*Node{"infra": {Children: map[string]*Node{
-			"staging": {Children: map[string]*Node{
+		"vault2": {Children: map[string]*Node{"group": {Children: map[string]*Node{
+			"sub1": {Children: map[string]*Node{
 				"db": {Children: map[string]*Node{"HOST_T": leaf("t")}}}}}}}},
 	}
-	roots, _ := ResolveScopes(tree, []Scope{{SecretPath: "infra.staging"}})
+	roots, _ := ResolveScopes(tree, []Scope{{SecretPath: "group.sub1"}})
 	got, err := ToFlatEnvEntriesScoped(roots)
 	if err != nil {
 		t.Fatal(err)

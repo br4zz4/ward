@@ -1,0 +1,4 @@
+vault2:
+  group:
+    key1: value2
+    key_b: valueb

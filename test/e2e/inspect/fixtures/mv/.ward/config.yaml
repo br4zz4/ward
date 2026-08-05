@@ -1,5 +1,5 @@
 vaults:
-  - name: commons
-    path: .ward/vaults/commons
-  - name: trgclub
-    path: .ward/vaults/trgclub
+  - name: vault1
+    path: .ward/vaults/vault1
+  - name: vault2
+    path: .ward/vaults/vault2

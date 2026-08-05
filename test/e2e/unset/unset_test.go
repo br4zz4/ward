@@ -130,23 +130,23 @@ func TestUnset_scope_qualified_removes_key(t *testing.T) {
 	dir := t.TempDir()
 	copyFixture(t, fix("mv"), dir)
 
-	// act: TF_VAR_aws_region exists in both vaults; qualifying picks commons
-	_, _, code := testutil.Run(t, bin, dir, "unset", "commons:infra.TF_VAR_aws_region")
+	// act: key1 exists in both vaults; qualifying picks vault1
+	_, _, code := testutil.Run(t, bin, dir, "unset", "vault1:group.key1")
 
 	// assert
 	if code != 0 {
 		t.Fatalf("unset exit %d", code)
 	}
-	_, _, getCode := testutil.Run(t, bin, dir, "get", "commons:infra.TF_VAR_aws_region")
+	_, _, getCode := testutil.Run(t, bin, dir, "get", "vault1:group.key1")
 	if getCode == 0 {
-		t.Error("expected commons key to be gone after unset")
+		t.Error("expected vault1 key to be gone after unset")
 	}
-	// the trgclub copy must survive
-	out, _, getCode2 := testutil.Run(t, bin, dir, "get", "trgclub:infra.TF_VAR_aws_region")
+	// the vault2 copy must survive
+	out, _, getCode2 := testutil.Run(t, bin, dir, "get", "vault2:group.key1")
 	if getCode2 != 0 {
-		t.Fatalf("expected trgclub key to remain, get exit %d", getCode2)
+		t.Fatalf("expected vault2 key to remain, get exit %d", getCode2)
 	}
-	if !testutil.Contains(out, "us-west-2") {
-		t.Errorf("expected us-west-2 to remain, got: %q", out)
+	if !testutil.Contains(out, "value2") {
+		t.Errorf("expected value2 to remain, got: %q", out)
 	}
 }

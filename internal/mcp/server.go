@@ -94,7 +94,7 @@ func Serve() error {
 	s.AddTool(
 		mcp.NewTool("ward_get",
 			mcp.WithDescription("Return the merged value at a dot-path (or full tree if no path given)"),
-			mcp.WithString("path", mcp.Description("scope to a secret: 'commons:infra.KEY' (one vault) or 'infra.KEY' (searches all vaults; ambiguous = error)")),
+			mcp.WithString("path", mcp.Description("scope to a secret: 'vault1:group.key1' (one vault) or 'group.key1' (searches all vaults; ambiguous = error)")),
 			mcp.WithString("dir", mcp.Description("project directory containing .ward/config.yaml (default: current directory)")),
 		),
 		func(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -113,7 +113,7 @@ func Serve() error {
 	s.AddTool(
 		mcp.NewTool("ward_tree",
 			mcp.WithDescription("Show merged tree with source file and line for each value"),
-			mcp.WithString("path", mcp.Description("optional scope: 'commons:infra.staging' (one vault) or 'infra.staging' (overlay)")),
+			mcp.WithString("path", mcp.Description("optional scope: 'vault1:group.key1' (one vault) or 'group.key1' (overlay)")),
 			mcp.WithString("dir", mcp.Description("project directory containing .ward/config.yaml (default: current directory)")),
 		),
 		func(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -208,11 +208,11 @@ func Serve() error {
 		mcp.NewTool("ward_exec",
 			mcp.WithDescription("Execute a command with ward secrets injected as env vars. "+
 				"Optionally scope which secrets are injected with 'scope' — a vault-qualified "+
-				"path 'commons:infra.staging' (one vault) or 'infra.staging' (overlay across all "+
+				"path 'vault1:group.key1' (one vault) or 'group.key1' (overlay across all "+
 				"vaults). Space-separate multiple scopes. See ward_docs."),
 			mcp.WithString("command", mcp.Required(), mcp.Description("command and arguments, e.g. 'rails server'")),
-			mcp.WithString("scope", mcp.Description("scope(s) to inject: 'commons:infra.staging' (one vault) "+
-				"or 'infra.staging' (overlay all vaults); space-separate multiple")),
+			mcp.WithString("scope", mcp.Description("scope(s) to inject: 'vault1:group.key1' (one vault) "+
+				"or 'group.key1' (overlay all vaults); space-separate multiple")),
 			mcp.WithBoolean("prefixed", mcp.Description("use full dot-path names as env var keys")),
 			mcp.WithString("dir", mcp.Description("project directory containing .ward/config.yaml (default: current directory)")),
 		),
@@ -322,7 +322,7 @@ func Serve() error {
 	s.AddTool(
 		mcp.NewTool("ward_set",
 			mcp.WithDescription("Set a single secret at a full dot-path"),
-			mcp.WithString("path", mcp.Required(), mcp.Description("scope of the secret to set: 'commons:infra.KEY' (colon qualifies the vault)")),
+			mcp.WithString("path", mcp.Required(), mcp.Description("scope of the secret to set: 'vault1:group.key1' (colon qualifies the vault)")),
 			mcp.WithString("value", mcp.Required(), mcp.Description("value to set")),
 			mcp.WithString("dir", mcp.Description("project directory containing .ward/config.yaml (default: current directory)")),
 		),
@@ -340,7 +340,7 @@ func Serve() error {
 	s.AddTool(
 		mcp.NewTool("ward_unset",
 			mcp.WithDescription("Remove a single secret at a full dot-path"),
-			mcp.WithString("path", mcp.Required(), mcp.Description("scope of the secret to remove: 'commons:infra.KEY'")),
+			mcp.WithString("path", mcp.Required(), mcp.Description("scope of the secret to remove: 'vault1:group.key1'")),
 			mcp.WithString("dir", mcp.Description("project directory containing .ward/config.yaml (default: current directory)")),
 		),
 		func(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -400,7 +400,7 @@ Files are encrypted with age keys. The key lives in .ward/<vault>.key (local) or
 ## Core concepts
 
 - **vault**: a directory of .ward files (e.g. .ward/vault/)
-- **scope**: e.g. commons:infra.staging or infra.staging — selects part of the merged tree (see below)
+- **scope**: e.g. vault1:group.key1 or group.key1 — selects part of the merged tree (see below)
 - **merge**: files at deeper ancestry levels override parent values (child wins)
 - **config**: .ward/config.yaml defines vaults and key location
 - **.plain.ward**: structured plaintext file (never encrypted), read without a key
@@ -409,15 +409,15 @@ Files are encrypted with age keys. The key lives in .ward/<vault>.key (local) or
 
 A scope selects which part of the merged tree a command acts on:
 
-- commons:infra.staging — one vault (strict). Only that vault's subtree.
-- infra.staging — no vault. For exec/envs/secrets/tree this OVERLAYS the same
-  secret-path under EVERY vault, unioned (e.g. commons + trgclub); genuine
+- vault1:group.key1 — one vault (strict). Only that vault's subtree.
+- group.key1 — no vault. For exec/envs/secrets/tree this OVERLAYS the same
+  secret-path under EVERY vault, unioned (e.g. vault1 + vault2); genuine
   same-name collisions across vaults still error. For get (single value) it is a
   single lookup — ambiguous across vaults is an error.
 - multiple scopes — space-separate to union explicit subtrees (exec/secrets).
 
-A plain dotted path like commons.infra.staging is treated as a secret-path, NOT as
-vault commons — to target a vault use the colon form commons:infra.staging.
+A plain dotted path like vault1.group.key1 is treated as a secret-path, NOT as
+vault vault1 — to target a vault use the colon form vault1:group.key1.
 
 ## Targeting a project (IMPORTANT for agents)
 
@@ -471,33 +471,33 @@ ward init                    # creates .ward/config.yaml, .ward/<vault>.key, fir
 ` + "```" + `yaml
 # .ward/config.yaml
 vaults:
-  - name: myapp
+  - name: vault1
     path: ./.ward/vault
-  - name: commons
-    path: ../.commons/ward/vaults/shared
+  - name: vault2
+    path: ../.other/ward/vaults/shared
 ` + "```" + `
 
 Each vault can use its own encryption key. Resolution order per vault (highest priority first):
 
-1. ` + "`" + `WARD_KEY_<NAME>` + "`" + ` env var (e.g. ` + "`" + `WARD_KEY_COMMONS` + "`" + `)
+1. ` + "`" + `WARD_KEY_<NAME>` + "`" + ` env var (e.g. ` + "`" + `WARD_KEY_VAULT2` + "`" + `)
 2. ` + "`" + `.ward/<name>.key` + "`" + ` file — auto-detected when present
 3. Global ` + "`" + `WARD_KEY` + "`" + ` env var / ` + "`" + `encryption` + "`" + ` config
 
 ` + "```" + `yaml
 vaults:
-  - name: myapp
-    path: .ward/vaults/myapp
+  - name: vault1
+    path: .ward/vaults/vault1
     encryption:
-      key_file: .ward/myapp.key      # explicit key file
-  - name: commons
-    path: ../.commons/ward/vaults/commons
+      key_file: .ward/vault1.key      # explicit key file
+  - name: vault2
+    path: ../.other/ward/vaults/vault2
     encryption:
-      key_env: WARD_KEY_COMMONS      # explicit env var
+      key_env: WARD_KEY_VAULT2      # explicit env var
 ` + "```" + `
 
 ` + "```" + `sh
 # CI with multiple vault keys
-WARD_KEY_MYAPP=ward-xxx WARD_KEY_COMMONS=ward-yyy ward envs
+WARD_KEY_VAULT1=ward-xxx WARD_KEY_VAULT2=ward-yyy ward envs
 ` + "```" + `
 
 ## Claude Code skills

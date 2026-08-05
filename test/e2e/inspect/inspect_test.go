@@ -106,9 +106,9 @@ func TestInspect_conflict_envvar_scoped_parent_fails(t *testing.T) {
 
 func TestInspect_scope_qualified_clean(t *testing.T) {
 	// scoping to a single vault's subtree contains no collision → clean
-	_, _, code := testutil.Run(t, bin, fix("mv"), "inspect", "commons:infra")
+	_, _, code := testutil.Run(t, bin, fix("mv"), "inspect", "vault1:group")
 	if code != 0 {
-		t.Fatalf("expected exit 0 when scoped to commons:infra, got %d", code)
+		t.Fatalf("expected exit 0 when scoped to vault1:group, got %d", code)
 	}
 }
 

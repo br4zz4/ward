@@ -153,8 +153,8 @@ func TestLoad_missing_file(t *testing.T) {
 func TestLoad_vaults(t *testing.T) {
 	path := writeTemp(t, `
 vaults:
-  - path: ../commons/secrets
-  - path: /org/infra/creds
+  - path: ../vault1/secrets
+  - path: /org/vault2/creds
 `)
 	cfg, err := Load(path)
 	if err != nil {
@@ -163,7 +163,7 @@ vaults:
 	if len(cfg.Vaults) != 2 {
 		t.Fatalf("expected 2 vaults, got %d", len(cfg.Vaults))
 	}
-	if cfg.Vaults[0].Path != "../commons/secrets" {
+	if cfg.Vaults[0].Path != "../vault1/secrets" {
 		t.Errorf("unexpected vault path: %q", cfg.Vaults[0].Path)
 	}
 }
@@ -239,8 +239,8 @@ func TestFindConfigFile_notFound(t *testing.T) {
 func TestLoad_sources_legacy_compat(t *testing.T) {
 	path := writeTemp(t, `
 sources:
-  - path: ../commons/secrets
-  - path: /org/infra/creds
+  - path: ../vault1/secrets
+  - path: /org/vault2/creds
 `)
 	cfg, err := Load(path)
 	if err != nil {
@@ -249,7 +249,7 @@ sources:
 	if len(cfg.Vaults) != 2 {
 		t.Fatalf("expected 2 vaults (migrated from sources), got %d", len(cfg.Vaults))
 	}
-	if cfg.Vaults[0].Path != "../commons/secrets" {
+	if cfg.Vaults[0].Path != "../vault1/secrets" {
 		t.Errorf("unexpected vault path: %q", cfg.Vaults[0].Path)
 	}
 }
@@ -299,7 +299,7 @@ func TestLoad_per_vault_key_auto_detected(t *testing.T) {
 	if err := os.MkdirAll(wardDir, 0755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(wardDir, "commons.key"), []byte("AGE-SECRET-KEY-1FAKE"), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(wardDir, "vault2.key"), []byte("AGE-SECRET-KEY-1FAKE"), 0600); err != nil {
 		t.Fatal(err)
 	}
 	orig, _ := os.Getwd()
@@ -310,8 +310,8 @@ func TestLoad_per_vault_key_auto_detected(t *testing.T) {
 vaults:
   - name: myapp
     path: .ward/vaults/myapp
-  - name: commons
-    path: .ward/vaults/commons
+  - name: vault2
+    path: .ward/vaults/vault2
 `)
 	cfg, err := Load(cfgPath)
 	if err != nil {
@@ -320,8 +320,8 @@ vaults:
 	if cfg.Vaults[0].Encryption.KeyFile != "" {
 		t.Errorf("myapp: expected no key_file (no .ward/myapp.key), got %q", cfg.Vaults[0].Encryption.KeyFile)
 	}
-	if cfg.Vaults[1].Encryption.KeyFile != ".ward/commons.key" {
-		t.Errorf("commons: expected .ward/commons.key, got %q", cfg.Vaults[1].Encryption.KeyFile)
+	if cfg.Vaults[1].Encryption.KeyFile != ".ward/vault2.key" {
+		t.Errorf("vault2: expected .ward/vault2.key, got %q", cfg.Vaults[1].Encryption.KeyFile)
 	}
 }
 

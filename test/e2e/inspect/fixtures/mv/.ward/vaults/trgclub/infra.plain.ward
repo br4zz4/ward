@@ -1,3 +1,0 @@
-trgclub:
-  infra:
-    TF_VAR_api_url: https://trg.example

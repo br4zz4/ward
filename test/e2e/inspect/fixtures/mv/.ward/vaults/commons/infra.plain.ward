@@ -1,4 +1,0 @@
-commons:
-  infra:
-    TF_VAR_aws_region: us-east-1
-    SHARED_ONLY: x

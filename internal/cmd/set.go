@@ -69,7 +69,7 @@ func splitSetArgs(sf *scopeFlags, args []string) (scopePositional []string, valu
 		return nil, args[0]
 	}
 	if len(args) != 2 {
-		fatal(fmt.Errorf("usage: set <scope> <value> (e.g. set commons:infra.KEY value)"))
+		fatal(fmt.Errorf("usage: set <scope> <value> (e.g. set vault1:group.key1 value1)"))
 	}
 	return []string{args[0]}, args[1]
 }
