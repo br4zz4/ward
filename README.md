@@ -85,7 +85,7 @@ apk add --allow-untrusted ward.apk
 ```sh
 asdf plugin add ward https://github.com/br4zz4/asdf-ward
 asdf install ward latest
-asdf global ward latest
+asdf set -u ward latest   # writes ~/.tool-versions (asdf 0.16+; replaces 'asdf global')
 ```
 
 **Go**
