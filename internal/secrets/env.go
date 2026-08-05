@@ -176,7 +176,27 @@ type leafRef struct {
 func ToFlatEnvEntries(tree map[string]*Node, preferPrefix string) (map[string]EnvEntry, error) {
 	byEnvKey := map[string][]leafRef{}
 	collectLeafs(tree, "", byEnvKey)
+	return flatEntriesFromLeafs(byEnvKey, preferPrefix)
+}
 
+// ToFlatEnvEntriesScoped flattens the leaves under the given scoped roots into env
+// vars keyed by leaf name (uppercased), applying the same shadow and collision
+// rules as ToFlatEnvEntries. Leaves are collected per root into a shared map so
+// intermediate sub-maps sharing a name across roots do not overwrite one another.
+func ToFlatEnvEntriesScoped(roots []ScopedRoot) (map[string]EnvEntry, error) {
+	byEnvKey := map[string][]leafRef{}
+	for _, root := range roots {
+		if root.Node.Children != nil {
+			collectLeafs(root.Node.Children, root.DotPath, byEnvKey)
+		} else {
+			key := LeafKey(root.DotPath)
+			byEnvKey[key] = append(byEnvKey[key], leafRef{root.DotPath, root.Node})
+		}
+	}
+	return flatEntriesFromLeafs(byEnvKey, "")
+}
+
+func flatEntriesFromLeafs(byEnvKey map[string][]leafRef, preferPrefix string) (map[string]EnvEntry, error) {
 	out := map[string]EnvEntry{}
 	var conflicts []EnvConflict
 

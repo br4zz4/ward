@@ -294,3 +294,59 @@ func TestToFlatEnvEntries_same_depth_unrelated_is_collision(t *testing.T) {
 		t.Errorf("expected 1 conflict, got %d", len(ce.Conflicts))
 	}
 }
+
+func TestToFlatEnvEntriesScoped_overlay(t *testing.T) {
+	tree := mkTree()
+	roots, _ := ResolveScopes(tree, []Scope{{SecretPath: "infra.staging"}})
+	got, err := ToFlatEnvEntriesScoped(roots)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := got["A"]; !ok {
+		t.Error("expected A from commons.infra.staging")
+	}
+	if _, ok := got["B"]; !ok {
+		t.Error("expected B from trgclub.infra.staging")
+	}
+	if len(got) != 2 {
+		t.Errorf("expected exactly 2 leaves (no production leak), got %v", got)
+	}
+}
+
+func TestToFlatEnvEntriesScoped_collision(t *testing.T) {
+	leaf := func(v string) *Node { return &Node{Value: v} }
+	tree := map[string]*Node{
+		"commons": {Children: map[string]*Node{"infra": {Children: map[string]*Node{
+			"staging": {Children: map[string]*Node{"A": leaf("1")}}}}}},
+		"trgclub": {Children: map[string]*Node{"infra": {Children: map[string]*Node{
+			"staging": {Children: map[string]*Node{"A": leaf("2")}}}}}},
+	}
+	roots, _ := ResolveScopes(tree, []Scope{{SecretPath: "infra.staging"}})
+	if _, err := ToFlatEnvEntriesScoped(roots); err == nil {
+		t.Fatal("expected collision on A across two vaults")
+	}
+}
+
+func TestToFlatEnvEntriesScoped_nested_no_dataloss(t *testing.T) {
+	leaf := func(v string) *Node { return &Node{Value: v} }
+	// dois roots com sub-mapa intermediário de mesmo nome "db" mas folhas distintas
+	tree := map[string]*Node{
+		"commons": {Children: map[string]*Node{"infra": {Children: map[string]*Node{
+			"staging": {Children: map[string]*Node{
+				"db": {Children: map[string]*Node{"HOST_C": leaf("c")}}}}}}}},
+		"trgclub": {Children: map[string]*Node{"infra": {Children: map[string]*Node{
+			"staging": {Children: map[string]*Node{
+				"db": {Children: map[string]*Node{"HOST_T": leaf("t")}}}}}}}},
+	}
+	roots, _ := ResolveScopes(tree, []Scope{{SecretPath: "infra.staging"}})
+	got, err := ToFlatEnvEntriesScoped(roots)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := got["HOST_C"]; !ok {
+		t.Error("HOST_C lost — shallow merge dropped a nested leaf")
+	}
+	if _, ok := got["HOST_T"]; !ok {
+		t.Error("HOST_T lost — shallow merge dropped a nested leaf")
+	}
+}
