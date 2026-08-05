@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/br4zz4/ward/internal/secrets"
-	"github.com/br4zz4/ward/internal/ward"
 	"github.com/spf13/cobra"
 )
 
@@ -14,14 +13,15 @@ func NewEnvsCmd() *cobra.Command {
 	var prefixed bool
 
 	c := &cobra.Command{
-		Use:               "envs [--prefixed] [dot.path]",
+		Use:               "envs [--prefixed] [dot.path...]",
 		Short:             "Show the env vars that would be injected by exec",
-		Args:              cobra.MaximumNArgs(1),
+		Args:              cobra.ArbitraryArgs,
 		ValidArgsFunction: completeDotPaths,
 		Run: func(_ *cobra.Command, args []string) {
-			dotPath := ""
-			if len(args) == 1 {
-				dotPath = args[0]
+			scopes := args
+			firstScope := ""
+			if len(scopes) > 0 {
+				firstScope = scopes[0]
 			}
 
 			enforceVaultStructure()
@@ -29,13 +29,13 @@ func NewEnvsCmd() *cobra.Command {
 			if err != nil {
 				fatal(err)
 			}
-			result, err := eng.MergeScoped(dotPath)
+			result, err := eng.MergeScoped(firstScope)
 			if err != nil {
 				fatal(err)
 			}
 			printEngineWarnings(eng)
 
-			entries, err := resolveEnvEntries(eng, result, dotPath, prefixed)
+			entries, err := eng.EnvVarsForScopes(result, prefixed, scopes)
 			if err != nil {
 				fatal(stampEnvCommand(err, "envs"))
 			}
@@ -46,14 +46,6 @@ func NewEnvsCmd() *cobra.Command {
 
 	c.Flags().BoolVar(&prefixed, "prefixed", false, "use full path env var names")
 	return c
-}
-
-// resolveEnvEntries returns env entries from the full merged tree.
-// When dotPath is given it is used as a preference hint to resolve env var
-// collisions — the entry under that dot-path wins — but all other vars are
-// still included.
-func resolveEnvEntries(eng *ward.Engine, result *ward.MergeResult, dotPath string, prefixed bool) (map[string]secrets.EnvEntry, error) {
-	return eng.EnvVarsPrefer(result, prefixed, dotPath)
 }
 
 // printEnvEntries renders env entries with colour-coded keys and aligned values.

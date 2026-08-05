@@ -6,7 +6,6 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/br4zz4/ward/internal/ward"
 	"github.com/spf13/cobra"
 )
 
@@ -18,7 +17,7 @@ func NewExecCmd() *cobra.Command {
 		DisableFlagParsing: true,
 		ValidArgsFunction:  completeDotPaths,
 		Run: func(_ *cobra.Command, args []string) {
-			dotPath, cmdArgs, prefixed := parseExecArgs(args)
+			scopes, cmdArgs, prefixed := parseExecArgs(args)
 
 			if len(cmdArgs) == 0 {
 				fmt.Fprintln(os.Stderr, "ward: exec requires a command after --")
@@ -30,15 +29,23 @@ func NewExecCmd() *cobra.Command {
 			if err != nil {
 				fatal(err)
 			}
-			result, err := eng.MergeScoped(dotPath)
+			firstScope := ""
+			if len(scopes) > 0 {
+				firstScope = scopes[0]
+			}
+			result, err := eng.MergeScoped(firstScope)
 			if err != nil {
 				fatal(err)
 			}
 			printEngineWarnings(eng)
 
-			envVars, err := resolveEnvVars(eng, result, dotPath, prefixed)
+			entries, err := eng.EnvVarsForScopes(result, prefixed, scopes)
 			if err != nil {
 				fatal(stampEnvCommand(err, "exec"))
+			}
+			envVars := make(map[string]string, len(entries))
+			for k, en := range entries {
+				envVars[k] = en.Value
 			}
 
 			cmd := exec.Command(cmdArgs[0], cmdArgs[1:]...)
@@ -61,37 +68,19 @@ func NewExecCmd() *cobra.Command {
 	}
 }
 
-// resolveEnvVars returns env vars from the full merged tree.
-// dotPath is used as a preference hint to resolve env var collisions.
-func resolveEnvVars(eng *ward.Engine, result *ward.MergeResult, dotPath string, prefixed bool) (map[string]string, error) {
-	entries, err := eng.EnvVarsPrefer(result, prefixed, dotPath)
-	if err != nil {
-		return nil, err
-	}
-	out := make(map[string]string, len(entries))
-	for k, e := range entries {
-		out[k] = e.Value
-	}
-	return out, nil
-}
-
-// parseExecArgs parses: [--prefixed] [dot.path] -- <cmd> [args...]
-func parseExecArgs(args []string) (dotPath string, cmdArgs []string, prefixed bool) {
+// parseExecArgs parses: [--prefixed] [dot.path...] -- <cmd> [args...]
+func parseExecArgs(args []string) (scopes []string, cmdArgs []string, prefixed bool) {
 	rest := make([]string, 0, len(args))
-	for i := 0; i < len(args); i++ {
-		a := args[i]
+	for _, a := range args {
 		if a == "--prefixed" {
 			prefixed = true
 			continue
 		}
 		rest = append(rest, a)
 	}
-
 	for i, a := range rest {
 		if a == "--" {
-			if i > 0 {
-				dotPath = rest[0]
-			}
+			scopes = rest[:i]
 			cmdArgs = rest[i+1:]
 			return
 		}
