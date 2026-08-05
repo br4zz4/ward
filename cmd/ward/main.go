@@ -82,7 +82,7 @@ func main() {
 	var all []*cobra.Command
 	all = append(all, group(groupRun,
 		cmd.NewExecCmd(),
-		cmd.NewEnvsCmd(),
+		cmd.NewSecretsCmd(),
 	)...)
 	all = append(all, group(groupSecret,
 		cmd.NewGetCmd(),
@@ -109,7 +109,7 @@ func main() {
 	)...)
 
 	// Deprecated aliases — hidden from help, still functional.
-	all = append(all, cmd.NewViewCmd(), cmd.NewOverrideCmd())
+	all = append(all, cmd.NewViewCmd(), cmd.NewOverrideCmd(), cmd.NewEnvsCmd())
 
 	root.AddCommand(all...)
 
