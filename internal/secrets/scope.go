@@ -28,6 +28,19 @@ func ParseScope(s string) Scope {
 	return Scope{Vault: s[:colon], SecretPath: s[colon+1:]}
 }
 
+// FullDotPath returns the internal tree path for a scope: vault + "." + secret-path
+// when a vault is set, or just the secret-path otherwise. Used by write commands
+// to reconstruct the dotted path the tree indexes by.
+func (s Scope) FullDotPath() string {
+	if s.Vault == "" {
+		return s.SecretPath
+	}
+	if s.SecretPath == "" {
+		return s.Vault
+	}
+	return s.Vault + "." + s.SecretPath
+}
+
 // ScopedRoot is a subtree selected by a scope: the dot-path where it sits in the
 // merged tree and the node rooted there.
 type ScopedRoot struct {
