@@ -42,8 +42,10 @@ set, and there is no syntax to say "this vault, explicitly" vs "any vault, overl
 Introduce a **vault-qualified scope path** and make it actually scope the tree
 before flattening.
 
-Syntax: `[vault:]dot.path`. The optional `vault:` prefix (colon-separated)
-qualifies a single vault; its absence means "match under every vault (overlay)".
+Syntax: `[vault:]secret-path`. The optional `vault:` qualifier (colon-separated)
+targets a single vault; its absence (or a leading `:`) means "match under every
+vault (overlay)". Terminology used throughout: **scope** = `<vault>:<secret-path>`;
+**secret-path** = the part after the colon; **vault** = the part before it.
 
 - **Qualified** — `commons:infra.staging` → strict. Selects only the subtree under
   `commons`'s namespace at `infra.staging`. No leaves from other vaults.
@@ -65,9 +67,21 @@ vaults the caller can decrypt.
 
 ### Naming
 
-The argument is called a **scope path** (it selects the scope to inject), replacing
-"dot-path" in docs/help, since it now carries an optional `vault:` qualifier and is
-no longer only dots.
+The argument is a **scope** (a.k.a. **scope-path**), replacing "dot-path" in
+docs/help, since it carries an optional `vault:` qualifier and is no longer only
+dots. Its grammar:
+
+```
+scope       = [ vault ":" ] secret-path
+vault       = a configured vault name
+secret-path = dot-separated path within a vault (e.g. infra.staging)
+```
+
+Examples:
+- `commons:infra.staging` → vault `commons`, secret-path `infra.staging`
+- `infra.staging` → no vault (overlay), secret-path `infra.staging`
+- `:infra.staging` → same as `infra.staging` (leading colon is optional sugar for
+  "no vault"; **not** an error)
 
 ## Behavior specification
 
@@ -90,13 +104,15 @@ errors, preserving ward's core guarantee.
 
 ### Qualified vs unqualified detection
 
-Detection is **syntactic**, not heuristic:
+Detection is **syntactic**, not heuristic. Split the scope on the first `:`:
 
-- Contains `:` before the first `.` → qualified. Segment before `:` is the vault
-  name; it must be a configured vault, else error listing known vaults. Scope =
-  `Lookup(tree, vault + "." + rest)`.
+- Has `:` with a **non-empty** vault → qualified. The vault must be a configured
+  vault, else error listing known vaults. Selects `Lookup(tree, vault + "." +
+  secret-path)`.
+- Has `:` with an **empty** vault (`:infra.staging`) → unqualified (same as no
+  colon; the leading `:` is optional sugar).
 - No `:` → unqualified. For each vault top-key `T` in the tree, attempt
-  `Lookup(tree, T + "." + path)`; collect every hit. Scope = union. Zero hits →
+  `Lookup(tree, T + "." + secret-path)`; collect every hit. Union. Zero hits →
   key-not-found listing the vaults tried.
 
 Because ward already enforces top-key == vault name, "vault top-key in the tree"
@@ -171,6 +187,7 @@ Positive selection:
 - Qualified `commons:infra.staging` → commons staging leaves present; **assert**
   trgclub leaves absent.
 - Unqualified `infra.staging` → union of commons + trgclub staging leaves present.
+- Leading-colon `:infra.staging` → identical result to `infra.staging`.
 - Multiple paths `commons:infra.staging trgclub:infra.staging` → union present.
 - Inherited ancestor: a `commons.infra` (one level up) leaf appears under
   `infra.staging`.
@@ -197,9 +214,9 @@ Errors / compat break:
 
 ### Unit (`internal/secrets`)
 
-- Scope parser: `vault:path` split; no-colon; colon-after-first-dot must NOT be
-  read as a qualifier; leading `:path` (empty vault) → treated as unqualified or
-  explicit error (pick one, test it); empty string.
+- Scope parser: `vault:secret-path` split on first colon; no-colon → unqualified;
+  colon-after-first-dot must NOT be read as a qualifier; leading `:secret-path`
+  (empty vault) → unqualified (equal to no colon); empty string → whole tree.
 - Resolver: qualified hit; qualified unknown vault; unqualified multi-hit;
   unqualified single-hit; unqualified no-hit; depth-1 anchoring (a deeper
   `<vault>.x.infra.staging` must NOT match `infra.staging`); multi-path union
