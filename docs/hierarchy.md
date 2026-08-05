@@ -78,25 +78,96 @@ staging.ward         specificity = 6  (company, company.sectors, company.sectors
 
 ---
 
-## Dot-path scoping
+## Scope
 
-A **dot-path** argument tells `ward exec`, `ward envs`, and `ward tree` to scope the merge to a specific subtree of the merged data.
+A **scope** argument tells the path commands (`get`, `set`, `unset`, `exec`,
+`envs`/`secrets`, `tree`, `inspect`) which secrets to operate on. The grammar
+is:
 
-```sh
-ward exec company.sectors.one.staging -- deploy
+```
+scope = [vault:]secret-path
 ```
 
-All vaults are merged as usual. The dot-path then selects the subtree at `company.sectors.one.staging` and exposes only its leaves as env vars, using flat leaf names (`DATABASE_URL`, not `COMPANY_SECTORS_ONE_STAGING_DATABASE_URL`).
+### Three equivalent ways to pass a scope
 
-TAB completion is available for dot-path arguments in all three commands.
+The same scope can be provided in any of three forms, in any path command:
+
+1. **Positional** — `ward get commons:infra.KEY`
+2. **Flag** — `ward get -s commons:infra.KEY` (or `--scope`)
+3. **Split** — `ward get --vault commons --secret infra.KEY`
+
+The `-s/--scope` flag and the `--vault/--secret` pair are mutually exclusive
+with the inline positional form; pick one.
+
+### Qualified vs unqualified
+
+A scope with a `vault:` prefix is **qualified** and **strict** — it addresses
+exactly one vault:
+
+```sh
+ward get commons:infra.staging.DATABASE_URL   # only the commons vault
+```
+
+A scope with **no** `vault:` prefix has no qualifier. Its behaviour depends on
+the command:
+
+- **Multi-value reads** (`exec`, `envs`/`secrets`, `tree`) — **overlay**: the
+  same secret-path under *every* vault that has it (at depth 1 below the vault)
+  is unioned together.
+- **`get`** (single value) — **single lookup**: if the secret-path exists in
+  exactly one vault it is returned; if it exists in more than one vault, `ward`
+  reports an ambiguity error.
+
+A leading colon (`:infra.staging`) is exactly the same as writing no prefix
+(`infra.staging`) — it is optional sugar.
+
+### Universal rule: a plain dot is never a vault
+
+**A pure dot-path never identifies a vault.** `commons.infra.staging` is a
+literal secret-path, *not* "vault commons, secret-path infra.staging". To
+address a vault you must use the `vault:` prefix (or `--vault`).
+
+> **Compat break:** previously the first segment of a dot-path was treated as
+> the vault. That is no longer the case. Rewrite `commons.infra.staging` as
+> `commons:infra.staging` when you mean the commons vault.
+
+This rule is universal — it applies to `get`, `set`, `unset`, `exec`,
+`envs` (now `secrets`), `tree`, and `inspect` alike.
+
+### Overlay example (two vaults)
+
+Given two vaults, `commons` and `trgclub`, both defining an `infra.staging`
+subtree:
+
+```sh
+ward exec infra.staging -- deploy
+```
+
+This is an unqualified multi-value read, so it **overlays** both vaults: the
+leaves of `commons.infra.staging` and `trgclub.infra.staging` are unioned and
+exposed together. To restrict to a single vault, qualify it:
+
+```sh
+ward exec commons:infra.staging -- deploy   # only commons
+```
+
+### Multiple scopes
+
+`exec` and `secrets` accept several scopes at once; the result is their union:
+
+```sh
+ward exec commons:infra.staging trgclub:infra.staging -- deploy
+```
+
+TAB completion is available for scope arguments in all path commands.
 
 ---
 
-## Without a dot-path
+## Without a scope
 
 ```sh
 ward exec -- app
-ward envs
+ward secrets
 ```
 
 All vaults are merged and all leaves are exposed. Conflicts between any two files at the same specificity level are errors. Use this for projects with a single unambiguous hierarchy.

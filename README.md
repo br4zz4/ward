@@ -80,6 +80,16 @@ curl -sL $(curl -s https://api.github.com/repos/br4zz4/ward/releases/latest \
 apk add --allow-untrusted ward.apk
 ```
 
+**asdf**
+
+```sh
+asdf plugin add ward https://github.com/br4zz4/asdf-ward
+asdf install ward latest
+asdf global ward latest
+```
+
+(plugin repo — confirm availability)
+
 **Go**
 
 ```sh
@@ -115,7 +125,7 @@ ward new ./.commons/ward/vaults/ruby/staging
 ward tree
 
 # Show the env vars that would be injected
-ward envs myapp.environments.staging
+ward secrets myapp.environments.staging
 
 # Inject and run
 ward exec myapp.environments.staging -- env | grep DATABASE
@@ -145,43 +155,75 @@ If the file is outside the existing vaults, it is automatically added to `.ward/
 
 Decrypt a `.ward` file, open it in `$EDITOR`, re-encrypt on save. Defaults to the first file in the default vault.
 
-### `ward envs [dot.path] [--prefixed]`
+### `ward secrets [scope...] [--prefixed]`
 
 Print the env vars that would be injected by `exec`.
+(Formerly `ward envs`, which still works as a deprecated alias but prints a
+warning.)
+
+A **scope** is `[vault:]secret-path`. It can be passed positionally, via
+`-s/--scope`, or via `--vault <vault> --secret <secret-path>`. A qualified
+scope (`commons:infra.staging`) restricts the read to one vault; an unqualified
+scope (`infra.staging`) overlays that secret-path across every vault that has
+it. A plain dot never identifies a vault — use the `vault:` prefix. Multiple
+scopes are unioned.
 
 ```sh
-# Without dot-path — flat leaf names, all vaults merged
-ward envs
+# Without a scope — flat leaf names, all vaults merged
+ward secrets
 # DATABASE_URL  = postgres://staging.acme.internal/app
 # REDIS_URL     = redis://staging.acme.internal:6379
 
-# With dot-path — scoped to that path, names relative to its level
-ward envs myapp.environments.staging
+# With a scope — scoped to that secret-path, names relative to its level
+ward secrets myapp.environments.staging
 # NAME          = sector 1 override
 # DATABASE_URL  = postgres://staging.acme.internal/app
 
+# Qualified to a single vault, or unioning several scopes
+ward secrets commons:infra.staging
+ward secrets commons:infra.staging trgclub:infra.staging
+
 # Full path names with --prefixed
-ward envs --prefixed
+ward secrets --prefixed
 # MYAPP_DATABASE_URL  = postgres://staging.acme.internal/app
 # MYAPP_REDIS_URL     = redis://staging.acme.internal:6379
 ```
 
-### `ward exec [dot.path] -- <command>`
+### `ward exec [scope...] -- <command>`
 
 Merge secrets and inject as env vars, then run a command.
+
+A **scope** is `[vault:]secret-path`, passed positionally, via `-s/--scope`, or
+via `--vault/--secret`. A qualified scope targets one vault; an unqualified one
+overlays the secret-path across all vaults that have it. Multiple scopes are
+unioned.
 
 ```sh
 ward exec myapp.environments.staging -- rails server
 ward exec myapp.environments.staging -- env | grep DATABASE
+
+# Overlay commons.infra.staging + trgclub.infra.staging
+ward exec infra.staging -- deploy
+
+# Restrict to a single vault
+ward exec commons:infra.staging -- deploy
+
+# Union of several scopes
+ward exec commons:infra.staging trgclub:infra.staging -- deploy
 ```
 
-### `ward tree [dot.path]`
+### `ward tree [scope...]`
 
 Print the merged tree with source file and line for each value.
 (Formerly `ward view`, which still works but is deprecated.)
 
+Accepts a **scope** (`[vault:]secret-path`) positionally, via `-s/--scope`, or
+via `--vault/--secret`. A qualified scope shows one vault; an unqualified one
+overlays the secret-path across all vaults that have it.
+
 ```sh
 ward tree myapp.environments.staging
+ward tree commons:infra.staging
 ```
 
 ```
@@ -194,22 +236,40 @@ myapp:
 ● active  ● overrides
 ```
 
-### `ward get <dot.path>`
+### `ward get <scope>`
 
-Print the merged value at a dot-path.
+Print the merged value at a **scope** (`[vault:]secret-path`), passed
+positionally, via `-s/--scope`, or via `--vault/--secret`.
+
+`get` returns a single value. With a `vault:` qualifier it reads only that
+vault. Without one, it does a single lookup across all vaults: if the
+secret-path exists in exactly one vault it is returned; if it exists in more
+than one, `ward` reports an ambiguity error (qualify it to disambiguate). A
+plain dot never identifies a vault.
 
 ```sh
 ward get myapp.staging.database_url
 # postgres://staging.acme.internal/app
+
+# Qualified to a single vault
+ward get commons:infra.staging.database_url
 ```
 
-### `ward set <dot.path> <value>`
+### `ward set <scope> <value>`
 
-Set a single secret at a full dot-path. The first segment is the vault; the path
-must be at least three segments (`vault.file.key`).
+Set a single secret at a **scope** (`[vault:]secret-path`), passed positionally,
+via `-s/--scope`, or via `--vault/--secret`.
+
+The vault is now qualified with a `:` (`vault:file.key`) or with
+`--vault/--secret` — **a plain dot no longer identifies the vault**. This is a
+compat break: `ward set myapp.staging.database_url` treats
+`myapp.staging.database_url` as a literal secret-path, not "vault myapp". To
+write to a specific vault, qualify it as `ward set myapp:staging.database_url`
+(or `ward set --vault myapp --secret staging.database_url`).
 
 ```sh
-ward set myapp.staging.database_url postgres://...
+ward set myapp:staging.database_url postgres://...
+ward set --vault myapp --secret staging.database_url postgres://...
 ```
 
 - Updates the value when the path already lives in exactly one file.
@@ -219,12 +279,14 @@ ward set myapp.staging.database_url postgres://...
 - If the write leaves an env var colliding with a different dot-path, it still
   succeeds and prints a non-blocking warning.
 
-### `ward unset <dot.path>`
+### `ward unset <scope>`
 
-Remove a single secret at a full dot-path.
+Remove a single secret at a **scope** (`[vault:]secret-path`), passed
+positionally, via `-s/--scope`, or via `--vault/--secret`. As with `set`, a
+plain dot does not identify the vault — qualify it with `:` when needed.
 
 ```sh
-ward unset myapp.staging.database_url
+ward unset myapp:staging.database_url
 ```
 
 - Errors with `key not found` when the path does not exist.
@@ -340,9 +402,11 @@ WARD_KEY_MYAPP=ward-xxx WARD_KEY_COMMONS=ward-yyy ward exec myapp.staging -- dep
 
 | Scenario | Env var |
 |---|---|
-| No dot-path, no `--prefixed` | Flat leaf name: `DATABASE_URL` |
-| No dot-path, `--prefixed` | Full dot-path: `MYAPP_STAGING_DATABASE_URL` |
-| With dot-path | Scoped to that path, flat leaf name: `DATABASE_URL` |
+| No scope, no `--prefixed` | Flat leaf name: `DATABASE_URL` |
+| No scope, `--prefixed` | Full secret-path: `MYAPP_STAGING_DATABASE_URL` |
+| Unqualified scope (`infra.staging`) | Scoped to that path, flat leaf name: `DATABASE_URL` |
+| Qualified scope (`commons:infra.staging`) | One vault, scoped to that path, flat leaf name: `DATABASE_URL` |
+| Qualified scope, `--prefixed` | One vault, full secret-path: `INFRA_STAGING_DATABASE_URL` |
 
 ---
 
