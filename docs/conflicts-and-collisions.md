@@ -30,15 +30,24 @@ Ward cannot decide which value is authoritative. The merge is blocked.
 There is no automatic "last file wins" mode. Conflicts require an explicit
 decision.
 
-**Scope behaviour:** if you provide a dot-path argument to `ward envs` or
-`ward exec`, conflicts *outside* that path are silently resolved (last writer
-wins) so your scoped command can proceed. Conflicts *inside* or *above* the
-requested path still block.
+**Scope behaviour:** a scope argument now genuinely *restricts* the set of
+leaves a command sees — it is not merely a tie-breaker for collisions. Leaves
+outside the requested scope are not part of the operation at all, so conflicts
+that live outside it cannot block a scoped read.
+
+Because of this, a cross-environment conflict such as
+`commons:infra.production.DATABASE_URL` versus
+`commons:infra.staging.DATABASE_URL` no longer aborts a read scoped to
+`infra.staging` — the `production` leaf is simply out of scope.
 
 ```sh
-# app.secret_key conflicts, but app.db.host does not — scoped command succeeds
-ward envs app.db
+# infra.production.DATABASE_URL conflicts, but the read is scoped to staging — it succeeds
+ward secrets commons:infra.staging
 ```
+
+A **genuine conflict inside the same scope** — the same leaf defined by two
+vaults under the same secret-path — still blocks. Resolve it with `--prefixed`
+(see [Collision](#collision) below) so the vaults' env var names stay distinct.
 
 ---
 
@@ -72,16 +81,16 @@ so ward cannot determine which `TOKEN` to inject.
    # injects APP_STAGING_TOKEN and APP_PRODUCTION_TOKEN
    ```
 
-2. **Provide a dot-path hint** — tells ward which branch to prefer when
-   resolving the collision. All other env vars from the full tree are still
-   included:
+2. **Narrow the scope** — a scope argument restricts the set of leaves, so
+   picking a scope under which only one of the colliding leaves lives resolves
+   the collision:
    ```sh
-   ward envs app.staging        # TOKEN=staging-token, plus all other vars
-   ward envs app.production     # TOKEN=prod-token, plus all other vars
+   ward secrets app.staging        # TOKEN=staging-token, plus all in-scope vars
+   ward secrets app.production     # TOKEN=prod-token, plus all in-scope vars
    ```
-   The hint only resolves collisions where exactly one entry matches the
-   prefix. If both entries are under the hint (e.g. `ward envs app`), the
-   collision is still reported.
+   The scope resolves the collision only when exactly one entry falls under it.
+   If both entries are still in scope (e.g. `ward secrets app`), the collision
+   is still reported.
 
 **Note:** collisions are detected at the env-var layer, conflicts at the merge
 layer. `ward inspect` reports **both** — run it (optionally scoped to a dot-path,
@@ -124,5 +133,5 @@ can see it is present but not active.
 | Condition  | Trigger | Layer | `ward inspect` | Resolution |
 |------------|---------|-------|----------------|------------|
 | **Conflict**   | Same leaf dot-path in ≥2 files | Merge | ✓ reports it | Remove from one file, or move to shared vault |
-| **Collision**  | Same leaf name, unrelated dot-paths | Env vars | ✓ reports it | Use `--prefixed` or narrow the scope |
+| **Collision**  | Same leaf name, unrelated secret-paths | Env vars | ✓ reports it | Use `--prefixed` or narrow the scope |
 | **Shadow**     | Same leaf name, one path is ancestor of the other | Env vars | ✗ silent | No action needed — deeper wins intentionally |
