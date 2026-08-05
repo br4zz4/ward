@@ -22,7 +22,7 @@ func NewFileCmd() *cobra.Command {
 
 func newFileAddCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "add <file> <vault>[.subdir]",
+		Use:   "add <file> <vault>[:subdir]",
 		Short: "Add a file as a single encrypted secret",
 		Args:  cobra.ExactArgs(2),
 		Run: func(_ *cobra.Command, args []string) {
@@ -122,9 +122,9 @@ func newFileExtractCmd() *cobra.Command {
 	}
 }
 
-// splitVaultArg splits "app.main" into ("app", "main") and "app" into ("app", "").
+// splitVaultArg splits "app:main" into ("app", "main") and "app" into ("app", "").
 func splitVaultArg(arg string) (vault, subDir string) {
-	parts := strings.SplitN(arg, ".", 2)
+	parts := strings.SplitN(arg, ":", 2)
 	if len(parts) == 2 {
 		return parts[0], parts[1]
 	}

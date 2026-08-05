@@ -22,7 +22,7 @@ func TestSplitVaultArg_vault_only(t *testing.T) {
 
 func TestSplitVaultArg_vault_with_subdir(t *testing.T) {
 	// arrange
-	arg := "app.main"
+	arg := "app:main"
 
 	// act
 	vault, subDir := splitVaultArg(arg)
@@ -38,7 +38,7 @@ func TestSplitVaultArg_vault_with_subdir(t *testing.T) {
 
 func TestSplitVaultArg_vault_with_nested_subdir(t *testing.T) {
 	// arrange
-	arg := "app.secrets.prod"
+	arg := "app:secrets.prod"
 
 	// act
 	vault, subDir := splitVaultArg(arg)

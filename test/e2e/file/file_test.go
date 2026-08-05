@@ -79,6 +79,28 @@ func TestFileImport_key_readable_via_get(t *testing.T) {
 	}
 }
 
+func TestFileImport_places_file_in_subdir(t *testing.T) {
+	// arrange
+	dir := t.TempDir()
+	copyFixture(t, fix("basic"), dir)
+	src := filepath.Join(dir, "service-account.json")
+	if err := os.WriteFile(src, []byte(`{"type":"service_account"}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	// act
+	_, stderr, code := testutil.Run(t, bin, dir, "file", "add", src, "app:creds")
+
+	// assert
+	if code != 0 {
+		t.Fatalf("exit %d: %s", code, stderr)
+	}
+	wardPath := filepath.Join(dir, ".ward", "vaults", "app", "creds", "service-account.json.ward")
+	if _, err := os.Stat(wardPath); err != nil {
+		t.Errorf("expected .ward file at %s: %v", wardPath, err)
+	}
+}
+
 func TestFileImport_errors_if_target_exists(t *testing.T) {
 	// arrange
 	dir := t.TempDir()
