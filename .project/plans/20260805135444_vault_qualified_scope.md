@@ -1295,6 +1295,226 @@ git commit -m "docs: ward_docs explica scope e overlay"
 
 ---
 
+## Task 14: `ward secrets` command (envs rename)
+
+**Files:**
+- Create: `internal/cmd/secrets.go`
+- Modify: `internal/cmd/envs.go` (make it a deprecated alias), `cmd/ward/main.go`
+- Modify: `test/e2e/envs/` → add `test/e2e/secrets/` mirror, or add secrets cases.
+
+**Rationale (user request):** `ward secrets` reads better than `ward envs` for
+"show the injectable secrets". Rename canonically to `secrets`; keep `envs` as a
+hidden deprecated alias (same pattern as `view`→`tree`).
+
+- [ ] **Step 1: Write the failing test**
+
+```go
+// test/e2e/secrets/secrets_test.go  (build tag e2e)
+func TestSecrets_lists_like_envs(t *testing.T) {
+	out, _, code := testutil.Run(t, bin, fix("basic"), "secrets")
+	if code != 0 {
+		t.Fatalf("exit %d", code)
+	}
+	if !testutil.Contains(testutil.StripANSI(out), "secret_key") {
+		t.Errorf("ward secrets should list leaves, got %q", out)
+	}
+}
+
+func TestEnvs_deprecated_still_works(t *testing.T) {
+	out, stderr, code := testutil.Run(t, bin, fix("basic"), "envs")
+	if code != 0 {
+		t.Fatalf("exit %d", code)
+	}
+	if !testutil.Contains(testutil.StripANSI(out), "secret_key") {
+		t.Error("deprecated envs must still work")
+	}
+	if !testutil.Contains(testutil.StripANSI(stderr), "deprecated") {
+		t.Error("envs should warn deprecated")
+	}
+}
+```
+
+Reuse the envs fixtures via a shared fixture dir or copy `basic`.
+
+- [ ] **Step 2: Run to verify it fails**
+
+```bash
+go test -tags e2e ./test/e2e/secrets/...
+```
+
+Expected: FAIL — unknown command "secrets".
+
+- [ ] **Step 3: Write minimal implementation**
+
+Extract the current `envs` Run body into a shared `runSecrets(args, prefixed)` and
+have both commands call it. `secrets.go`:
+
+```go
+func NewSecretsCmd() *cobra.Command {
+	var prefixed bool
+	c := &cobra.Command{
+		Use:               "secrets [--prefixed] [scope...]",
+		Short:             "Show the secrets (env vars) that would be injected by exec",
+		Args:              cobra.ArbitraryArgs,
+		ValidArgsFunction: completeDotPaths,
+		Run: func(_ *cobra.Command, args []string) { runSecrets(args, prefixed) },
+	}
+	c.Flags().BoolVar(&prefixed, "prefixed", false, "use full path env var names")
+	return c
+}
+```
+
+`envs.go` becomes the deprecated alias:
+
+```go
+func NewEnvsCmd() *cobra.Command {
+	var prefixed bool
+	c := &cobra.Command{
+		Use:               "envs [--prefixed] [scope...]",
+		Short:             "Deprecated: use 'secrets'",
+		Hidden:            true,
+		Args:              cobra.ArbitraryArgs,
+		ValidArgsFunction: completeDotPaths,
+		Run: func(_ *cobra.Command, args []string) {
+			runSecrets(args, prefixed)
+			warnDeprecated("envs", "secrets")
+		},
+	}
+	c.Flags().BoolVar(&prefixed, "prefixed", false, "use full path env var names")
+	return c
+}
+```
+
+Move the shared logic (MergeScoped + EnvVarsForScopes + printEnvEntries) into
+`runSecrets`. Register `NewSecretsCmd()` in `main.go` alongside (or replacing the
+visible) `NewEnvsCmd()`.
+
+- [ ] **Step 4: Run to verify it passes**
+
+```bash
+go test -tags e2e ./test/e2e/secrets/... ./test/e2e/envs/...
+```
+
+Expected: PASS
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add internal/cmd/secrets.go internal/cmd/envs.go cmd/ward/main.go test/e2e/secrets/
+git commit -m "feat: ward secrets renomeia envs deprecado"
+```
+
+**MCP note:** Task 12's `ward_docs` and the `ward_envs` tool should mention
+`secrets` is the canonical name (keep `ward_envs` tool working). Add a note to
+Task 11/12 briefs when dispatched.
+
+---
+
+## Task 15: `ward set` explicit flags
+
+**Files:**
+- Modify: `internal/cmd/set.go`
+- Modify: `test/e2e/set/` (or wherever set is tested)
+
+**Rationale (user request):** allow explicit flags instead of a single positional
+dot-path, e.g. `ward set ssh_deploy_key --vault documentation --secret infra.KEY`.
+
+**DESIGN — needs a small decision before implementing.** The exact semantics of the
+positional + flags are ambiguous and must be settled first (brainstorm):
+- What is the positional (`ssh_deploy_key`) vs `--secret infra.KEY` vs `--vault`?
+  One reading: `--vault` picks the vault, `--secret` is the path within it, and the
+  positional is the value. Another: positional is a name, `--secret` the full path.
+- Keep the current `set <dot.path> <value>` form working (backward compat).
+
+Do not implement until the semantics are chosen. When ready, follow TDD: e2e test
+asserting the flag form writes to the right file/path, plus the positional form
+still works.
+
+- [ ] **Step 0: Settle semantics** (controller + user) — record the chosen grammar
+  here before writing tests.
+- [ ] **Steps 1–5:** TDD cycle per the chosen design.
+
+---
+
+## Task 16: `get` and `set` accept `vault:secret-path`
+
+**Files:**
+- Modify: `internal/cmd/get.go`, `internal/cmd/set.go`
+- Modify: e2e for get/set.
+
+**Rationale (user request):** the `vault:secret-path` syntax must be universal —
+`get` and `set` should accept it too, not only exec/envs/tree.
+
+**Semantics (decided):**
+
+`get`:
+- `commons:infra.KEY` → read from vault `commons` (qualified, strict).
+- `infra.KEY` (no vault) → single lookup: search every vault; exactly one hit →
+  return it; more than one → ambiguity error naming the vaults; zero → not found.
+- `commons.infra.KEY` (dot-only) → no longer targets a vault (compat break, uniform
+  with exec); treated as an unqualified secret-path → single-lookup search.
+- Overlay does NOT apply to `get` (it returns one value, not a union).
+
+`set`:
+- `commons:infra.KEY value` → write into vault `commons` (qualified).
+- Dot-only `commons.infra.KEY` → compat break: the leading segment is no longer a
+  vault; use the colon form to target a vault. (Uniform rule across ward: colon
+  qualifies a vault; a plain dot never identifies a vault.)
+- No overlay for set (writes are single-target).
+
+**Implementation:** both parse the arg with `secrets.ParseScope`. When `Vault` is
+set, resolve within that vault's namespace; when empty, do the single-lookup search
+(get) or require disambiguation (set). Reuse the resolver where sensible.
+
+- [ ] **Step 1: Write the failing tests**
+
+```go
+// get e2e (fixture with commons + trgclub)
+func TestGet_qualified(t *testing.T) {
+	out, _, code := testutil.Run(t, bin, fixMV(), "get", "commons:infra.TF_VAR_aws_region")
+	if code != 0 || !testutil.Contains(out, "us-east-1") {
+		t.Fatalf("qualified get failed: %q (exit %d)", out, code)
+	}
+}
+
+func TestGet_unqualified_single(t *testing.T) {
+	// a key that exists in only one vault → resolves
+	out, _, code := testutil.Run(t, bin, fixMV(), "get", "infra.TF_VAR_api_url")
+	if code != 0 || !testutil.Contains(out, "https://trg.example") {
+		t.Fatalf("unqualified single get failed: %q", out)
+	}
+}
+
+func TestGet_unqualified_ambiguous_errors(t *testing.T) {
+	// a key present in both vaults → ambiguity error
+	_, _, code := testutil.Run(t, bin, fixMV(), "get", "infra.TF_VAR_aws_region")
+	if code == 0 {
+		t.Fatal("ambiguous unqualified get must error")
+	}
+}
+
+// set e2e
+func TestSet_qualified_writes_to_vault(t *testing.T) {
+	dir := copyFixture(t, "set-mv")
+	_, _, code := testutil.Run(t, bin, dir, "set", "commons:infra.NEW_KEY", "v1")
+	if code != 0 {
+		t.Fatalf("qualified set failed exit %d", code)
+	}
+	out, _, _ := testutil.Run(t, bin, dir, "get", "commons:infra.NEW_KEY")
+	if !testutil.Contains(out, "v1") {
+		t.Errorf("set value not readable back: %q", out)
+	}
+}
+```
+
+Adapt fixture helpers (`fixMV`, `copyFixture`) to the project's existing test
+utilities; if set needs a writable copy, mirror how other set tests do it.
+
+- [ ] **Step 2–5:** TDD cycle. Confirm both compat-break behaviors are covered by a
+  test asserting dot-only no longer resolves as a vault path for get and set.
+
+---
+
 ## Task 13: Integrate to main + release
 
 **Preconditions:** all of `go build ./...`, `go test ./...`,
