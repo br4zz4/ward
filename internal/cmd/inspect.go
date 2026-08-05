@@ -37,7 +37,7 @@ func NewInspectCmd() *cobra.Command {
 			fatal(err)
 		}
 
-		result := runInspectAll(sc.FullDotPath(), prefixed)
+		result := runInspectAll(sc.TreePath(), prefixed)
 		printInspectResult(result, prefixed)
 	}
 

@@ -35,7 +35,7 @@ func NewGetCmd() *cobra.Command {
 		if err != nil {
 			fatal(err)
 		}
-		result, err := eng.MergeScoped(sc.FullDotPath())
+		result, err := eng.MergeScoped(sc.TreePath())
 		if err != nil {
 			fatal(err)
 		}
@@ -60,12 +60,12 @@ func NewGetCmd() *cobra.Command {
 // ambiguity across vaults or when nothing matches).
 func resolveGetTarget(eng *ward.Engine, result *ward.MergeResult, sc secrets.Scope) (string, *secrets.Node) {
 	if sc.Vault != "" {
-		node, err := eng.GetAtPath(result, sc.FullDotPath())
+		node, err := eng.GetAtPath(result, sc.TreePath())
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "ward:", err)
 			os.Exit(1)
 		}
-		return sc.FullDotPath(), node
+		return sc.TreePath(), node
 	}
 
 	type hit struct {

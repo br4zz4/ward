@@ -40,11 +40,20 @@ func TestResolveScopeArg_empty(t *testing.T) {
 	}
 }
 
-func TestScope_FullDotPath(t *testing.T) {
-	if (secrets.Scope{Vault: "commons", SecretPath: "infra.KEY"}).FullDotPath() != "commons.infra.KEY" {
-		t.Fatal("qualified full path wrong")
+func TestScope_TreePath(t *testing.T) {
+	if (secrets.Scope{Vault: "commons", SecretPath: "infra.KEY"}).TreePath() != "commons.infra.KEY" {
+		t.Fatal("qualified tree path wrong")
 	}
-	if (secrets.Scope{SecretPath: "infra.KEY"}).FullDotPath() != "infra.KEY" {
+	if (secrets.Scope{SecretPath: "infra.KEY"}).TreePath() != "infra.KEY" {
+		t.Fatal("unqualified tree path wrong")
+	}
+}
+
+func TestScope_FullPath(t *testing.T) {
+	if (secrets.Scope{Vault: "commons", SecretPath: "infra.KEY"}).FullPath() != "commons:infra.KEY" {
+		t.Fatal("qualified full path should use colon")
+	}
+	if (secrets.Scope{SecretPath: "infra.KEY"}).FullPath() != "infra.KEY" {
 		t.Fatal("unqualified full path wrong")
 	}
 }
