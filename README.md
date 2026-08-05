@@ -88,8 +88,6 @@ asdf install ward latest
 asdf global ward latest
 ```
 
-(plugin repo — confirm availability)
-
 **Go**
 
 ```sh
