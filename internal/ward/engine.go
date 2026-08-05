@@ -192,6 +192,50 @@ func (e *Engine) EnvVarsPrefer(r *MergeResult, prefixed bool, preferPrefix strin
 	return secrets.ToFlatEnvEntries(r.Tree, preferPrefix)
 }
 
+// EnvVarsForScopes resolves env vars restricted to the given scopes. An empty
+// slice (or a single empty scope) selects the whole tree. With prefixed=true the
+// names are full dot-paths over the selected roots; otherwise bare leaf names,
+// with genuine cross-scope collisions surfaced as an error.
+func (e *Engine) EnvVarsForScopes(r *MergeResult, prefixed bool, scopes []string) (map[string]secrets.EnvEntry, error) {
+	parsed := make([]secrets.Scope, 0, len(scopes))
+	for _, s := range scopes {
+		if s == "" {
+			continue
+		}
+		parsed = append(parsed, secrets.ParseScope(s))
+	}
+	roots, err := secrets.ResolveScopes(r.Tree, parsed)
+	if err != nil {
+		return nil, err
+	}
+	if prefixed {
+		union := map[string]*secrets.Node{}
+		for _, root := range roots {
+			if root.DotPath == "" {
+				return secrets.ToEnvEntries(r.Tree), nil
+			}
+			placeAtPath(union, root.DotPath, root.Node)
+		}
+		return secrets.ToEnvEntries(union), nil
+	}
+	return secrets.ToFlatEnvEntriesScoped(roots)
+}
+
+func placeAtPath(dst map[string]*secrets.Node, dotPath string, node *secrets.Node) {
+	parts := strings.Split(dotPath, ".")
+	cur := dst
+	for i, p := range parts {
+		if i == len(parts)-1 {
+			cur[p] = node
+			return
+		}
+		if cur[p] == nil {
+			cur[p] = &secrets.Node{Children: map[string]*secrets.Node{}}
+		}
+		cur = cur[p].Children
+	}
+}
+
 // EnvVarsMap is like EnvVars but returns plain string values (for injection into
 // a child process environment).
 func (e *Engine) EnvVarsMap(r *MergeResult, prefixed bool) (map[string]string, error) {
