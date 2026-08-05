@@ -89,10 +89,21 @@ func (e *EnvConflictError) Error() string {
 	return sb.String()
 }
 
+// scopeForm turns an internal dot-path into the canonical scope form a user
+// types: the first segment becomes the vault qualifier, joined to the rest with
+// a colon (e.g. app.production → app:production). A single segment is returned
+// unchanged.
+func scopeForm(dotPath string) string {
+	if i := strings.IndexByte(dotPath, '.'); i >= 0 {
+		return dotPath[:i] + ":" + dotPath[i+1:]
+	}
+	return dotPath
+}
+
 // writeScopeCollision renders one env var defined under two unrelated scopes,
 // with copy-pasteable fixes tailored to the command that ran.
 func (e *EnvConflictError) writeScopeCollision(sb *strings.Builder, c EnvConflict) {
-	scopeA, scopeB := parentDotPath(c.DotPaths[0]), parentDotPath(c.DotPaths[1])
+	scopeA, scopeB := scopeForm(parentDotPath(c.DotPaths[0])), scopeForm(parentDotPath(c.DotPaths[1]))
 
 	fmt.Fprintf(sb, "%s✗ %s%s  %s— same env var from two scopes%s\n",
 		colorBold+colorPink, c.EnvKey, colorReset, colorGray, colorReset)

@@ -61,12 +61,13 @@ func TestGet_missing_key_fails(t *testing.T) {
 	}
 }
 
-func TestGet_missing_key_lists_available(t *testing.T) {
-	// the error should name the level where the path broke and its keys
+func TestGet_missing_key_reports_missing_key(t *testing.T) {
+	// without a key the vault cannot be decrypted, so ward reports the missing
+	// key rather than a level-aware key-not-found hint.
 	_, stderr, _ := testutil.Run(t, bin, fix("missing-key"), "get", "app:main.nonexistent")
 	clean := testutil.StripANSI(stderr)
-	if !testutil.Contains(clean, "available under app.main") || !testutil.Contains(clean, "name") {
-		t.Errorf("expected available-keys hint under app.main, got: %q", stderr)
+	if !testutil.Contains(clean, "no encryption key found") {
+		t.Errorf("expected missing-key error, got: %q", stderr)
 	}
 }
 

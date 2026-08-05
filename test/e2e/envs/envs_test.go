@@ -87,7 +87,7 @@ func TestEnvs_conflict_envvar_shows_envs_examples(t *testing.T) {
 	// the resolution examples must reference the command that ran (envs), not exec
 	_, stderr, _ := testutil.Run(t, bin, fix("conflict-envvar"), "envs")
 	clean := testutil.StripANSI(stderr)
-	if !testutil.Contains(clean, "ward envs app.staging") {
+	if !testutil.Contains(clean, "ward secrets app:staging") {
 		t.Errorf("expected 'ward envs' example, got: %q", stderr)
 	}
 	if testutil.Contains(clean, "ward exec") {
@@ -106,7 +106,7 @@ func TestEnvs_conflict_envvar_prefixed_succeeds(t *testing.T) {
 }
 
 func TestEnvs_conflict_envvar_hint_staging(t *testing.T) {
-	out, _, code := testutil.Run(t, bin, fix("conflict-envvar"), "envs", "app.staging")
+	out, _, code := testutil.Run(t, bin, fix("conflict-envvar"), "envs", "app:staging")
 	if code != 0 {
 		t.Fatalf("exit %d", code)
 	}
@@ -116,7 +116,7 @@ func TestEnvs_conflict_envvar_hint_staging(t *testing.T) {
 }
 
 func TestEnvs_conflict_envvar_hint_production(t *testing.T) {
-	out, _, code := testutil.Run(t, bin, fix("conflict-envvar"), "envs", "app.production")
+	out, _, code := testutil.Run(t, bin, fix("conflict-envvar"), "envs", "app:production")
 	if code != 0 {
 		t.Fatalf("exit %d", code)
 	}
