@@ -1,3 +1,7 @@
+encryption:
+  engine: sops+age
+  key_file: .ward/sample.key
+
 vaults:
   - name: va
     path: .ward/vaults/va

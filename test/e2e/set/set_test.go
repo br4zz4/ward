@@ -38,15 +38,51 @@ func TestSet_updates_existing_key(t *testing.T) {
 	copyFixture(t, fix("basic"), dir)
 
 	// act
-	_, _, code := testutil.Run(t, bin, dir, "set", "app.main.token", "updated")
+	_, _, code := testutil.Run(t, bin, dir, "set", "app:main.token", "updated")
 
 	// assert
 	if code != 0 {
 		t.Fatalf("set exit %d", code)
 	}
-	out, _, _ := testutil.Run(t, bin, dir, "get", "app.main.token")
+	out, _, _ := testutil.Run(t, bin, dir, "get", "app:main.token")
 	if !testutil.Contains(out, "updated") {
 		t.Errorf("expected updated, got: %q", out)
+	}
+}
+
+func TestSet_updates_with_vault_secret_flags(t *testing.T) {
+	// arrange
+	dir := t.TempDir()
+	copyFixture(t, fix("basic"), dir)
+
+	// act
+	_, _, code := testutil.Run(t, bin, dir, "set", "--vault", "app", "--secret", "main.token", "v")
+
+	// assert
+	if code != 0 {
+		t.Fatalf("set exit %d", code)
+	}
+	out, _, _ := testutil.Run(t, bin, dir, "get", "app:main.token")
+	if !testutil.Contains(out, "v") {
+		t.Errorf("expected v, got: %q", out)
+	}
+}
+
+func TestSet_updates_with_scope_flag(t *testing.T) {
+	// arrange
+	dir := t.TempDir()
+	copyFixture(t, fix("basic"), dir)
+
+	// act
+	_, _, code := testutil.Run(t, bin, dir, "set", "-s", "app:main.token", "v")
+
+	// assert
+	if code != 0 {
+		t.Fatalf("set exit %d", code)
+	}
+	out, _, _ := testutil.Run(t, bin, dir, "get", "app:main.token")
+	if !testutil.Contains(out, "v") {
+		t.Errorf("expected v, got: %q", out)
 	}
 }
 
@@ -56,7 +92,7 @@ func TestSet_creates_new_file_with_notice(t *testing.T) {
 	copyFixture(t, fix("basic"), dir)
 
 	// act
-	_, stderr, code := testutil.Run(t, bin, dir, "set", "app.prod.apikey", "xyz")
+	_, stderr, code := testutil.Run(t, bin, dir, "set", "app:prod.apikey", "xyz")
 
 	// assert
 	if code != 0 {
@@ -65,7 +101,7 @@ func TestSet_creates_new_file_with_notice(t *testing.T) {
 	if !testutil.Contains(testutil.StripANSI(stderr), "a new file was created") {
 		t.Errorf("expected new-file notice, got: %q", stderr)
 	}
-	out, _, _ := testutil.Run(t, bin, dir, "get", "app.prod.apikey")
+	out, _, _ := testutil.Run(t, bin, dir, "get", "app:prod.apikey")
 	if !testutil.Contains(out, "xyz") {
 		t.Errorf("expected xyz, got: %q", out)
 	}
@@ -77,7 +113,7 @@ func TestSet_shallow_path_fails(t *testing.T) {
 	copyFixture(t, fix("basic"), dir)
 
 	// act
-	_, stderr, code := testutil.Run(t, bin, dir, "set", "app.token", "x")
+	_, stderr, code := testutil.Run(t, bin, dir, "set", "app:token", "x")
 
 	// assert
 	if code == 0 {
@@ -94,7 +130,7 @@ func TestSet_unknown_vault_fails(t *testing.T) {
 	copyFixture(t, fix("basic"), dir)
 
 	// act
-	_, stderr, code := testutil.Run(t, bin, dir, "set", "unknown.main.token", "x")
+	_, stderr, code := testutil.Run(t, bin, dir, "set", "unknown:main.token", "x")
 
 	// assert
 	if code == 0 {
@@ -111,23 +147,23 @@ func TestSet_new_key_preserves_sibling_keys_in_same_file(t *testing.T) {
 	copyFixture(t, fix("basic"), dir)
 
 	// act: add a brand-new key to the same file
-	_, _, code := testutil.Run(t, bin, dir, "set", "app.main.password", "s3cr3t")
+	_, _, code := testutil.Run(t, bin, dir, "set", "app:main.password", "s3cr3t")
 
 	// assert: the new key was written
 	if code != 0 {
 		t.Fatalf("set exit %d", code)
 	}
-	out, _, _ := testutil.Run(t, bin, dir, "get", "app.main.password")
+	out, _, _ := testutil.Run(t, bin, dir, "get", "app:main.password")
 	if !testutil.Contains(out, "s3cr3t") {
 		t.Errorf("expected password=s3cr3t, got: %q", out)
 	}
 
 	// assert: pre-existing sibling keys must still be present
-	out, _, _ = testutil.Run(t, bin, dir, "get", "app.main.token")
+	out, _, _ = testutil.Run(t, bin, dir, "get", "app:main.token")
 	if !testutil.Contains(out, "original") {
 		t.Errorf("expected token=original to be preserved, got: %q", out)
 	}
-	out, _, _ = testutil.Run(t, bin, dir, "get", "app.main.name")
+	out, _, _ = testutil.Run(t, bin, dir, "get", "app:main.name")
 	if !testutil.Contains(out, "my-service") {
 		t.Errorf("expected name=my-service to be preserved, got: %q", out)
 	}
@@ -139,7 +175,7 @@ func TestSet_group_path_fails_with_children_listed(t *testing.T) {
 	copyFixture(t, fix("group"), dir)
 
 	// act: try to set a value at a group path (3 segments, passes requireLeafDepth)
-	_, stderr, code := testutil.Run(t, bin, dir, "set", "app.main.db", "some-value")
+	_, stderr, code := testutil.Run(t, bin, dir, "set", "app:main.db", "some-value")
 
 	// assert: must fail
 	if code == 0 {
@@ -160,7 +196,7 @@ func TestSet_type2_collision_writes_and_warns(t *testing.T) {
 	copyFixture(t, fix("collision"), dir)
 
 	// act: vb.prod.token collides with va.staging.token on env var TOKEN
-	_, stderr, code := testutil.Run(t, bin, dir, "set", "vb.prod.token", "from-vb")
+	_, stderr, code := testutil.Run(t, bin, dir, "set", "vb:prod.token", "from-vb")
 
 	// assert: write succeeds AND a warning is printed
 	if code != 0 {
@@ -169,7 +205,7 @@ func TestSet_type2_collision_writes_and_warns(t *testing.T) {
 	if !testutil.Contains(testutil.StripANSI(stderr), "collides") {
 		t.Errorf("expected collision warning, got: %q", stderr)
 	}
-	out, _, _ := testutil.Run(t, bin, dir, "get", "vb.prod.token")
+	out, _, _ := testutil.Run(t, bin, dir, "get", "vb:prod.token")
 	if !testutil.Contains(out, "from-vb") {
 		t.Errorf("expected value written despite collision, got: %q", out)
 	}

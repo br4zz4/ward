@@ -1,0 +1,21 @@
+app:
+    main:
+        db:
+            host: ENC[AES256_GCM,data:yJ9xKBh9isk7,iv:vFxVzuTrzQyI8DbUQlzUhR2FMRE7LWUPIikreNnDEVo=,tag:fX7YD64BDXVZH4g7SFQ8fw==,type:str]
+            port: ENC[AES256_GCM,data:lad8Yg==,iv:aHHB520Fm4qMZFstap3x+LiDFYrujwqXkpIkLXEhPyY=,tag:BMepbPjxwaZCjyCmil1h+g==,type:str]
+        token: ENC[AES256_GCM,data:nKS4iQNU,iv:s3ZQUDG79o9e+UvTMWao+VV1pYssjH4D35XCu2KjKKY=,tag:KMgZUkob1pdUoLljEK0ykQ==,type:str]
+sops:
+    age:
+        - recipient: age1g9grlq7gm29xnapmxye6c2mf53uvzrqgx7nq25x5j3p6ztyz3e3qu9v5k6
+          enc: |
+            -----BEGIN AGE ENCRYPTED FILE-----
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSBWT3Z4TVJSbENhRGxlcjRT
+            STA5V0EvWlFhcGplK1F0RmpWeVAzL29OMUJRClNNZnNlMDFZWUNzZ0hSRG5rdWc0
+            UmhJNWx1N1JUT3M3WmVlY0tINmJBK2sKLS0tIFVac3hlbi9jU1JJdEUvcDh2Tyto
+            TzgzWFdjNEJySE5scWNiZUc1Yi9jWEEKR4iauQSiDUsyGuz9cWtcRCULSsLrXrx5
+            +Zofj4WUzgKYLLWfHMJnyY2JHZHTi40PEhA8m15gK2xOpdXUz4Bouw==
+            -----END AGE ENCRYPTED FILE-----
+    lastmodified: "2026-08-05T19:38:18Z"
+    mac: ENC[AES256_GCM,data:jL7tdOrrta0MfgIes6tvD/kiKAHH9uvvZ88u5zEuKcu/s94SfvmvU33uCIWOzTuuHSn5pUIwiHwUZYWrJuYy32euhbTSU62HNnkXWqmzmkNzvfzB05qJC28nbNBbxpyfv2D7V1mflD3v4aVzV4gRfTxOZTYLOZA7QD8NbhKFVQ4=,iv:XvAgOuPdKrUfrR+slifGwP4faPBwCbHpwCS4OsTaQrg=,tag:r3AFGiRQcs6NtNag0x04BQ==,type:str]
+    unencrypted_suffix: _unencrypted
+    version: 3.12.1

@@ -1,4 +1,0 @@
-app:
-  main:
-    name: my-service
-    token: original

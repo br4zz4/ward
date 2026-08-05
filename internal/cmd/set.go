@@ -11,42 +11,67 @@ import (
 )
 
 func NewSetCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:               "set <dot.path> <value>",
-		Short:             "Set a single secret at a full dot-path",
-		Args:              cobra.ExactArgs(2),
+	c := &cobra.Command{
+		Use:               "set [scope] <value>",
+		Short:             "Set a single secret at a scope",
+		Args:              cobra.ArbitraryArgs,
 		ValidArgsFunction: completeDotPaths,
-		Run: func(_ *cobra.Command, args []string) {
-			dotPath, value := args[0], args[1]
-
-			requireLeafDepth(dotPath)
-
-			ed := newSecretEditor()
-			vault := ed.vaultFor(dotPath)
-
-			// A leaf lives in exactly one file. More than one → Type-1 conflict.
-			targets := secrets.FilesMatching(ed.files, dotPath, secrets.IsLeaf)
-			ed.abortOnAmbiguity(dotPath, targets)
-
-			if setPathIsGroup(ed.files, dotPath) {
-				fatal(groupPathError(ed.files, dotPath))
-			}
-
-			targetPath, created := resolveSetTarget(targets, dotPath, vault.Path, ed.cfgPath)
-
-			tree := secrets.NewTree(nil)
-			if _, err := os.Stat(targetPath); err == nil {
-				tree = ed.load(targetPath)
-			}
-			tree.Set(dotPath, value)
-			ed.save(targetPath, tree)
-
-			reportSet(dotPath, targetPath, created)
-			if warn := envCollisionWarning(ed.eng, dotPath); warn != "" {
-				fmt.Fprint(os.Stderr, warn)
-			}
-		},
 	}
+	sf := registerScopeFlags(c)
+	c.Run = func(_ *cobra.Command, args []string) {
+		scopePositional, value := splitSetArgs(sf, args)
+
+		sc, err := resolveScopeArg(sf, scopePositional)
+		if err != nil {
+			fatal(err)
+		}
+
+		dotPath := sc.TreePath()
+		requireLeafDepth(dotPath)
+
+		ed := newSecretEditor()
+		vault := ed.vaultForScope(sc)
+
+		// A leaf lives in exactly one file. More than one → Type-1 conflict.
+		targets := secrets.FilesMatching(ed.files, dotPath, secrets.IsLeaf)
+		ed.abortOnAmbiguity(dotPath, targets)
+
+		if setPathIsGroup(ed.files, dotPath) {
+			fatal(groupPathError(ed.files, dotPath))
+		}
+
+		targetPath, created := resolveSetTarget(targets, dotPath, vault.Path, ed.cfgPath)
+
+		tree := secrets.NewTree(nil)
+		if _, err := os.Stat(targetPath); err == nil {
+			tree = ed.load(targetPath)
+		}
+		tree.Set(dotPath, value)
+		ed.save(targetPath, tree)
+
+		reportSet(sc.FullPath(), targetPath, created)
+		if warn := envCollisionWarning(ed.eng, dotPath); warn != "" {
+			fmt.Fprint(os.Stderr, warn)
+		}
+	}
+	return c
+}
+
+// splitSetArgs separates the positional scope (if any) from the value argument.
+// When a scope flag was used the value is the sole positional; otherwise the
+// scope is the first positional and the value the second.
+func splitSetArgs(sf *scopeFlags, args []string) (scopePositional []string, value string) {
+	usedFlags := sf.scope != "" || sf.vault != "" || sf.secret != ""
+	if usedFlags {
+		if len(args) != 1 {
+			fatal(fmt.Errorf("set with a scope flag takes exactly one argument: the value"))
+		}
+		return nil, args[0]
+	}
+	if len(args) != 2 {
+		fatal(fmt.Errorf("usage: set <scope> <value> (e.g. set commons:infra.KEY value)"))
+	}
+	return []string{args[0]}, args[1]
 }
 
 // resolveSetTarget picks the file to write: the sole existing file that defines
