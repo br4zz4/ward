@@ -35,7 +35,7 @@ func TestOverride_replaces_content(t *testing.T) {
 		t.Fatalf("override exit %d", cmd)
 	}
 
-	out, _, code := testutil.Run(t, bin, dir, "get", "app.main.name")
+	out, _, code := testutil.Run(t, bin, dir, "get", "app:main.name")
 	if code != 0 {
 		t.Fatalf("get exit %d", code)
 	}

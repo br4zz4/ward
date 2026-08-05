@@ -35,7 +35,7 @@ func TestPlain_read_without_key(t *testing.T) {
 	os.WriteFile(filepath.Join(vaultDir, "config.plain.ward"),
 		[]byte(vault+":\n  config:\n    port: \"8080\"\n"), 0644)
 
-	out, _, code := testutil.Run(t, bin, dir, "get", vault+".config.port")
+	out, _, code := testutil.Run(t, bin, dir, "get", vault+":config.port")
 	if code != 0 {
 		t.Fatalf("get exit %d", code)
 	}
@@ -54,7 +54,7 @@ func TestPlain_encrypted_without_key_errors(t *testing.T) {
 	// remove the key so nothing decrypts
 	os.Remove(filepath.Join(dir, ".ward", vault+".key"))
 
-	_, _, code := testutil.Run(t, bin, dir, "get", vault+".secret_1")
+	_, _, code := testutil.Run(t, bin, dir, "get", vault+":secret_1")
 	if code == 0 {
 		t.Fatal("expected non-zero exit when key is missing and file is encrypted")
 	}
@@ -73,7 +73,7 @@ func TestPlain_survives_key_removal(t *testing.T) {
 	os.Remove(filepath.Join(dir, ".ward", vault+".key"))
 
 	// encrypted secret errors, but plain value is still retrievable and a warning is printed
-	out, stderr, _ := testutil.Run(t, bin, dir, "get", vault+".public.name")
+	out, stderr, _ := testutil.Run(t, bin, dir, "get", vault+":public.name")
 	if !testutil.Contains(out, "hello") && !testutil.Contains(stderr, "hello") {
 		t.Errorf("expected plain value 'hello' to be readable, stdout=%q stderr=%q", out, stderr)
 	}

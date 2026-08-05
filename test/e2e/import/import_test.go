@@ -42,7 +42,7 @@ func TestImport_replaces_content(t *testing.T) {
 		t.Fatalf("import exit %d", code)
 	}
 
-	out, _, getCode := testutil.Run(t, bin, dir, "get", "app.main.name")
+	out, _, getCode := testutil.Run(t, bin, dir, "get", "app:main.name")
 	if getCode != 0 {
 		t.Fatalf("get exit %d", getCode)
 	}

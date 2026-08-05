@@ -49,7 +49,7 @@ func TestSops_raw_decrypts_nested_file(t *testing.T) {
 }
 
 func TestSops_get_merges_hierarchy(t *testing.T) {
-	out, _, code := testutil.Run(t, bin, fix("basic"), "get", "company.name")
+	out, _, code := testutil.Run(t, bin, fix("basic"), "get", "company:name")
 	if code != 0 {
 		t.Fatalf("exit %d", code)
 	}
@@ -59,7 +59,7 @@ func TestSops_get_merges_hierarchy(t *testing.T) {
 }
 
 func TestSops_get_deep_value(t *testing.T) {
-	out, _, code := testutil.Run(t, bin, fix("basic"), "get", "company.sectors.one.staging.database_url")
+	out, _, code := testutil.Run(t, bin, fix("basic"), "get", "company:sectors.one.staging.database_url")
 	if code != 0 {
 		t.Fatalf("exit %d", code)
 	}

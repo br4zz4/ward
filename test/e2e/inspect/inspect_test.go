@@ -88,7 +88,7 @@ func TestInspect_conflict_envvar_prefixed_ok(t *testing.T) {
 
 func TestInspect_conflict_envvar_scoped_leaf_ok(t *testing.T) {
 	// scoping to one side of the collision disambiguates → clean
-	_, _, code := testutil.Run(t, bin, fix("conflict-envvar"), "inspect", "app.staging")
+	_, _, code := testutil.Run(t, bin, fix("conflict-envvar"), "inspect", "app:staging")
 	if code != 0 {
 		t.Fatalf("expected exit 0 when scoped to a single side, got %d", code)
 	}

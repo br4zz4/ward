@@ -32,7 +32,7 @@ func wardProject(t *testing.T, dir string) {
 	if _, _, code := testutil.Run(t, bin, dir, "init"); code != 0 {
 		t.Fatalf("ward init failed in %s", dir)
 	}
-	if _, stderr, code := testutil.Run(t, bin, dir, "set", vault+".main.token", "secret123"); code != 0 {
+	if _, stderr, code := testutil.Run(t, bin, dir, "set", vault+":main.token", "secret123"); code != 0 {
 		t.Fatalf("ward set failed (vault=%s): %s", vault, stderr)
 	}
 }
@@ -56,7 +56,7 @@ func TestRotateKey_secret_readable_after_rotation(t *testing.T) {
 	}
 
 	// assert: secret is still readable with the new key
-	out, _, _ := testutil.Run(t, bin, dir, "get", vaultName(dir)+".main.token")
+	out, _, _ := testutil.Run(t, bin, dir, "get", vaultName(dir)+":main.token")
 	if !testutil.Contains(out, "secret123") {
 		t.Errorf("expected secret123 after rotation, got: %q", out)
 	}

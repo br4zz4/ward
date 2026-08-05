@@ -108,7 +108,7 @@ func TestExec_conflict_envvar_prefixed_runs(t *testing.T) {
 }
 
 func TestExec_conflict_envvar_hint_runs(t *testing.T) {
-	out, _, code := testutil.Run(t, bin, fix("conflict-envvar"), "exec", "app.staging", "--", "env")
+	out, _, code := testutil.Run(t, bin, fix("conflict-envvar"), "exec", "app:staging", "--", "env")
 	if code != 0 {
 		t.Fatalf("exit %d", code)
 	}
