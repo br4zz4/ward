@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 
@@ -55,6 +56,42 @@ func (e *secretEditor) vaultFor(dotPath string) *config.Source {
 		fatalVaultNotFound(name)
 	}
 	return src
+}
+
+// vaultForScope resolves the vault for a scope. A qualified scope names the
+// vault directly; an unqualified one is resolved to the single vault whose
+// files define the secret-path, exiting when ambiguous or absent.
+func (e *secretEditor) vaultForScope(sc secrets.Scope) *config.Source {
+	if sc.Vault != "" {
+		src := findVault(e.cfg, sc.Vault)
+		if src == nil {
+			fatalVaultNotFound(sc.Vault)
+		}
+		return src
+	}
+
+	var matches []*config.Source
+	for i := range e.cfg.Vaults {
+		v := &e.cfg.Vaults[i]
+		full := v.Name + "." + sc.SecretPath
+		if len(secrets.FilesMatching(e.files, full, secrets.Exists)) > 0 {
+			matches = append(matches, v)
+		}
+	}
+
+	switch len(matches) {
+	case 0:
+		fatal(e.keyNotFound(sc.SecretPath))
+	case 1:
+		return matches[0]
+	default:
+		names := make([]string, len(matches))
+		for i, m := range matches {
+			names[i] = m.Name
+		}
+		fatal(fmt.Errorf("%s is defined in multiple vaults (%s) — qualify it as <vault>:%s", sc.SecretPath, strings.Join(names, ", "), sc.SecretPath))
+	}
+	return nil
 }
 
 // abortOnAmbiguity exits when the dot-path is defined in more than one file
