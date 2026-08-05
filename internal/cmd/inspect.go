@@ -25,19 +25,20 @@ func NewInspectCmd() *cobra.Command {
 	var prefixed bool
 
 	c := &cobra.Command{
-		Use:               "inspect [--prefixed] [dot.path]",
+		Use:               "inspect [--prefixed] [scope]",
 		Short:             "Detect conflicts and env var collisions across all files",
-		Args:              cobra.MaximumNArgs(1),
+		Args:              cobra.ArbitraryArgs,
 		ValidArgsFunction: completeDotPaths,
-		Run: func(_ *cobra.Command, args []string) {
-			dotPath := ""
-			if len(args) == 1 {
-				dotPath = args[0]
-			}
+	}
+	sf := registerScopeFlags(c)
+	c.Run = func(_ *cobra.Command, args []string) {
+		sc, err := resolveScopeArg(sf, args)
+		if err != nil {
+			fatal(err)
+		}
 
-			result := runInspectAll(dotPath, prefixed)
-			printInspectResult(result, prefixed)
-		},
+		result := runInspectAll(sc.FullDotPath(), prefixed)
+		printInspectResult(result, prefixed)
 	}
 
 	c.Flags().BoolVar(&prefixed, "prefixed", false, "check as if env vars used full path names (no Type-2 collisions)")

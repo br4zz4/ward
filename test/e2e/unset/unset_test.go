@@ -38,13 +38,13 @@ func TestUnset_removes_existing_key(t *testing.T) {
 	copyFixture(t, fix("basic"), dir)
 
 	// act
-	_, _, code := testutil.Run(t, bin, dir, "unset", "app.main.token")
+	_, _, code := testutil.Run(t, bin, dir, "unset", "app:main.token")
 
 	// assert
 	if code != 0 {
 		t.Fatalf("unset exit %d", code)
 	}
-	_, _, getCode := testutil.Run(t, bin, dir, "get", "app.main.token")
+	_, _, getCode := testutil.Run(t, bin, dir, "get", "app:main.token")
 	if getCode == 0 {
 		t.Error("expected key to be gone after unset")
 	}
@@ -56,10 +56,10 @@ func TestUnset_keeps_sibling_key(t *testing.T) {
 	copyFixture(t, fix("basic"), dir)
 
 	// act
-	testutil.Run(t, bin, dir, "unset", "app.main.token")
+	testutil.Run(t, bin, dir, "unset", "app:main.token")
 
 	// assert: sibling survives and structure stays valid
-	out, _, code := testutil.Run(t, bin, dir, "get", "app.main.name")
+	out, _, code := testutil.Run(t, bin, dir, "get", "app:main.name")
 	if code != 0 {
 		t.Fatalf("get sibling exit %d", code)
 	}
@@ -74,7 +74,7 @@ func TestUnset_missing_key_fails(t *testing.T) {
 	copyFixture(t, fix("basic"), dir)
 
 	// act
-	_, stderr, code := testutil.Run(t, bin, dir, "unset", "app.main.nonexistent")
+	_, stderr, code := testutil.Run(t, bin, dir, "unset", "app:main.nonexistent")
 
 	// assert
 	if code == 0 {
@@ -90,8 +90,8 @@ func TestUnset_group_path_fails(t *testing.T) {
 	dir := t.TempDir()
 	copyFixture(t, fix("basic"), dir)
 
-	// act: app.main is a group (has children), not a leaf
-	_, stderr, code := testutil.Run(t, bin, dir, "unset", "app.main")
+	// act: app:main is a group (has children), not a leaf
+	_, stderr, code := testutil.Run(t, bin, dir, "unset", "app:main")
 
 	// assert: refuses and explains, without removing the branch
 	if code == 0 {
@@ -100,7 +100,7 @@ func TestUnset_group_path_fails(t *testing.T) {
 	if !testutil.Contains(testutil.StripANSI(stderr), "group, not a leaf") {
 		t.Errorf("expected group-not-leaf error, got: %q", stderr)
 	}
-	out, _, _ := testutil.Run(t, bin, dir, "get", "app.main.name")
+	out, _, _ := testutil.Run(t, bin, dir, "get", "app:main.name")
 	if !testutil.Contains(out, "my-service") {
 		t.Errorf("expected branch to remain intact, got: %q", out)
 	}
@@ -112,7 +112,7 @@ func TestUnset_unknown_vault_fails(t *testing.T) {
 	copyFixture(t, fix("basic"), dir)
 
 	// act
-	_, stderr, code := testutil.Run(t, bin, dir, "unset", "unknown.main.token")
+	_, stderr, code := testutil.Run(t, bin, dir, "unset", "unknown:main.token")
 
 	// assert
 	if code == 0 {
@@ -120,5 +120,33 @@ func TestUnset_unknown_vault_fails(t *testing.T) {
 	}
 	if !testutil.Contains(testutil.StripANSI(stderr), "not found") {
 		t.Errorf("expected vault-not-found error, got: %q", stderr)
+	}
+}
+
+// ── scope: qualified unset on a multi-vault fixture ───────────────────────────
+
+func TestUnset_scope_qualified_removes_key(t *testing.T) {
+	// arrange
+	dir := t.TempDir()
+	copyFixture(t, fix("mv"), dir)
+
+	// act: TF_VAR_aws_region exists in both vaults; qualifying picks commons
+	_, _, code := testutil.Run(t, bin, dir, "unset", "commons:infra.TF_VAR_aws_region")
+
+	// assert
+	if code != 0 {
+		t.Fatalf("unset exit %d", code)
+	}
+	_, _, getCode := testutil.Run(t, bin, dir, "get", "commons:infra.TF_VAR_aws_region")
+	if getCode == 0 {
+		t.Error("expected commons key to be gone after unset")
+	}
+	// the trgclub copy must survive
+	out, _, getCode2 := testutil.Run(t, bin, dir, "get", "trgclub:infra.TF_VAR_aws_region")
+	if getCode2 != 0 {
+		t.Fatalf("expected trgclub key to remain, get exit %d", getCode2)
+	}
+	if !testutil.Contains(out, "us-west-2") {
+		t.Errorf("expected us-west-2 to remain, got: %q", out)
 	}
 }

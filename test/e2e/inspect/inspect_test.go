@@ -102,6 +102,16 @@ func TestInspect_conflict_envvar_scoped_parent_fails(t *testing.T) {
 	}
 }
 
+// ── scope: qualified inspect on a multi-vault fixture ─────────────────────────
+
+func TestInspect_scope_qualified_clean(t *testing.T) {
+	// scoping to a single vault's subtree contains no collision → clean
+	_, _, code := testutil.Run(t, bin, fix("mv"), "inspect", "commons:infra")
+	if code != 0 {
+		t.Fatalf("expected exit 0 when scoped to commons:infra, got %d", code)
+	}
+}
+
 // ── structure-violation ───────────────────────────────────────────────────────
 
 func TestInspect_structure_violation_fails(t *testing.T) {
