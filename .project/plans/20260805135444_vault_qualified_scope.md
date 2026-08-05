@@ -1119,6 +1119,230 @@ git commit -m "docs: scope path, overlay e asdf no readme"
 
 ---
 
+## Task 11: MCP scope support
+
+**Files:**
+- Modify: `internal/mcp/server.go`
+
+**Why:** The MCP wraps the `ward` binary via `os.Executable()`, so it depends on
+the CLI (Tasks 1–5) being in place. `ward_exec` currently accepts only `command`
+(no scope) and always runs the whole tree. `ward_tree`/`ward_envs`/`ward_get` pass
+`path` through and inherit the new syntax for free — only their descriptions need
+updating. This task makes the overlay reachable by agents.
+
+**Interfaces:**
+- Consumes: the updated CLI (Tasks 1–5) — no direct Go dependency, spawns `ward`.
+
+- [ ] **Step 1: Write the failing test**
+
+MCP tools are integration-tested by spawning the built binary. Add a fixture-backed
+test under `test/integration` (tag `integration`) or, if MCP has no harness yet, a
+minimal one that starts `Serve` is out of scope — instead assert the argument
+wiring via a small unit that builds the args slice. Prefer extracting the arg
+assembly for `ward_exec` into a testable helper:
+
+```go
+// internal/mcp/server_test.go
+package mcp
+
+import (
+	"reflect"
+	"testing"
+)
+
+func TestExecArgs_withScopes(t *testing.T) {
+	got := execArgs("", []string{"infra.staging"}, false, "rails server")
+	want := []string{"exec", "infra.staging", "--", "rails", "server"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %v want %v", got, want)
+	}
+}
+
+func TestExecArgs_multiScope_prefixed(t *testing.T) {
+	got := execArgs("", []string{"commons:infra.staging", "trgclub:infra.staging"}, true, "env")
+	want := []string{"exec", "--prefixed", "commons:infra.staging", "trgclub:infra.staging", "--", "env"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %v want %v", got, want)
+	}
+}
+
+func TestExecArgs_noScope(t *testing.T) {
+	got := execArgs("", nil, false, "env")
+	want := []string{"exec", "--", "env"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %v want %v", got, want)
+	}
+}
+```
+
+- [ ] **Step 2: Run to verify it fails**
+
+```bash
+go test ./internal/mcp/ -run TestExecArgs
+```
+
+Expected: FAIL — `undefined: execArgs`
+
+- [ ] **Step 3: Write minimal implementation**
+
+Extract the arg builder and add `scope` (repeatable) + `prefixed` to `ward_exec`:
+
+```go
+// execArgs assembles ward exec args: optional -d dir, --prefixed, zero-or-more
+// scopes, then -- and the command tokens.
+func execArgs(dir string, scopes []string, prefixed bool, command string) []string {
+	args := []string{"exec"}
+	if prefixed {
+		args = append(args, "--prefixed")
+	}
+	args = append(args, scopes...)
+	args = append(args, "--")
+	args = append(args, strings.Fields(command)...)
+	return dirArgs(dir, args...)
+}
+```
+
+Update the `ward_exec` tool registration to accept scopes. `mcp-go` string params
+are single-valued; accept a comma-or-space-separated `scope` string and split it:
+
+```go
+mcp.NewTool("ward_exec",
+	mcp.WithDescription("Execute a command with ward secrets injected as env vars. "+
+		"Optionally scope which secrets are injected with 'scope' — a vault-qualified "+
+		"or overlay path (see ward_docs). Multiple scopes space-separated."),
+	mcp.WithString("command", mcp.Required(), mcp.Description("command and arguments, e.g. 'rails server'")),
+	mcp.WithString("scope", mcp.Description("scope(s) to inject: 'commons:infra.staging' (one vault) "+
+		"or 'infra.staging' (overlay all vaults); space-separate multiple")),
+	mcp.WithBoolean("prefixed", mcp.Description("use full dot-path names as env var keys")),
+	mcp.WithString("dir", mcp.Description("project directory containing .ward/config.yaml (default: current directory)")),
+),
+func(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	var scopes []string
+	if s := strings.TrimSpace(req.GetString("scope", "")); s != "" {
+		scopes = strings.Fields(s)
+	}
+	args := execArgs(req.GetString("dir", ""), scopes, req.GetBool("prefixed", false), req.GetString("command", ""))
+	out, err := run(args...)
+	if err != nil {
+		return fail(err), nil
+	}
+	return ok(out), nil
+},
+```
+
+Also update the descriptions of `ward_tree`, `ward_envs`, `ward_get` from
+"dot-path" to "scope (vault-qualified or overlay; see ward_docs)". No logic change
+there — `path` already passes through.
+
+- [ ] **Step 4: Run to verify it passes**
+
+```bash
+go test ./internal/mcp/ -run TestExecArgs && go build ./...
+```
+
+Expected: PASS
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add internal/mcp/server.go internal/mcp/server_test.go
+git commit -m "feat: mcp expoe scope em ward_exec"
+```
+
+---
+
+## Task 12: MCP docs (ward_docs)
+
+**Files:**
+- Modify: `internal/mcp/server.go` (the `wardDocs` const)
+
+Agents read `ward_docs` to learn ward. It must teach the scope grammar and overlay,
+or the new MCP `scope` param is undiscoverable.
+
+- [ ] **Step 1** — Add a "Scope" section to `wardDocs`:
+
+````markdown
+## Scope (vault-qualified paths)
+
+A scope selects which part of the merged tree to inject:
+
+- `commons:infra.staging` — one vault (strict). Only that vault's subtree.
+- `infra.staging` — overlay. Same secret-path under EVERY vault, unioned
+  (e.g. commons + trgclub). Values specific to each vault coexist; genuine
+  same-name collisions across vaults still error (use prefixed to keep both).
+- multiple scopes — space-separate to union explicit subtrees.
+
+Note: a plain dotted path like `commons.infra.staging` is treated as an overlay
+secret-path, NOT as vault `commons` — to target a vault use the colon form
+`commons:infra.staging`.
+````
+
+Also replace the "dot-path" bullet in Core concepts with a "scope" bullet, and
+update the `ward exec` line in Key commands to `ward exec [scope] -- cmd`.
+
+- [ ] **Step 2: Verify** — build; visual check the const compiles.
+
+```bash
+go build ./...
+```
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add internal/mcp/server.go
+git commit -m "docs: ward_docs explica scope e overlay"
+```
+
+---
+
+## Task 13: Integrate to main + release
+
+**Preconditions:** all of `go build ./...`, `go test ./...`,
+`go test -tags e2e ./test/e2e/...`, `go test -tags integration ./test/integration/...`
+green on the branch.
+
+- [ ] **Step 1: Rebase branch onto latest main**
+
+```bash
+git fetch origin
+git rebase origin/main
+```
+
+Resolve any conflicts; re-run the full test suite after rebase.
+
+- [ ] **Step 2: Fast-forward main and push** (rebase flow, linear history, no PR)
+
+```bash
+git checkout main
+git pull --rebase origin main
+git merge --ff-only feat/vault-qualified-scope
+git push origin main
+```
+
+- [ ] **Step 3: Tag release for goreleaser**
+
+Next tag after `v0.2.0`. This ships a new feature plus a compat break (dot-only no
+longer targets a vault) → **`v0.3.0`**.
+
+```bash
+git tag v0.3.0
+git push origin v0.3.0
+```
+
+Confirm the goreleaser workflow runs and publishes brew/apt/apk/asdf artifacts, so
+agents pick up the new `ward` binary the MCP invokes.
+
+- [ ] **Step 4: Confirm the MCP surface end-to-end**
+
+After the release binary is in place, from an agent (or locally with the fresh
+binary), verify:
+
+```bash
+ward exec infra.staging -- env | grep TF_VAR   # overlay union, no collision
+```
+
+---
+
 ## Final verification
 
 ```bash
@@ -1156,6 +1380,16 @@ ward exec infra.staging -- env | grep TF_VAR   # union, no collision, production
   confirm it compiles with the exported field access.
 
 **Parallelization:** Tasks 1→2→3→4→5 are a dependency chain (each consumes the
-prior). Tasks 6, 7, 8 depend on 5 but are independent of each other. Task 9 and 10
-are independent of everything after 5. Suggested parallel wave after Task 5:
-{6, 7, 8, 9, 10}.
+prior). Tasks 6, 7, 8, 9, 10, 11, 12 all depend on 5 (11/12 because the MCP wraps
+the CLI binary) but are independent of each other. Suggested parallel wave after
+Task 5: {6, 7, 8, 9, 10, 11, 12}. Task 13 (integrate + release) runs last, after
+the whole suite is green.
+
+**MCP note:** the MCP cannot be implemented "first" in code terms — it shells out
+to the `ward` binary, so it needs Tasks 1–5 done. It ships in the **same push** as
+the CLI (Task 13), and the release/tag makes the updated binary reachable by the
+agents that consume the MCP. `ward_tree`/`ward_envs`/`ward_get` gain the syntax for
+free (they forward `path`); only `ward_exec` needs a new `scope` param (Task 11).
+
+**Integration:** rebase flow (Task 13) — linear history onto main, no PR, then tag
+`v0.3.0` for goreleaser.
