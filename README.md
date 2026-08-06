@@ -12,7 +12,7 @@ Hierarchical secrets manager.
 ```
 
 ```sh
-ward exec myapp.environments.staging -- your-app
+ward exec myapp:environments.staging -- your-app
 # DATABASE_URL=postgres://staging.acme.internal/app
 # NAME=sector 1 override
 # REDIS_URL=redis://staging.acme.internal:6379
@@ -123,10 +123,10 @@ ward new ./.commons/ward/vaults/ruby/staging
 ward tree
 
 # Show the env vars that would be injected
-ward secrets myapp.environments.staging
+ward secrets myapp:environments.staging
 
 # Inject and run
-ward exec myapp.environments.staging -- env | grep DATABASE
+ward exec myapp:environments.staging -- env | grep DATABASE
 ```
 
 ---
@@ -173,7 +173,7 @@ ward secrets
 # REDIS_URL     = redis://staging.acme.internal:6379
 
 # With a scope — scoped to that secret-path, names relative to its level
-ward secrets myapp.environments.staging
+ward secrets myapp:environments.staging
 # NAME          = sector 1 override
 # DATABASE_URL  = postgres://staging.acme.internal/app
 
@@ -197,8 +197,8 @@ overlays the secret-path across all vaults that have it. Multiple scopes are
 unioned.
 
 ```sh
-ward exec myapp.environments.staging -- rails server
-ward exec myapp.environments.staging -- env | grep DATABASE
+ward exec myapp:environments.staging -- rails server
+ward exec myapp:environments.staging -- env | grep DATABASE
 
 # Overlay commons.infra.staging + trgclub.infra.staging
 ward exec infra.staging -- deploy
@@ -220,7 +220,7 @@ via `--vault/--secret`. A qualified scope shows one vault; an unqualified one
 overlays the secret-path across all vaults that have it.
 
 ```sh
-ward tree myapp.environments.staging
+ward tree myapp:environments.staging
 ward tree commons:infra.staging
 ```
 
@@ -246,7 +246,7 @@ than one, `ward` reports an ambiguity error (qualify it to disambiguate). A
 plain dot never identifies a vault.
 
 ```sh
-ward get myapp.staging.database_url
+ward get myapp:staging.database_url
 # postgres://staging.acme.internal/app
 
 # Qualified to a single vault
@@ -381,17 +381,17 @@ default_dir: secrets
 
 ```sh
 export WARD_KEY=ward-AAAA...
-ward exec myapp.environments.staging -- deploy
+ward exec myapp:environments.staging -- deploy
 ```
 
 Use `WARD_KEY_<NAME>` for single or multiple vaults — no config needed:
 
 ```sh
 # single vault
-WARD_KEY_MYAPP=ward-xxx ward exec myapp.staging -- deploy
+WARD_KEY_MYAPP=ward-xxx ward exec myapp:staging -- deploy
 
 # multiple vaults
-WARD_KEY_MYAPP=ward-xxx WARD_KEY_COMMONS=ward-yyy ward exec myapp.staging -- deploy
+WARD_KEY_MYAPP=ward-xxx WARD_KEY_COMMONS=ward-yyy ward exec myapp:staging -- deploy
 ```
 
 ---
