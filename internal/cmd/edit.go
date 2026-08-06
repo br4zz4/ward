@@ -288,19 +288,22 @@ func findByScope(arg string) string {
 
 // scopeTargetFiles returns the .ward files whose data defines the scope's path
 // (leaf or group). A qualified scope matches vault.secret-path directly; an
-// unqualified one also overlays the secret-path under each file's root keys,
-// so "main.production" finds it inside any vault.
+// unqualified one overlays the secret-path under each file's vault root, so
+// "main.production" finds it inside any vault.
+//
+// Parsed trees are rooted by vault name, so an unqualified path is never
+// matched against the root itself — that would make a plain dot identify a
+// vault, which the scope rules forbid (see docs/hierarchy.md).
 func scopeTargetFiles(files []secrets.ParsedFile, sc secrets.Scope) []string {
 	if sc.Vault != "" {
 		return secrets.FilesMatching(files, sc.TreePath(), secrets.Exists)
 	}
+	if sc.SecretPath == "" {
+		return nil
+	}
 	var out []string
 	for _, pf := range files {
 		tree := secrets.NewTree(pf.Data)
-		if tree.Kind(sc.SecretPath) != secrets.KindAbsent {
-			out = append(out, pf.File)
-			continue
-		}
 		for root := range pf.Data {
 			if tree.Kind(root+"."+sc.SecretPath) != secrets.KindAbsent {
 				out = append(out, pf.File)
