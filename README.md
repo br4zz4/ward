@@ -94,7 +94,7 @@ go build -o ~/.local/bin/ward ./cmd/ward
 # Initialise a new project
 ward init
 
-# Edit the default secrets file
+# Edit a secrets file — asks which vault and file
 ward edit
 
 # Create a new secrets file
@@ -133,9 +133,37 @@ Create a new encrypted `.ward` file and open it in `$EDITOR`.
 
 If the file is outside the existing vaults, it is automatically added to `.ward/config.yaml`.
 
-### `ward edit [file]`
+### `ward edit [vault] [file|scope]`
 
-Decrypt a `.ward` file, open it in `$EDITOR`, re-encrypt on save. Defaults to the first file in the default vault.
+Decrypt a `.ward` file, open it in `$EDITOR`, re-encrypt on save. There are four
+ways to say which file you mean — when something is left out, ward asks instead
+of guessing. A prompt is skipped whenever only one candidate exists.
+
+```sh
+# Interactive — asks which vault, then which file
+ward edit
+
+# Vault given — asks which file inside it
+ward edit myapp
+
+# Vault and file — opens directly
+ward edit myapp environments/staging
+
+# Scope notation — the same [vault:]secret-path used by every other command
+ward edit myapp:environments.staging
+```
+
+The file argument is flexible: `environments/staging`, `environments.staging`
+and `environments/staging.ward` all name the same file, and a bare
+`staging` works when it is unambiguous within the vault. Naming a directory
+(`ward edit myapp environments`) lists the files beneath it to choose from.
+
+A plain filesystem path still works on its own (`ward edit .ward/vaults/myapp/environments/staging.ward`),
+as does a bare filename found anywhere in the vaults (`ward edit staging`).
+
+> Scope notation reads the encrypted contents to find where a secret-path is
+> defined, so it needs a usable key for that vault. The `<vault> <file>` form
+> resolves purely by path and works even when the key is missing.
 
 ### `ward secrets [scope...] [--prefixed]`
 
