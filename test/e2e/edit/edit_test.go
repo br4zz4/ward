@@ -63,6 +63,38 @@ func TestEdit_scope_with_unknown_vault_reports_vault_not_found(t *testing.T) {
 	}
 }
 
+// A config ward cannot parse must be reported as such. Blaming the vault name
+// sends the user looking for a vault that is in fact declared.
+func TestEdit_malformed_config_is_not_reported_as_unknown_vault(t *testing.T) {
+	// act
+	_, stderr, code := testutil.Run(t, bin, fix("bad-config"), "edit", "app:main.name")
+
+	// assert
+	if code == 0 {
+		t.Fatalf("expected a non-zero exit, got %d", code)
+	}
+	if testutil.Contains(stderr, "not found") {
+		t.Errorf("a parse failure must not be reported as a missing vault, got: %q", stderr)
+	}
+	if !testutil.Contains(stderr, "config.yaml") {
+		t.Errorf("expected the config file named in the error, got: %q", stderr)
+	}
+}
+
+// The same must hold for the bare <vault> form.
+func TestEdit_malformed_config_on_bare_vault_form(t *testing.T) {
+	// act
+	_, stderr, code := testutil.Run(t, bin, fix("bad-config"), "edit", "app")
+
+	// assert
+	if code == 0 {
+		t.Fatalf("expected a non-zero exit, got %d", code)
+	}
+	if !testutil.Contains(stderr, "config.yaml") {
+		t.Errorf("expected the config file named in the error, got: %q", stderr)
+	}
+}
+
 // When one vault loads and another is skipped for a missing key, the skipped
 // files are invisible to scope resolution. Saying "no such file" would blame
 // the argument for a key problem.

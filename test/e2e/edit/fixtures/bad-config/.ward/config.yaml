@@ -1,0 +1,4 @@
+vaults:
+  - name: app
+    path: .ward/vaults/app
+   bad_indent: [unclosed

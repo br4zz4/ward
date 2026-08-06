@@ -83,7 +83,11 @@ func wardFilePath(args []string) string {
 	info, err := os.Stat(path)
 	if err != nil {
 		// A bare vault name selects that vault and asks which file.
-		if src := vaultNamed(args[0]); src != nil {
+		src, vaultErr := vaultNamed(args[0])
+		if vaultErr != nil {
+			fatal(vaultErr)
+		}
+		if src != nil {
 			return pickFileInVault(src)
 		}
 		// Path doesn't exist — try to find it inside the vaults.
@@ -106,17 +110,23 @@ func wardFilePath(args []string) string {
 	return path
 }
 
-// vaultNamed returns the configured vault with the given name, or nil.
-func vaultNamed(name string) *config.Source {
+// vaultNamed returns the configured vault with the given name.
+//
+// A nil source with a nil error means the config was read and holds no such
+// vault. A config that cannot be parsed is an error, never a missing vault —
+// otherwise a broken config sends the user hunting for a vault they declared.
+// Not being in a project at all is left to the caller's engine, which explains
+// that case better than this lookup can.
+func vaultNamed(name string) (*config.Source, error) {
 	cfgPath, err := resolvedConfigFile()
 	if err != nil {
-		return nil
+		return nil, nil
 	}
 	cfg, err := config.Load(cfgPath)
 	if err != nil {
-		return nil
+		return nil, err
 	}
-	return findVault(cfg, name)
+	return findVault(cfg, name), nil
 }
 
 // pickVaultThenFile asks which vault to edit (skipped when only one exists),
@@ -160,7 +170,10 @@ func pickFileInVault(src *config.Source) string {
 // fileInVault resolves arg to a file inside the named vault, prompting when
 // the argument matches more than one.
 func fileInVault(vaultName, arg string) string {
-	src := vaultNamed(vaultName)
+	src, err := vaultNamed(vaultName)
+	if err != nil {
+		fatal(err)
+	}
 	if src == nil {
 		fatalVaultNotFound(vaultName)
 	}
@@ -310,8 +323,14 @@ func findByScope(arg string) (string, error) {
 	sc := secrets.ParseScope(arg)
 	// A qualified scope names its vault explicitly, so an unknown one is an
 	// error in the argument — say so before decrypting anything.
-	if sc.Vault != "" && vaultNamed(sc.Vault) == nil {
-		fatalVaultNotFound(sc.Vault)
+	if sc.Vault != "" {
+		src, err := vaultNamed(sc.Vault)
+		if err != nil {
+			return "", err
+		}
+		if src == nil {
+			fatalVaultNotFound(sc.Vault)
+		}
 	}
 	eng, err := newEngine()
 	if err != nil {
