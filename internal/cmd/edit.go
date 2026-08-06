@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -83,6 +84,12 @@ func wardFilePath(args []string) string {
 		if found := findInVaults(filepath.Base(path)); found != "" {
 			return found
 		}
+		// Not a file reference — try it as a scope (vault:secret-path).
+		if len(args) == 1 {
+			if found := findByScope(args[0]); found != "" {
+				return found
+			}
+		}
 		return path // let Decrypt report the original error
 	}
 	if info.IsDir() {
@@ -129,12 +136,70 @@ func findInVaults(partial string) string {
 	return ""
 }
 
+// findByScope resolves a scope argument (vault:secret-path or bare dot-path)
+// to the .ward file defining it. When the scope's path spans several files,
+// the user picks one. Returns "" when the argument matches nothing.
+func findByScope(arg string) string {
+	eng, err := newEngine()
+	if err != nil {
+		return ""
+	}
+	files, err := eng.LoadFiles()
+	if err != nil {
+		return ""
+	}
+	targets := scopeTargetFiles(files, secrets.ParseScope(arg))
+	if len(targets) == 0 {
+		return ""
+	}
+	picked, err := pickFromList(targets, os.Stdin, os.Stdout)
+	if err != nil {
+		fatal(err)
+	}
+	return picked
+}
+
+// scopeTargetFiles returns the .ward files whose data defines the scope's path
+// (leaf or group). A qualified scope matches vault.secret-path directly; an
+// unqualified one also overlays the secret-path under each file's root keys,
+// so "main.production" finds it inside any vault.
+func scopeTargetFiles(files []secrets.ParsedFile, sc secrets.Scope) []string {
+	if sc.Vault != "" {
+		return secrets.FilesMatching(files, sc.TreePath(), secrets.Exists)
+	}
+	var out []string
+	for _, pf := range files {
+		tree := secrets.NewTree(pf.Data)
+		if tree.Kind(sc.SecretPath) != secrets.KindAbsent {
+			out = append(out, pf.File)
+			continue
+		}
+		for root := range pf.Data {
+			if tree.Kind(root+"."+sc.SecretPath) != secrets.KindAbsent {
+				out = append(out, pf.File)
+				break
+			}
+		}
+	}
+	return out
+}
+
 // pickWardFile lists .ward files under dir and prompts the user to choose one.
 func pickWardFile(dir string) string {
 	files, err := secrets.Discover([]string{dir})
 	if err != nil || len(files) == 0 {
 		fatal(fmt.Errorf("no .ward files found in %s", dir))
 	}
+	picked, err := pickFromList(files, os.Stdin, os.Stdout)
+	if err != nil {
+		fatal(err)
+	}
+	return picked
+}
+
+// pickFromList prompts on out for one of files, reading the choice from in.
+// A single candidate is returned directly without prompting.
+func pickFromList(files []string, in io.Reader, out io.Writer) (string, error) {
 	sort.Slice(files, func(i, j int) bool {
 		di, dj := strings.Count(files[i], "/"), strings.Count(files[j], "/")
 		if di != dj {
@@ -143,18 +208,18 @@ func pickWardFile(dir string) string {
 		return files[i] < files[j]
 	})
 	if len(files) == 1 {
-		return files[0]
+		return files[0], nil
 	}
-	fmt.Println("Select a file to edit:")
+	fmt.Fprintln(out, "Select a file to edit:")
 	for i, f := range files {
-		fmt.Printf("  %d) %s\n", i+1, f)
+		fmt.Fprintf(out, "  %d) %s\n", i+1, f)
 	}
-	fmt.Print("> ")
+	fmt.Fprint(out, "> ")
 	var choice int
-	if _, err := fmt.Fscan(os.Stdin, &choice); err != nil || choice < 1 || choice > len(files) {
-		fatal(fmt.Errorf("invalid choice"))
+	if _, err := fmt.Fscan(in, &choice); err != nil || choice < 1 || choice > len(files) {
+		return "", fmt.Errorf("invalid choice")
 	}
-	return files[choice-1]
+	return files[choice-1], nil
 }
 
 func writeTempFile(originalPath string, content []byte) (string, error) {
