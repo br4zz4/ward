@@ -128,6 +128,35 @@ func TestEdit_unmatched_scope_in_readable_vault_is_not_masked(t *testing.T) {
 	}
 }
 
+// A vault that was read but holds no files is not a key problem. Another
+// vault's skip must not be pinned on it.
+func TestEdit_readable_empty_vault_is_not_blamed_on_a_skip(t *testing.T) {
+	// act
+	_, stderr, code := testutil.Run(t, bin, fix("empty-vault"), "edit", "empty:foo.bar")
+
+	// assert
+	if code == 0 {
+		t.Fatalf("expected a non-zero exit, got %d", code)
+	}
+	if testutil.Contains(stderr, "missing key for vault locked") {
+		t.Errorf("a readable vault must not be blamed on another vault's skip, got: %q", stderr)
+	}
+}
+
+// The scope's own vault being skipped is still reported.
+func TestEdit_scope_on_skipped_vault_still_reports_the_skip(t *testing.T) {
+	// act
+	_, stderr, code := testutil.Run(t, bin, fix("empty-vault"), "edit", "locked:infra.production")
+
+	// assert
+	if code == 0 {
+		t.Fatalf("expected a non-zero exit, got %d", code)
+	}
+	if !testutil.Contains(stderr, "missing key for vault locked") {
+		t.Errorf("expected the skip reported for its own vault, got: %q", stderr)
+	}
+}
+
 // The <vault> <path> form resolves on the filesystem, so it still reaches the
 // file when no key is available — only the decrypt step then fails.
 func TestEdit_vault_and_path_resolves_without_key(t *testing.T) {
