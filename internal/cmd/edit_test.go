@@ -289,7 +289,7 @@ func TestUnresolvedScopeError_nil_when_no_skip_explains_the_miss(t *testing.T) {
 
 func TestSkipExplainsMiss_qualified_scope_on_skipped_vault(t *testing.T) {
 	// act
-	got := skipExplainsMiss(secrets.ParseScope("locked:infra.production"), map[string]int{"locked": 1})
+	got := skipExplainsMiss(secrets.ParseScope("locked:infra.production"), []string{"locked"})
 
 	// assert
 	if !got {
@@ -299,7 +299,7 @@ func TestSkipExplainsMiss_qualified_scope_on_skipped_vault(t *testing.T) {
 
 func TestSkipExplainsMiss_qualified_scope_on_readable_vault(t *testing.T) {
 	// act — the scope names a vault that was NOT skipped
-	got := skipExplainsMiss(secrets.ParseScope("app:nope.missing"), map[string]int{"locked": 1})
+	got := skipExplainsMiss(secrets.ParseScope("app:nope.missing"), []string{"locked"})
 
 	// assert
 	if got {
@@ -310,7 +310,7 @@ func TestSkipExplainsMiss_qualified_scope_on_readable_vault(t *testing.T) {
 func TestSkipExplainsMiss_readable_but_empty_vault(t *testing.T) {
 	// act — "empty" loaded no files but was not skipped for a missing key;
 	// it must not be blamed on another vault's skip
-	got := skipExplainsMiss(secrets.ParseScope("empty:foo.bar"), map[string]int{"locked": 1})
+	got := skipExplainsMiss(secrets.ParseScope("empty:foo.bar"), []string{"locked"})
 
 	// assert
 	if got {
@@ -320,7 +320,7 @@ func TestSkipExplainsMiss_readable_but_empty_vault(t *testing.T) {
 
 func TestSkipExplainsMiss_unqualified_scope(t *testing.T) {
 	// act — without a vault the match could have been in the skipped one
-	got := skipExplainsMiss(secrets.ParseScope("infra.production"), map[string]int{"locked": 1})
+	got := skipExplainsMiss(secrets.ParseScope("infra.production"), []string{"locked"})
 
 	// assert
 	if !got {
@@ -343,7 +343,7 @@ func TestUnresolvedScopeError_reports_the_skipped_vault(t *testing.T) {
 	warnings := []string{"missing key for vault locked — 1 file(s) skipped"}
 
 	// act
-	got := unresolvedScopeError(secrets.ParseScope("locked:infra.production"), warnings, false)
+	got := unresolvedScopeError(secrets.ParseScope("locked:infra.production"), warnings, true)
 
 	// assert
 	if got == nil {
@@ -360,7 +360,7 @@ func TestUnresolvedScopeError_reports_the_skipped_vault(t *testing.T) {
 func TestUnresolvedScopeError_suggests_the_path_form(t *testing.T) {
 	// act — the <vault> <file> form resolves without a key, so point at it
 	got := unresolvedScopeError(secrets.ParseScope("locked:infra.production"),
-		[]string{"missing key for vault locked — 1 file(s) skipped"}, false)
+		[]string{"missing key for vault locked — 1 file(s) skipped"}, true)
 
 	// assert
 	if got == nil || !strings.Contains(got.Error(), "ward edit locked <file>") {

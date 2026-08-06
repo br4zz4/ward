@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
@@ -342,7 +343,7 @@ func findByScope(arg string) (string, error) {
 	}
 	targets := scopeTargetFiles(files, sc)
 	if len(targets) == 0 {
-		if err := unresolvedScopeError(sc, eng.Warnings(), vaultWasRead(files, sc.Vault)); err != nil {
+		if err := unresolvedScopeError(sc, eng.Warnings(), skipExplainsMiss(sc, eng.SkippedVaults())); err != nil {
 			return "", err
 		}
 		return "", nil
@@ -355,10 +356,10 @@ func findByScope(arg string) (string, error) {
 // merged tree, so scope resolution cannot see them — reporting the argument as
 // a missing file would blame it for a key problem.
 //
-// vaultRead says whether the scope's own vault did load; when it did, an
-// unrelated vault being skipped cannot explain the miss.
-func unresolvedScopeError(sc secrets.Scope, warnings []string, vaultRead bool) error {
-	if len(warnings) == 0 || vaultRead {
+// explains says whether a skip could actually account for this miss; when it
+// cannot, the miss is genuine and this is not the error to raise.
+func unresolvedScopeError(sc secrets.Scope, warnings []string, explains bool) error {
+	if len(warnings) == 0 || !explains {
 		return nil
 	}
 	target := sc.Vault
@@ -375,19 +376,22 @@ func unresolvedScopeError(sc secrets.Scope, warnings []string, vaultRead bool) e
 	return errors.New(b.String())
 }
 
-// vaultWasRead reports whether any loaded file carries the vault's root key.
-// An unqualified scope (empty name) is never considered read: the match could
-// have been in any vault, including one that was skipped.
-func vaultWasRead(files []secrets.ParsedFile, vault string) bool {
-	if vault == "" {
+// skipExplainsMiss reports whether files skipped for a missing key could
+// account for a scope matching nothing.
+//
+// It asks which vaults were actually skipped rather than inferring readability
+// from content: a vault that loaded but holds nothing — or whose files are
+// structured wrongly, which is exactly what edit exists to repair — was read,
+// and must not be blamed on another vault's missing key. An unqualified scope
+// could have matched anywhere, so any skip may explain it.
+func skipExplainsMiss(sc secrets.Scope, skipped []string) bool {
+	if len(skipped) == 0 {
 		return false
 	}
-	for _, pf := range files {
-		if _, ok := pf.Data[vault]; ok {
-			return true
-		}
+	if sc.Vault == "" {
+		return true
 	}
-	return false
+	return slices.Contains(skipped, sc.Vault)
 }
 
 // scopeTargetFiles returns the .ward files whose data defines the scope's path
