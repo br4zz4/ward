@@ -502,5 +502,5 @@ WARD_KEY_VAULT1=ward-xxx WARD_KEY_VAULT2=ward-yyy ward envs
 
 ## Claude Code skills
 
-- **/ward:context** — use when working with ward in a project (setup, vaults, debugging)`
+- **/ward:handle-secrets** — use when handling ward secrets: create/edit vaults, scope commands (vault:secret-path), inject env vars, debug merge/key issues`
 
