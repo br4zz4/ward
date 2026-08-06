@@ -177,41 +177,54 @@ func fileInVault(vaultName, arg string) string {
 // resolveVaultFile returns the files under vaultPath that arg addresses. The
 // argument may use slashes or dots, carry the .ward extension or not, name a
 // directory (selecting everything beneath it), or be a bare basename.
+//
+// The path is tried exactly as typed before dots are read as separators, so a
+// file or directory whose name legitimately contains a dot stays addressable.
 func resolveVaultFile(vaultPath string, files []string, arg string) []string {
-	rel := strings.TrimSuffix(strings.ReplaceAll(arg, ".", "/"), "/ward")
-	rel = strings.Trim(rel, "/")
-	if rel == "" {
-		return nil
+	for _, rel := range vaultRelForms(arg) {
+		if matches := matchVaultRel(vaultPath, files, rel); len(matches) > 0 {
+			return matches
+		}
 	}
+	return nil
+}
 
-	// Exact file match, relative to the vault root.
-	var exact []string
+// vaultRelForms returns the vault-relative paths arg may denote, most literal
+// first: the path as typed, then the same with dots read as separators. Only a
+// trailing .ward is stripped as an extension.
+func vaultRelForms(arg string) []string {
+	var forms []string
+	literal := strings.Trim(strings.TrimSuffix(arg, ".ward"), "/")
+	if literal != "" {
+		forms = append(forms, literal)
+	}
+	dotted := strings.Trim(strings.TrimSuffix(strings.ReplaceAll(arg, ".", "/"), "/ward"), "/")
+	if dotted != "" && dotted != literal {
+		forms = append(forms, dotted)
+	}
+	return forms
+}
+
+// matchVaultRel resolves one vault-relative form against the vault's files:
+// an exact file, else a directory prefix, else a bare basename.
+func matchVaultRel(vaultPath string, files []string, rel string) []string {
+	var exact, beneath, byBase []string
 	for _, f := range files {
-		if vaultRelPath(vaultPath, f) == rel+".ward" {
+		switch relPath := vaultRelPath(vaultPath, f); {
+		case relPath == rel+".ward":
 			exact = append(exact, f)
+		case strings.HasPrefix(relPath, rel+"/"):
+			beneath = append(beneath, f)
+		}
+		if strings.TrimSuffix(filepath.Base(f), ".ward") == rel {
+			byBase = append(byBase, f)
 		}
 	}
 	if len(exact) > 0 {
 		return exact
 	}
-
-	// Directory prefix: select every file beneath it.
-	var beneath []string
-	for _, f := range files {
-		if strings.HasPrefix(vaultRelPath(vaultPath, f), rel+"/") {
-			beneath = append(beneath, f)
-		}
-	}
 	if len(beneath) > 0 {
 		return beneath
-	}
-
-	// Bare basename anywhere in the vault.
-	var byBase []string
-	for _, f := range files {
-		if strings.TrimSuffix(filepath.Base(f), ".ward") == rel {
-			byBase = append(byBase, f)
-		}
 	}
 	return byBase
 }

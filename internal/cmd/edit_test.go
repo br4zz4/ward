@@ -166,6 +166,61 @@ func TestResolveVaultFile_group_prefix(t *testing.T) {
 	}
 }
 
+func TestResolveVaultFile_literal_dotted_component(t *testing.T) {
+	// arrange — a directory whose name legitimately contains a dot
+	files := []string{
+		".ward/vaults/app/services/api.v2/prod.ward",
+		".ward/vaults/app/services/api/v2/prod.ward",
+	}
+
+	// act — the path as typed must win over dot-to-slash normalisation
+	got := resolveVaultFile(".ward/vaults/app", files, "services/api.v2/prod")
+
+	// assert
+	if len(got) != 1 || got[0] != ".ward/vaults/app/services/api.v2/prod.ward" {
+		t.Fatalf("expected the literal api.v2 path, got %v", got)
+	}
+}
+
+func TestResolveVaultFile_literal_dotted_component_with_extension(t *testing.T) {
+	// arrange
+	files := []string{".ward/vaults/app/services/api.v2/prod.ward"}
+
+	// act — only the trailing .ward is an extension; inner dots are literal
+	got := resolveVaultFile(".ward/vaults/app", files, "services/api.v2/prod.ward")
+
+	// assert
+	if len(got) != 1 || got[0] != ".ward/vaults/app/services/api.v2/prod.ward" {
+		t.Fatalf("expected the literal api.v2 path, got %v", got)
+	}
+}
+
+func TestResolveVaultFile_dotted_basename(t *testing.T) {
+	// arrange
+	files := []string{".ward/vaults/app/api.v2.ward"}
+
+	// act — a bare basename carrying a dot resolves literally
+	got := resolveVaultFile(".ward/vaults/app", files, "api.v2")
+
+	// assert
+	if len(got) != 1 || got[0] != ".ward/vaults/app/api.v2.ward" {
+		t.Fatalf("expected api.v2.ward, got %v", got)
+	}
+}
+
+func TestResolveVaultFile_dot_notation_still_falls_back(t *testing.T) {
+	// arrange — no literal "infra.production" file exists
+	files := []string{".ward/vaults/app/infra/production.ward"}
+
+	// act
+	got := resolveVaultFile(".ward/vaults/app", files, "infra.production")
+
+	// assert
+	if len(got) != 1 || got[0] != ".ward/vaults/app/infra/production.ward" {
+		t.Fatalf("expected the dot-notation fallback to resolve, got %v", got)
+	}
+}
+
 func TestResolveVaultFile_no_match(t *testing.T) {
 	// act
 	got := resolveVaultFile(".ward/vaults/app", vaultFileFixture(), "nope")
