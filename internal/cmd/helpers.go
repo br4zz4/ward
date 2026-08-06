@@ -199,9 +199,17 @@ func resolveKeyFile(cfg *config.Config) (string, error) {
 	return "", nil
 }
 
+// errKeyUnavailable signals that a vault declares a key source (key_env or
+// key_file) that is not available right now. It is not fatal on its own: reads
+// skip the vault with a warning, writes fail with the hint.
+type errKeyUnavailable struct{ hint string }
+
+func (e *errKeyUnavailable) Error() string { return e.hint }
+
 // resolveKeyFileForVault resolves the key for a specific vault.
 // Priority: WARD_KEY_<NAME> env var → vault-level key_env → vault-level key_file → falls through to global.
 // Returns "" when no vault-specific key is configured (caller should fall back to global).
+// Returns *errKeyUnavailable when a key source is declared but unavailable.
 func resolveKeyFileForVault(v config.Source) (string, error) {
 	envName := wardKeyEnvName(v.Name)
 	if token := os.Getenv(envName); token != "" {
@@ -214,10 +222,9 @@ func resolveKeyFileForVault(v config.Source) (string, error) {
 	if v.Encryption.KeyEnv != "" {
 		content := strings.TrimSpace(os.Getenv(v.Encryption.KeyEnv))
 		if content == "" {
-			fatalKeyError(
-				fmt.Sprintf("env var %s%s%s is empty or not set", clrYellow, v.Encryption.KeyEnv, clrReset),
-				fmt.Sprintf("set %s%s%s to the contents of your age key", clrYellow, v.Encryption.KeyEnv, clrReset),
-			)
+			return "", &errKeyUnavailable{
+				hint: fmt.Sprintf("set %s to the contents of your age key", v.Encryption.KeyEnv),
+			}
 		}
 		if strings.HasPrefix(content, "ward-") {
 			keyFile, err := writeTempKey(content)
@@ -234,10 +241,9 @@ func resolveKeyFileForVault(v config.Source) (string, error) {
 	}
 	if v.Encryption.KeyFile != "" {
 		if _, err := os.Stat(v.Encryption.KeyFile); err != nil {
-			fatalKeyError(
-				fmt.Sprintf("key file %s%s%s not found", clrCyan, v.Encryption.KeyFile, clrReset),
-				fmt.Sprintf("run %sward init%s to generate it, or copy your key here", clrBold, clrReset),
-			)
+			return "", &errKeyUnavailable{
+				hint: fmt.Sprintf("key file %s not found — run 'ward init' to generate it, or copy your key here", v.Encryption.KeyFile),
+			}
 		}
 		data, err := os.ReadFile(v.Encryption.KeyFile)
 		if err != nil {
@@ -256,6 +262,13 @@ func resolveKeyFileForVault(v config.Source) (string, error) {
 func decryptorForVault(v config.Source, cfg *config.Config, globalDec sops.Decryptor) (sops.Decryptor, error) {
 	keyFile, err := resolveKeyFileForVault(v)
 	if err != nil {
+		// A declared-but-unavailable key is not fatal here: other vaults may still
+		// be readable. This vault yields a NoKeyError per file, which the engine
+		// turns into a skip plus a warning.
+		var ku *errKeyUnavailable
+		if errors.As(err, &ku) {
+			return sops.MissingKeyDecryptor{Hint: ku.hint}, nil
+		}
 		return nil, err
 	}
 	if keyFile == "" {

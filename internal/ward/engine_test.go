@@ -64,3 +64,76 @@ func TestLoad_all_keyless_encrypted_errors(t *testing.T) {
 		t.Fatal("expected error when nothing is decryptable")
 	}
 }
+
+// A vault whose declared key is unavailable is skipped with a warning that
+// carries the hint, while the other vault still loads.
+func TestLoad_missing_vault_key_warns_with_hint(t *testing.T) {
+	// arrange
+	dir := t.TempDir()
+	vA := filepath.Join(dir, "a")
+	vB := filepath.Join(dir, "b")
+	os.MkdirAll(vA, 0755)
+	os.MkdirAll(vB, 0755)
+	os.WriteFile(filepath.Join(vA, "main.ward"),
+		[]byte("-----BEGIN AGE ENCRYPTED FILE-----\nxxx\n"), 0644)
+	os.WriteFile(filepath.Join(vB, "conf.plain.ward"),
+		[]byte("b:\n  ok: \"1\"\n"), 0644)
+
+	cfg := &config.Config{
+		Encryption: config.Encryption{Engine: "age+armor"},
+		Vaults: []config.Source{
+			{Name: "a", Path: vA},
+			{Name: "b", Path: vB},
+		},
+	}
+	eng := NewEngineWithVaultDecryptors(cfg, sops.RequireKeyDecryptor{}, map[string]sops.Decryptor{
+		"a": sops.MissingKeyDecryptor{Hint: "set WARD_KEY_A to the contents of your age key"},
+	})
+
+	// act
+	res, err := eng.MergeForView()
+
+	// assert
+	if err != nil {
+		t.Fatalf("expected no error (b is loadable), got %v", err)
+	}
+	if res.Tree["b"] == nil {
+		t.Error("expected vault b to be present in tree")
+	}
+	warns := eng.Warnings()
+	if len(warns) != 1 || !strings.Contains(warns[0], "WARD_KEY_A") {
+		t.Errorf("expected warning carrying the hint, got %v", warns)
+	}
+}
+
+// Writing to a vault whose key is merely unavailable must fail loudly instead of
+// replacing the encrypted file with plaintext.
+func TestEncrypt_refuses_when_vault_key_is_missing(t *testing.T) {
+	// arrange
+	dir := t.TempDir()
+	vA := filepath.Join(dir, "a")
+	os.MkdirAll(vA, 0755)
+	path := filepath.Join(vA, "main.ward")
+	ciphertext := []byte("-----BEGIN AGE ENCRYPTED FILE-----\nxxx\n")
+	os.WriteFile(path, ciphertext, 0644)
+
+	cfg := &config.Config{
+		Encryption: config.Encryption{Engine: "age+armor"},
+		Vaults:     []config.Source{{Name: "a", Path: vA}},
+	}
+	eng := NewEngineWithVaultDecryptors(cfg, sops.RequireKeyDecryptor{}, map[string]sops.Decryptor{
+		"a": sops.MissingKeyDecryptor{Hint: "set WARD_KEY_A to the contents of your age key"},
+	})
+
+	// act
+	err := eng.Encrypt(path, []byte("a:\n  leaked: \"1\"\n"))
+
+	// assert
+	if err == nil {
+		t.Fatal("expected Encrypt to refuse without a key")
+	}
+	got, _ := os.ReadFile(path)
+	if string(got) != string(ciphertext) {
+		t.Errorf("encrypted file was overwritten: %q", got)
+	}
+}

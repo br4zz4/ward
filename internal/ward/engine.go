@@ -298,11 +298,16 @@ type Encryptor interface {
 }
 
 // Encrypt re-encrypts plaintext and writes it to path.
-// Falls back to a plain write when no real encryptor is configured.
+// Falls back to a plain write when no encryption is configured at all, but
+// refuses to write when a key is configured and merely unavailable — otherwise
+// an encrypted file would be silently replaced by plaintext.
 func (e *Engine) Encrypt(path string, plaintext []byte) error {
 	dec := e.decryptorFor(path)
 	if enc, ok := dec.(Encryptor); ok {
 		return enc.Encrypt(path, plaintext)
+	}
+	if md, ok := dec.(sops.MissingKeyDecryptor); ok {
+		return fmt.Errorf("%s: cannot write without the encryption key — %s", path, md.Hint)
 	}
 	return os.WriteFile(path, plaintext, 0644)
 }
@@ -348,19 +353,48 @@ func (e *Engine) load() ([]secrets.ParsedFile, error) {
 
 	// Encrypted files with no key: if NOTHING loaded, that's fatal; otherwise warn per vault.
 	if len(keySkips) > 0 {
-		if len(files) == 0 {
-			return nil, fmt.Errorf("no encryption key found — set WARD_KEY or provide .ward/<vault>.key")
-		}
 		byVault := map[string]int{}
+		hintFor := map[string]string{}
+		var order []string
 		for _, s := range keySkips {
-			byVault[vaultFor(s.Path).name]++
+			name := vaultFor(s.Path).name
+			if _, seen := byVault[name]; !seen {
+				order = append(order, name)
+			}
+			byVault[name]++
+			if h := sops.NoKeyHint(s.Err); h != "" && hintFor[name] == "" {
+				hintFor[name] = h
+			}
 		}
-		for name, n := range byVault {
-			e.warnings = append(e.warnings, fmt.Sprintf("missing key for vault %s — %d file(s) skipped", name, n))
+		if len(files) == 0 {
+			return nil, fmt.Errorf("no encryption key found — %s", missingKeySummary(order, hintFor))
+		}
+		for _, name := range order {
+			w := fmt.Sprintf("missing key for vault %s — %d file(s) skipped", name, byVault[name])
+			if h := hintFor[name]; h != "" {
+				w += " — " + h
+			}
+			e.warnings = append(e.warnings, w)
 		}
 	}
 
 	return files, nil
+}
+
+// missingKeySummary builds the fatal-message tail listing how to unlock each
+// vault that had no key, falling back to the generic advice when no vault
+// carries a hint.
+func missingKeySummary(vaults []string, hintFor map[string]string) string {
+	var parts []string
+	for _, name := range vaults {
+		if h := hintFor[name]; h != "" {
+			parts = append(parts, fmt.Sprintf("vault %s: %s", name, h))
+		}
+	}
+	if len(parts) == 0 {
+		return "set WARD_KEY or provide .ward/<vault>.key"
+	}
+	return strings.Join(parts, "; ")
 }
 
 type vaultInfo struct {

@@ -1,0 +1,7 @@
+vaults:
+  - name: app
+    path: .ward/vaults/app
+  - name: locked
+    path: .ward/vaults/locked
+    encryption:
+      key_env: WARD_KEY_LOCKED_FIXTURE

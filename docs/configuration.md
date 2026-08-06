@@ -136,8 +136,13 @@ never appears in the tree or env var names.
 - A vault whose encrypted files cannot be decrypted (no key) is **skipped** with a
   `⚠ missing key for vault <name>` warning on stderr; the other vaults still render.
   That vault's `.plain.ward` files are still read.
+- This holds whether the vault declares no key at all or declares a `key_env` /
+  `key_file` that is missing at runtime: an unset `key_env` never aborts a read
+  command, it only skips that vault. The warning names the env var or file to provide.
 - If **no** key resolves anywhere and at least one encrypted file exists, the command
-  fails: `no encryption key found — set WARD_KEY or provide .ward/<vault>.key`.
+  fails: `no encryption key found — …`.
+- Commands that **write** to a vault (`set`, `edit`, `new`, `import`, `file`) fail
+  instead of skipping, so an encrypted file is never replaced by plaintext.
 
 ---
 
