@@ -44,9 +44,31 @@ func TestScopeTargetFiles_unqualified_dot_path(t *testing.T) {
 	}
 }
 
-func TestScopeTargetFiles_vault_name_only(t *testing.T) {
-	// act
+func TestScopeTargetFiles_plain_dot_never_identifies_vault(t *testing.T) {
+	// act — "app.main" is a literal secret-path, NOT vault app + path main.
+	// No file defines "app.main" below its vault root, so nothing matches.
+	got := scopeTargetFiles(editFixtureFiles(), secrets.ParseScope("app.main"))
+
+	// assert
+	if len(got) != 0 {
+		t.Fatalf("a plain dot-path must not select a vault's files, got %v", got)
+	}
+}
+
+func TestScopeTargetFiles_bare_vault_name_is_not_a_scope(t *testing.T) {
+	// act — unqualified "app" must not resolve through the vault root either;
+	// `ward edit app` is handled as a vault name before scope resolution.
 	got := scopeTargetFiles(editFixtureFiles(), secrets.ParseScope("app"))
+
+	// assert
+	if len(got) != 0 {
+		t.Fatalf("bare vault name must not match as a scope, got %v", got)
+	}
+}
+
+func TestScopeTargetFiles_qualified_vault_name_only(t *testing.T) {
+	// act — with the colon it IS a vault qualifier, selecting the whole vault
+	got := scopeTargetFiles(editFixtureFiles(), secrets.ParseScope("app:"))
 
 	// assert
 	if len(got) != 2 {
