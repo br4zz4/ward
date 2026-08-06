@@ -276,15 +276,65 @@ func TestUnresolvedScopeError_nil_when_nothing_was_skipped(t *testing.T) {
 	}
 }
 
-func TestUnresolvedScopeError_nil_when_the_scoped_vault_was_read(t *testing.T) {
-	// act — another vault was skipped, but this scope's vault loaded fine, so
-	// the skip cannot explain the miss
+func TestUnresolvedScopeError_nil_when_no_skip_explains_the_miss(t *testing.T) {
+	// act — another vault was skipped, but it cannot explain this miss
 	got := unresolvedScopeError(secrets.ParseScope("app:nope.missing"),
-		[]string{"missing key for vault locked — 1 file(s) skipped"}, true)
+		[]string{"missing key for vault locked — 1 file(s) skipped"}, false)
 
 	// assert
 	if got != nil {
-		t.Fatalf("expected no error when the scoped vault was read, got %v", got)
+		t.Fatalf("expected no error when the skip is unrelated, got %v", got)
+	}
+}
+
+func TestSkipExplainsMiss_qualified_scope_on_skipped_vault(t *testing.T) {
+	// act
+	got := skipExplainsMiss(secrets.ParseScope("locked:infra.production"), map[string]int{"locked": 1})
+
+	// assert
+	if !got {
+		t.Fatal("a skipped vault must explain a miss scoped to it")
+	}
+}
+
+func TestSkipExplainsMiss_qualified_scope_on_readable_vault(t *testing.T) {
+	// act — the scope names a vault that was NOT skipped
+	got := skipExplainsMiss(secrets.ParseScope("app:nope.missing"), map[string]int{"locked": 1})
+
+	// assert
+	if got {
+		t.Fatal("an unrelated skipped vault must not explain this miss")
+	}
+}
+
+func TestSkipExplainsMiss_readable_but_empty_vault(t *testing.T) {
+	// act — "empty" loaded no files but was not skipped for a missing key;
+	// it must not be blamed on another vault's skip
+	got := skipExplainsMiss(secrets.ParseScope("empty:foo.bar"), map[string]int{"locked": 1})
+
+	// assert
+	if got {
+		t.Fatal("a readable vault with no files must not be blamed on a skip")
+	}
+}
+
+func TestSkipExplainsMiss_unqualified_scope(t *testing.T) {
+	// act — without a vault the match could have been in the skipped one
+	got := skipExplainsMiss(secrets.ParseScope("infra.production"), map[string]int{"locked": 1})
+
+	// assert
+	if !got {
+		t.Fatal("an unqualified scope must consider skipped vaults")
+	}
+}
+
+func TestSkipExplainsMiss_nothing_skipped(t *testing.T) {
+	// act
+	got := skipExplainsMiss(secrets.ParseScope("infra.production"), nil)
+
+	// assert
+	if got {
+		t.Fatal("nothing was skipped, so nothing can explain the miss")
 	}
 }
 
