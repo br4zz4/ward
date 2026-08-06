@@ -83,3 +83,17 @@ func TestTruncateValue_visible_len_after_truncation(t *testing.T) {
 		t.Errorf("expected visible len 13, got %d: %q", vl, got)
 	}
 }
+
+func TestWardKeyEnvName(t *testing.T) {
+	cases := map[string]string{
+		"myapp":         "WARD_KEY_MYAPP",
+		"messenger-api": "WARD_KEY_MESSENGER_API",
+		"my.vault":      "WARD_KEY_MY_VAULT",
+		"a-b.c":         "WARD_KEY_A_B_C",
+	}
+	for name, want := range cases {
+		if got := wardKeyEnvName(name); got != want {
+			t.Errorf("wardKeyEnvName(%q) = %q, want %q", name, got, want)
+		}
+	}
+}

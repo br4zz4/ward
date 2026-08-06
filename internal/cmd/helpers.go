@@ -145,7 +145,7 @@ func resolveKeyFile(cfg *config.Config) (string, error) {
 
 	// 1b. WARD_KEY_<VAULT> — single-vault shorthand, no config needed
 	if len(cfg.Vaults) == 1 {
-		envName := "WARD_KEY_" + strings.ToUpper(cfg.Vaults[0].Name)
+		envName := wardKeyEnvName(cfg.Vaults[0].Name)
 		if token := os.Getenv(envName); token != "" {
 			keyFile, err := writeTempKey(token)
 			if err != nil {
@@ -203,7 +203,7 @@ func resolveKeyFile(cfg *config.Config) (string, error) {
 // Priority: WARD_KEY_<NAME> env var → vault-level key_env → vault-level key_file → falls through to global.
 // Returns "" when no vault-specific key is configured (caller should fall back to global).
 func resolveKeyFileForVault(v config.Source) (string, error) {
-	envName := "WARD_KEY_" + strings.ToUpper(v.Name)
+	envName := wardKeyEnvName(v.Name)
 	if token := os.Getenv(envName); token != "" {
 		keyFile, err := writeTempKey(token)
 		if err != nil {
@@ -649,6 +649,15 @@ func formatOriginDim(o secrets.Origin) string {
 // --- utilities ---------------------------------------------------------------
 
 const treeValueMaxCols = 120
+
+// wardKeyEnvName builds the per-vault key env var name (WARD_KEY_<NAME>) from a
+// vault name, sanitising characters that are invalid in shell env var names:
+// hyphens and dots become underscores, and the result is upper-cased. e.g.
+// "messenger-api" → "WARD_KEY_MESSENGER_API".
+func wardKeyEnvName(vaultName string) string {
+	safe := strings.NewReplacer("-", "_", ".", "_").Replace(vaultName)
+	return "WARD_KEY_" + strings.ToUpper(safe)
+}
 
 func terminalWidth() int {
 	if c := os.Getenv("COLUMNS"); c != "" {
