@@ -117,7 +117,7 @@ ward edit
 ward new staging
 
 # Create a file in a specific path
-ward new ./.commons/ward/vaults/ruby/staging
+ward new ./.shared/ward/vaults/shared/staging
 
 # Show the merged tree with origins
 ward tree
@@ -145,7 +145,7 @@ Create a new encrypted `.ward` file and open it in `$EDITOR`.
 
 - Bare name: `ward new staging` → `.ward/vault/staging.ward`
 - Slash path: `ward new infra/prod` → `infra/prod.ward` (relative to CWD)
-- Dot-slash: `ward new ./.commons/vault/ruby/staging` → `.commons/vault/ruby/staging.ward`
+- Dot-slash: `ward new ./.shared/vault/staging` → `.shared/vault/staging.ward`
 
 If the file is outside the existing vaults, it is automatically added to `.ward/config.yaml`.
 
@@ -161,10 +161,10 @@ warning.)
 
 A **scope** is `[vault:]secret-path`. It can be passed positionally, via
 `-s/--scope`, or via `--vault <vault> --secret <secret-path>`. A qualified
-scope (`commons:infra.staging`) restricts the read to one vault; an unqualified
-scope (`infra.staging`) overlays that secret-path across every vault that has
-it. A plain dot never identifies a vault — use the `vault:` prefix. Multiple
-scopes are unioned.
+scope (`myapp:environments.staging`) restricts the read to one vault; an
+unqualified scope (`environments.staging`) overlays that secret-path across
+every vault that has it. A plain dot never identifies a vault — use the `vault:`
+prefix. Multiple scopes are unioned.
 
 ```sh
 # Without a scope — flat leaf names, all vaults merged
@@ -178,8 +178,8 @@ ward secrets myapp:environments.staging
 # DATABASE_URL  = postgres://staging.acme.internal/app
 
 # Qualified to a single vault, or unioning several scopes
-ward secrets commons:infra.staging
-ward secrets commons:infra.staging trgclub:infra.staging
+ward secrets myapp:environments.staging
+ward secrets myapp:environments.staging shared:environments.staging
 
 # Full path names with --prefixed
 ward secrets --prefixed
@@ -200,14 +200,14 @@ unioned.
 ward exec myapp:environments.staging -- rails server
 ward exec myapp:environments.staging -- env | grep DATABASE
 
-# Overlay commons.infra.staging + trgclub.infra.staging
-ward exec infra.staging -- deploy
+# Overlay: union myapp:environments.staging + shared:environments.staging
+ward exec environments.staging -- deploy
 
 # Restrict to a single vault
-ward exec commons:infra.staging -- deploy
+ward exec myapp:environments.staging -- deploy
 
-# Union of several scopes
-ward exec commons:infra.staging trgclub:infra.staging -- deploy
+# Union of several explicit scopes
+ward exec myapp:environments.staging shared:environments.staging -- deploy
 ```
 
 ### `ward tree [scope...]`
@@ -221,7 +221,7 @@ overlays the secret-path across all vaults that have it.
 
 ```sh
 ward tree myapp:environments.staging
-ward tree commons:infra.staging
+ward tree shared:environments.staging
 ```
 
 ```
@@ -246,11 +246,12 @@ than one, `ward` reports an ambiguity error (qualify it to disambiguate). A
 plain dot never identifies a vault.
 
 ```sh
-ward get myapp:staging.database_url
+# Qualified to a single vault
+ward get myapp:environments.staging.database_url
 # postgres://staging.acme.internal/app
 
-# Qualified to a single vault
-ward get commons:infra.staging.database_url
+# Unqualified — resolves only if the secret-path is unique across vaults
+ward get environments.staging.database_url
 ```
 
 ### `ward set <scope> <value>`
@@ -334,7 +335,7 @@ A list of directories to discover `.ward` files in. Each vault is walked recursi
 vaults:
   - path: ./.ward/vault
   - path: ./infra/secrets
-  - path: ../.commons/ward/vaults/ruby   # outside project root is fine
+  - path: ../.shared/ward/vaults/shared   # outside project root is fine
 ```
 
 `sources:` is accepted as a legacy alias for `vaults:`.
@@ -343,10 +344,10 @@ Vault `path` fields support shell expansion — `$VAR`, `${VAR}`, and `$(cmd)` a
 
 ```yaml
 vaults:
-  - name: myproject
-    path: .ward/vaults/myproject
-  - name: commons
-    path: $COMMONS_DIR/.ward/vaults/commons
+  - name: myapp
+    path: .ward/vaults/myapp
+  - name: shared
+    path: $SHARED_DIR/.ward/vaults/shared
 ```
 
 Each vault can use its own key by adding an `encryption` block:
@@ -355,15 +356,15 @@ Each vault can use its own key by adding an `encryption` block:
 vaults:
   - name: myapp
     path: .ward/vaults/myapp
-  - name: commons
-    path: ../.commons/ward/vaults/commons
+  - name: shared
+    path: ../.shared/ward/vaults/shared
     encryption:
-      key_file: .ward/commons.key
+      key_file: .ward/shared.key
 ```
 
 When no `encryption` block is set on a vault, ward resolves its key in order:
 
-1. `WARD_KEY_<NAME>` env var (e.g. `WARD_KEY_COMMONS`) — works with single or multiple vaults
+1. `WARD_KEY_<NAME>` env var (e.g. `WARD_KEY_SHARED`; hyphens/dots in the name become underscores) — works with single or multiple vaults
 2. `.ward/<name>.key` file — auto-detected when present
 3. Global `WARD_KEY` / `encryption` config
 
@@ -384,14 +385,16 @@ export WARD_KEY=ward-AAAA...
 ward exec myapp:environments.staging -- deploy
 ```
 
-Use `WARD_KEY_<NAME>` for single or multiple vaults — no config needed:
+Use `WARD_KEY_<NAME>` for single or multiple vaults — no config needed. `<NAME>`
+is the vault name upper-cased, with hyphens and dots replaced by underscores
+(e.g. vault `messenger-api` → `WARD_KEY_MESSENGER_API`):
 
 ```sh
 # single vault
-WARD_KEY_MYAPP=ward-xxx ward exec myapp:staging -- deploy
+WARD_KEY_MYAPP=ward-xxx ward exec myapp:environments.staging -- deploy
 
 # multiple vaults
-WARD_KEY_MYAPP=ward-xxx WARD_KEY_COMMONS=ward-yyy ward exec myapp:staging -- deploy
+WARD_KEY_MYAPP=ward-xxx WARD_KEY_SHARED=ward-yyy ward exec environments.staging -- deploy
 ```
 
 ---
@@ -402,8 +405,8 @@ WARD_KEY_MYAPP=ward-xxx WARD_KEY_COMMONS=ward-yyy ward exec myapp:staging -- dep
 |---|---|
 | No scope, no `--prefixed` | Flat leaf name: `DATABASE_URL` |
 | No scope, `--prefixed` | Full secret-path: `MYAPP_STAGING_DATABASE_URL` |
-| Unqualified scope (`infra.staging`) | Scoped to that path, flat leaf name: `DATABASE_URL` |
-| Qualified scope (`commons:infra.staging`) | One vault, scoped to that path, flat leaf name: `DATABASE_URL` |
+| Unqualified scope (`environments.staging`) | Scoped to that path, flat leaf name: `DATABASE_URL` |
+| Qualified scope (`myapp:environments.staging`) | One vault, scoped to that path, flat leaf name: `DATABASE_URL` |
 | Qualified scope, `--prefixed` | One vault, full secret-path: `INFRA_STAGING_DATABASE_URL` |
 
 ---
