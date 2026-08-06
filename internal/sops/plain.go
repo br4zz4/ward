@@ -27,3 +27,15 @@ func (PlainDecryptor) Decrypt(path string) ([]byte, error) {
 func (PlainDecryptor) Encrypt(path string, plaintext []byte) error {
 	return os.WriteFile(path, plaintext, 0644)
 }
+
+// IsEncryptedFile reports whether path exists and holds age-armored content.
+// Used by write paths to refuse replacing ciphertext with plaintext when no
+// encryptor is available. A missing or unreadable file reports false: there is
+// no ciphertext at risk.
+func IsEncryptedFile(path string) bool {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return false
+	}
+	return bytes.HasPrefix(bytes.TrimSpace(data), ageArmorHeader)
+}

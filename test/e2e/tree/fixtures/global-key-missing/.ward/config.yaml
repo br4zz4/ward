@@ -1,0 +1,6 @@
+encryption:
+  key_env: WARD_KEY_GLOBAL_FIXTURE
+
+vaults:
+  - name: app
+    path: .ward/vaults/app

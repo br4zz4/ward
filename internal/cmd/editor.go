@@ -70,6 +70,15 @@ func (e *secretEditor) vaultForScope(sc secrets.Scope) *config.Source {
 		return src
 	}
 
+	// An unqualified scope is resolved against the files that loaded. When a vault
+	// was skipped for lack of a key it may define this very path, so the match set
+	// is incomplete: writing to the single visible match could silently target the
+	// wrong vault. Refuse rather than guess.
+	if skipped := e.eng.SkippedVaults(); len(skipped) > 0 {
+		fatal(fmt.Errorf("cannot resolve %s: vault(s) %s were skipped for lack of a key and may define it — qualify it as <vault>:%s, or provide the key",
+			sc.SecretPath, strings.Join(skipped, ", "), sc.SecretPath))
+	}
+
 	var matches []*config.Source
 	for i := range e.cfg.Vaults {
 		v := &e.cfg.Vaults[i]

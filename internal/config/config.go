@@ -194,3 +194,12 @@ func Load(path string) (*Config, error) {
 
 	return cfg, nil
 }
+
+// KeyEnvName builds the per-vault key env var name (WARD_KEY_<NAME>) from a
+// vault name, sanitising characters that are invalid in shell env var names:
+// hyphens and dots become underscores, and the result is upper-cased. e.g.
+// "messenger-api" → "WARD_KEY_MESSENGER_API".
+func KeyEnvName(vaultName string) string {
+	safe := strings.NewReplacer("-", "_", ".", "_").Replace(vaultName)
+	return "WARD_KEY_" + strings.ToUpper(safe)
+}

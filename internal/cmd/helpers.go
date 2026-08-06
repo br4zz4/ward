@@ -98,6 +98,13 @@ func newEngine() (*ward.Engine, error) {
 func decryptorFor(cfg *config.Config) (sops.Decryptor, error) {
 	keyFile, err := resolveKeyFile(cfg)
 	if err != nil {
+		// A globally declared key that is unavailable must not abort the command:
+		// vaults carrying their own key still load. Only vaults that fall back to
+		// this decryptor are skipped, and Engine.load decides whether that is fatal.
+		var ku *errKeyUnavailable
+		if errors.As(err, &ku) {
+			return sops.MissingKeyDecryptor{Hint: ku.hint}, nil
+		}
 		return nil, err
 	}
 	if keyFile == "" {
@@ -159,10 +166,9 @@ func resolveKeyFile(cfg *config.Config) (string, error) {
 	if cfg.Encryption.KeyEnv != "" {
 		content := strings.TrimSpace(os.Getenv(cfg.Encryption.KeyEnv))
 		if content == "" {
-			fatalKeyError(
-				fmt.Sprintf("env var %s%s%s is empty or not set", clrYellow, cfg.Encryption.KeyEnv, clrReset),
-				fmt.Sprintf("set %s%s%s to the contents of your age key", clrYellow, cfg.Encryption.KeyEnv, clrReset),
-			)
+			return "", &errKeyUnavailable{
+				hint: fmt.Sprintf("set %s to the contents of your age key", cfg.Encryption.KeyEnv),
+			}
 		}
 		if strings.HasPrefix(content, "ward-") {
 			keyFile, err := writeTempKey(content)
@@ -181,10 +187,9 @@ func resolveKeyFile(cfg *config.Config) (string, error) {
 	// 3. key_file — supports both raw age key and ward-<base64url> token
 	if cfg.Encryption.KeyFile != "" {
 		if _, err := os.Stat(cfg.Encryption.KeyFile); err != nil {
-			fatalKeyError(
-				fmt.Sprintf("key file %s%s%s not found", clrCyan, cfg.Encryption.KeyFile, clrReset),
-				fmt.Sprintf("run %sward init%s to generate it, or copy your %s.ward.key%s here", clrBold, clrReset, clrCyan, clrReset),
-			)
+			return "", &errKeyUnavailable{
+				hint: fmt.Sprintf("key file %s not found — run 'ward init' to generate it, or copy your key here", cfg.Encryption.KeyFile),
+			}
 		}
 		data, err := os.ReadFile(cfg.Encryption.KeyFile)
 		if err != nil {
@@ -359,16 +364,6 @@ func fatalNoSources() {
 			"  %s→%s create one with  %sward new staging%s\n\n",
 		clrLightRed, clrReset, clrCyan, clrReset,
 		clrGray, clrReset, clrBold, clrReset,
-	)
-	os.Exit(1)
-}
-
-// fatalKeyError prints a styled key-missing error and exits 1.
-func fatalKeyError(problem, hint string) {
-	fmt.Fprintf(os.Stderr,
-		"\n  %s✗ no decryption key%s — %s\n\n  %s→%s %s\n\n",
-		clrLightRed, clrReset, problem,
-		clrGray, clrReset, hint,
 	)
 	os.Exit(1)
 }
@@ -663,13 +658,11 @@ func formatOriginDim(o secrets.Origin) string {
 
 const treeValueMaxCols = 120
 
-// wardKeyEnvName builds the per-vault key env var name (WARD_KEY_<NAME>) from a
-// vault name, sanitising characters that are invalid in shell env var names:
-// hyphens and dots become underscores, and the result is upper-cased. e.g.
-// "messenger-api" → "WARD_KEY_MESSENGER_API".
+// wardKeyEnvName builds the per-vault key env var name (WARD_KEY_<NAME>).
+// The rule lives in config so the engine can produce the same name in its
+// missing-key guidance.
 func wardKeyEnvName(vaultName string) string {
-	safe := strings.NewReplacer("-", "_", ".", "_").Replace(vaultName)
-	return "WARD_KEY_" + strings.ToUpper(safe)
+	return config.KeyEnvName(vaultName)
 }
 
 func terminalWidth() int {

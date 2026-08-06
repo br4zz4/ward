@@ -1,0 +1,4 @@
+app:
+  main:
+    db:
+      host: localhost

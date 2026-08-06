@@ -25,6 +25,22 @@ func TestMain(m *testing.M) {
 
 func fix(name string) string { return testutil.FixtureDir("tree", name) }
 
+// clearKeyEnv unsets every env var that could supply a key to the missing-key
+// fixtures, so a developer's environment cannot unlock them and mask a failure.
+// The child process inherits the parent's environment.
+func clearKeyEnv(t *testing.T) {
+	t.Helper()
+	for _, name := range []string{
+		"WARD_KEY",                // global token, checked first
+		"WARD_KEY_LOCKED",         // derived from vault name "locked"
+		"WARD_KEY_APP",            // derived from vault name "app"
+		"WARD_KEY_LOCKED_FIXTURE", // declared via key_env
+		"WARD_KEY_GLOBAL_FIXTURE", // declared via global key_env
+	} {
+		t.Setenv(name, "")
+	}
+}
+
 func TestTree_shows_tree_with_origin(t *testing.T) {
 	out, _, code := testutil.Run(t, bin, fix("basic"), "tree")
 	if code != 0 {
@@ -90,8 +106,9 @@ func TestTree_long_value_arrow_not_pushed_far_right(t *testing.T) {
 // A vault whose key_env is unset must not abort the whole command: the readable
 // vaults are shown and the locked one is reported as a warning.
 func TestTree_missing_vault_key_warns_and_shows_other_vaults(t *testing.T) {
-	// arrange: make sure the fixture's key env var is absent
-	t.Setenv("WARD_KEY_LOCKED_FIXTURE", "")
+	// arrange: clear every env var that could unlock the fixture's vault —
+	// the derived name and the global one outrank the declared key_env
+	clearKeyEnv(t)
 
 	// act
 	out, stderr, code := testutil.Run(t, bin, fix("missing-key"), "tree")
@@ -115,7 +132,7 @@ func TestTree_missing_vault_key_warns_and_shows_other_vaults(t *testing.T) {
 // When no vault can be decrypted there is nothing to show, so it stays fatal.
 func TestTree_all_vaults_missing_key_fails(t *testing.T) {
 	// arrange
-	t.Setenv("WARD_KEY_LOCKED_FIXTURE", "")
+	clearKeyEnv(t)
 
 	// act
 	_, stderr, code := testutil.Run(t, bin, fix("all-missing-key"), "tree")
@@ -140,5 +157,23 @@ func TestTree_conflict_envvar_warns(t *testing.T) {
 	}
 	if !testutil.Contains(testutil.StripANSI(out+stderr), "collision") {
 		t.Errorf("expected collision warning, got: %q / %q", out, stderr)
+	}
+}
+
+// A globally declared key that is unavailable must not abort the command either:
+// vaults that do not need it still render.
+func TestTree_missing_global_key_does_not_abort(t *testing.T) {
+	// arrange
+	clearKeyEnv(t)
+
+	// act
+	out, stderr, code := testutil.Run(t, bin, fix("global-key-missing"), "tree")
+
+	// assert
+	if code != 0 {
+		t.Fatalf("tree should exit 0 when the vault needs no key, got %d — %q", code, stderr)
+	}
+	if !testutil.Contains(testutil.StripANSI(out), "myapp") {
+		t.Errorf("expected the readable vault to render, got: %q", out)
 	}
 }

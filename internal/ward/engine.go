@@ -17,10 +17,11 @@ import (
 // Engine orchestrates secret discovery, loading, merging and env-var resolution.
 // The zero value is not usable; construct via NewEngine.
 type Engine struct {
-	cfg      *config.Config
-	dec      sops.Decryptor            // global fallback
-	vaultDec map[string]sops.Decryptor // per-vault decryptors (keyed by vault name)
-	warnings []string
+	cfg           *config.Config
+	dec           sops.Decryptor            // global fallback
+	vaultDec      map[string]sops.Decryptor // per-vault decryptors (keyed by vault name)
+	warnings      []string
+	skippedVaults []string // vaults skipped for lack of a key during the last load
 }
 
 // NewEngine returns an Engine backed by cfg and a global decryptor.
@@ -268,6 +269,14 @@ func (e *Engine) Warnings() []string {
 	return e.warnings
 }
 
+// SkippedVaults returns the names of vaults whose files could not be decrypted
+// during the last load. Callers that resolve a secret-path against the loaded
+// set must treat a non-empty result as incomplete knowledge: a skipped vault may
+// define the very path being resolved.
+func (e *Engine) SkippedVaults() []string {
+	return e.skippedVaults
+}
+
 // decryptorFor returns the decryptor for the vault that owns path.
 // Falls back to the global decryptor when no per-vault decryptor is configured.
 func (e *Engine) decryptorFor(path string) sops.Decryptor {
@@ -309,6 +318,12 @@ func (e *Engine) Encrypt(path string, plaintext []byte) error {
 	if md, ok := dec.(sops.MissingKeyDecryptor); ok {
 		return fmt.Errorf("%s: cannot write without the encryption key — %s", path, md.Hint)
 	}
+	// No encryptor at all: writing plaintext is the documented fallback for a
+	// project without encryption, but never over an existing ciphertext — that
+	// would silently destroy the encrypted content.
+	if sops.IsEncryptedFile(path) {
+		return fmt.Errorf("%s: refusing to overwrite an encrypted file with plaintext — no encryption key is configured", path)
+	}
 	return os.WriteFile(path, plaintext, 0644)
 }
 
@@ -337,6 +352,7 @@ func (e *Engine) load() ([]secrets.ParsedFile, error) {
 	files, skips := secrets.LoadAllLenient(paths, vaultRootFor, decFor)
 
 	e.warnings = nil
+	e.skippedVaults = nil
 	var keySkips, otherSkips []secrets.LoadSkip
 	for _, s := range skips {
 		if sops.IsNoKeyError(s.Err) {
@@ -369,11 +385,10 @@ func (e *Engine) load() ([]secrets.ParsedFile, error) {
 		if len(files) == 0 {
 			return nil, fmt.Errorf("no encryption key found — %s", missingKeySummary(order, hintFor))
 		}
+		e.skippedVaults = order
 		for _, name := range order {
-			w := fmt.Sprintf("missing key for vault %s — %d file(s) skipped", name, byVault[name])
-			if h := hintFor[name]; h != "" {
-				w += " — " + h
-			}
+			w := fmt.Sprintf("missing key for vault %s — %d file(s) skipped — %s",
+				name, byVault[name], keyHintFor(name, hintFor))
 			e.warnings = append(e.warnings, w)
 		}
 	}
@@ -381,18 +396,27 @@ func (e *Engine) load() ([]secrets.ParsedFile, error) {
 	return files, nil
 }
 
-// missingKeySummary builds the fatal-message tail listing how to unlock each
-// vault that had no key, falling back to the generic advice when no vault
-// carries a hint.
-func missingKeySummary(vaults []string, hintFor map[string]string) string {
-	var parts []string
-	for _, name := range vaults {
-		if h := hintFor[name]; h != "" {
-			parts = append(parts, fmt.Sprintf("vault %s: %s", name, h))
-		}
+// keyHintFor returns the guidance for unlocking a vault: the hint carried by its
+// decryptor when it declared a key source, otherwise the name of the env var
+// ward derives from the vault name.
+func keyHintFor(vault string, hintFor map[string]string) string {
+	if h := hintFor[vault]; h != "" {
+		return h
 	}
-	if len(parts) == 0 {
+	return fmt.Sprintf("set %s to the contents of your age key, or provide .ward/%s.key",
+		config.KeyEnvName(vault), vault)
+}
+
+// missingKeySummary builds the fatal-message tail listing how to unlock every
+// vault that had no key. Each vault gets its own entry, so a vault without a
+// declared key source is never dropped from the guidance.
+func missingKeySummary(vaults []string, hintFor map[string]string) string {
+	if len(vaults) == 0 {
 		return "set WARD_KEY or provide .ward/<vault>.key"
+	}
+	parts := make([]string, 0, len(vaults))
+	for _, name := range vaults {
+		parts = append(parts, fmt.Sprintf("vault %s: %s", name, keyHintFor(name, hintFor)))
 	}
 	return strings.Join(parts, "; ")
 }

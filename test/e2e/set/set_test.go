@@ -24,6 +24,21 @@ func TestMain(m *testing.M) {
 
 func fix(name string) string { return testutil.FixtureDir("set", name) }
 
+// clearKeyEnv unsets every env var that could unlock the locked-vault fixture,
+// so a developer's environment cannot mask a failure. The child process
+// inherits the parent's environment.
+func clearKeyEnv(t *testing.T) {
+	t.Helper()
+	for _, name := range []string{
+		"WARD_KEY",                // global token, checked first
+		"WARD_KEY_LOCKED",         // derived from vault name "locked"
+		"WARD_KEY_APP",            // derived from vault name "app"
+		"WARD_KEY_LOCKED_FIXTURE", // declared via key_env
+	} {
+		t.Setenv(name, "")
+	}
+}
+
 // copyFixture copies a fixture directory to dst so tests can mutate it.
 func copyFixture(t *testing.T, src, dst string) {
 	t.Helper()
@@ -208,5 +223,52 @@ func TestSet_type2_collision_writes_and_warns(t *testing.T) {
 	out, _, _ := testutil.Run(t, bin, dir, "get", "vb:prod.token")
 	if !testutil.Contains(out, "from-vb") {
 		t.Errorf("expected value written despite collision, got: %q", out)
+	}
+}
+
+// An unqualified write must not be resolved from a partial view: a vault skipped
+// for lack of a key may define the same path, so the target is ambiguous.
+func TestSet_unqualified_refuses_when_a_vault_is_locked(t *testing.T) {
+	// arrange
+	clearKeyEnv(t)
+	dir := t.TempDir()
+	copyFixture(t, fix("locked-vault"), dir)
+
+	// act
+	_, stderr, code := testutil.Run(t, bin, dir, "set", "main.db.host", "changed")
+
+	// assert
+	if code == 0 {
+		t.Fatal("expected unqualified set to fail while a vault is locked")
+	}
+	stripped := testutil.StripANSI(stderr)
+	if !testutil.Contains(stripped, "locked") {
+		t.Errorf("expected the error to name the skipped vault, got: %q", stripped)
+	}
+	// the readable vault must be untouched
+	out, _, _ := testutil.Run(t, bin, dir, "get", "app:main.db.host")
+	if !testutil.Contains(out, "localhost") {
+		t.Errorf("expected app.main.db.host unchanged, got: %q", out)
+	}
+}
+
+// A qualified write still works while another vault is locked: the target is
+// explicit, so no guessing is involved.
+func TestSet_qualified_still_works_when_another_vault_is_locked(t *testing.T) {
+	// arrange
+	clearKeyEnv(t)
+	dir := t.TempDir()
+	copyFixture(t, fix("locked-vault"), dir)
+
+	// act
+	_, stderr, code := testutil.Run(t, bin, dir, "set", "app:main.db.host", "changed")
+
+	// assert
+	if code != 0 {
+		t.Fatalf("qualified set should succeed, got %d — %q", code, testutil.StripANSI(stderr))
+	}
+	out, _, _ := testutil.Run(t, bin, dir, "get", "app:main.db.host")
+	if !testutil.Contains(out, "changed") {
+		t.Errorf("expected value written, got: %q", out)
 	}
 }
