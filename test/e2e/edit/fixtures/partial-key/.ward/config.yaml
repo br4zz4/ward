@@ -1,0 +1,8 @@
+vaults:
+  - name: app
+    path: .ward/vaults/app
+    encryption:
+      engine: sops+age
+      key_file: .ward/sample.key
+  - name: locked
+    path: .ward/vaults/locked

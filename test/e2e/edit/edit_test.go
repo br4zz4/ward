@@ -63,6 +63,39 @@ func TestEdit_scope_with_unknown_vault_reports_vault_not_found(t *testing.T) {
 	}
 }
 
+// When one vault loads and another is skipped for a missing key, the skipped
+// files are invisible to scope resolution. Saying "no such file" would blame
+// the argument for a key problem.
+func TestEdit_scope_in_partially_readable_project_reports_the_skip(t *testing.T) {
+	// act
+	_, stderr, code := testutil.Run(t, bin, fix("partial-key"), "edit", "locked:infra.production")
+
+	// assert
+	if code == 0 {
+		t.Fatalf("expected a non-zero exit, got %d", code)
+	}
+	if !testutil.Contains(stderr, "missing key for vault locked") {
+		t.Errorf("expected the skipped vault named, got: %q", stderr)
+	}
+	if testutil.Contains(stderr, "no such file") {
+		t.Errorf("a skipped vault must not be reported as a missing file, got: %q", stderr)
+	}
+}
+
+// A readable project that genuinely has no such scope still says so plainly.
+func TestEdit_unmatched_scope_in_readable_vault_is_not_masked(t *testing.T) {
+	// act — the app vault loads fine; this path simply does not exist
+	_, stderr, code := testutil.Run(t, bin, fix("partial-key"), "edit", "app:nope.missing")
+
+	// assert
+	if code == 0 {
+		t.Fatalf("expected a non-zero exit, got %d", code)
+	}
+	if testutil.Contains(stderr, "missing key for vault locked") {
+		t.Errorf("an unrelated readable vault must not blame the skipped one, got: %q", stderr)
+	}
+}
+
 // The <vault> <path> form resolves on the filesystem, so it still reaches the
 // file when no key is available — only the decrypt step then fails.
 func TestEdit_vault_and_path_resolves_without_key(t *testing.T) {

@@ -231,6 +231,58 @@ func TestResolveVaultFile_no_match(t *testing.T) {
 	}
 }
 
+func TestUnresolvedScopeError_nil_when_nothing_was_skipped(t *testing.T) {
+	// act — a clean load that simply had no match is not an error here
+	got := unresolvedScopeError(secrets.ParseScope("app:main"), nil, false)
+
+	// assert
+	if got != nil {
+		t.Fatalf("expected no error when the whole project was read, got %v", got)
+	}
+}
+
+func TestUnresolvedScopeError_nil_when_the_scoped_vault_was_read(t *testing.T) {
+	// act — another vault was skipped, but this scope's vault loaded fine, so
+	// the skip cannot explain the miss
+	got := unresolvedScopeError(secrets.ParseScope("app:nope.missing"),
+		[]string{"missing key for vault locked — 1 file(s) skipped"}, true)
+
+	// assert
+	if got != nil {
+		t.Fatalf("expected no error when the scoped vault was read, got %v", got)
+	}
+}
+
+func TestUnresolvedScopeError_reports_the_skipped_vault(t *testing.T) {
+	// arrange
+	warnings := []string{"missing key for vault locked — 1 file(s) skipped"}
+
+	// act
+	got := unresolvedScopeError(secrets.ParseScope("locked:infra.production"), warnings, false)
+
+	// assert
+	if got == nil {
+		t.Fatal("expected an error when files were skipped")
+	}
+	if !strings.Contains(got.Error(), "locked:infra.production") {
+		t.Errorf("expected the scope in the message, got %q", got)
+	}
+	if !strings.Contains(got.Error(), "missing key for vault locked") {
+		t.Errorf("expected the skip warning in the message, got %q", got)
+	}
+}
+
+func TestUnresolvedScopeError_suggests_the_path_form(t *testing.T) {
+	// act — the <vault> <file> form resolves without a key, so point at it
+	got := unresolvedScopeError(secrets.ParseScope("locked:infra.production"),
+		[]string{"missing key for vault locked — 1 file(s) skipped"}, false)
+
+	// assert
+	if got == nil || !strings.Contains(got.Error(), "ward edit locked <file>") {
+		t.Fatalf("expected the vault+path form suggested, got %v", got)
+	}
+}
+
 func TestPromptChoice_valid_choice(t *testing.T) {
 	// arrange
 	var out bytes.Buffer
