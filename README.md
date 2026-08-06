@@ -161,6 +161,25 @@ and `environments/staging.ward` all name the same file, and a bare
 A plain filesystem path still works on its own (`ward edit .ward/vaults/myapp/environments/staging.ward`),
 as does a bare filename found anywhere in the vaults (`ward edit staging`).
 
+**Precedence for a single argument.** With one argument, ward tries the
+interpretations in this order and takes the first that resolves:
+
+1. an existing filesystem path
+2. a configured **vault** name
+3. a **filename** found anywhere in the vaults
+4. a **scope** (`[vault:]secret-path`)
+
+A vault name is deliberately matched before a filename, so `ward edit myapp`
+always means the vault. If a vault and a file share a name — vault `myapp` and
+a `myapp.ward` file — the vault wins and the file needs an unambiguous
+spelling:
+
+```sh
+ward edit myapp            # the vault: asks which file inside it
+ward edit myapp.ward       # the file, by its full filename
+ward edit myapp <file>     # also unambiguous: vault + file
+```
+
 > Scope notation reads the encrypted contents to find where a secret-path is
 > defined, so it needs a usable key for that vault. The `<vault> <file>` form
 > resolves purely by path and works even when the key is missing.
