@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -305,9 +306,52 @@ func findByScope(arg string) (string, error) {
 	}
 	targets := scopeTargetFiles(files, sc)
 	if len(targets) == 0 {
+		if err := unresolvedScopeError(sc, eng.Warnings(), vaultWasRead(files, sc.Vault)); err != nil {
+			return "", err
+		}
 		return "", nil
 	}
 	return pickFromList(targets, os.Stdin, os.Stdout)
+}
+
+// unresolvedScopeError explains a scope that matched nothing while part of the
+// project could not be read. Files skipped for a missing key never reach the
+// merged tree, so scope resolution cannot see them — reporting the argument as
+// a missing file would blame it for a key problem.
+//
+// vaultRead says whether the scope's own vault did load; when it did, an
+// unrelated vault being skipped cannot explain the miss.
+func unresolvedScopeError(sc secrets.Scope, warnings []string, vaultRead bool) error {
+	if len(warnings) == 0 || vaultRead {
+		return nil
+	}
+	target := sc.Vault
+	if target == "" {
+		target = "<vault>"
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "cannot resolve %s — part of the project could not be read:", sc.FullPath())
+	for _, w := range warnings {
+		fmt.Fprintf(&b, "\n  %s", w)
+	}
+	fmt.Fprintf(&b, "\n  secrets in skipped files cannot be located by scope")
+	fmt.Fprintf(&b, "\n  → edit by path instead:  ward edit %s <file>", target)
+	return errors.New(b.String())
+}
+
+// vaultWasRead reports whether any loaded file carries the vault's root key.
+// An unqualified scope (empty name) is never considered read: the match could
+// have been in any vault, including one that was skipped.
+func vaultWasRead(files []secrets.ParsedFile, vault string) bool {
+	if vault == "" {
+		return false
+	}
+	for _, pf := range files {
+		if _, ok := pf.Data[vault]; ok {
+			return true
+		}
+	}
+	return false
 }
 
 // scopeTargetFiles returns the .ward files whose data defines the scope's path
