@@ -9,15 +9,16 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/br4zz4/ward/internal/config"
 	"github.com/br4zz4/ward/internal/secrets"
 	"github.com/spf13/cobra"
 )
 
 func NewEditCmd() *cobra.Command {
 	c := &cobra.Command{
-		Use:   "edit [file.ward]",
+		Use:   "edit [vault] [file|scope]",
 		Short: "Decrypt a .ward file, open in $EDITOR, re-encrypt on save",
-		Args:  cobra.MaximumNArgs(1),
+		Args:  cobra.MaximumNArgs(2),
 		ValidArgsFunction: completeWardFiles,
 		Run: func(_ *cobra.Command, args []string) {
 			path := wardFilePath(args)
@@ -55,40 +56,42 @@ func NewEditCmd() *cobra.Command {
 	return c
 }
 
+// wardFilePath resolves the edit target from the command arguments:
+//
+//	(no args)          → ask which vault, then which file
+//	<vault>            → ask which file within that vault
+//	<vault> <path>     → the file at that path within the vault
+//	<file|scope>       → a filesystem path, or a vault:secret-path scope
 func wardFilePath(args []string) string {
-	var path string
-	if len(args) == 1 {
-		path = args[0]
-		// Resolve user-supplied path relative to the original CWD (before
-		// FindConfigFile changed directory to the project root).
-		if !filepath.IsAbs(path) {
-			if orig := OriginalDir(); orig != "" {
-				path = filepath.Join(orig, path)
-			}
-		}
-	} else {
-		eng, err := newEngine()
-		if err != nil {
-			fatalNoSources()
-		}
-		sources := eng.SourcePaths()
-		if len(sources) == 0 {
-			fatalNoSources()
-		}
-		path = sources[0]
+	if len(args) == 0 {
+		return pickVaultThenFile()
 	}
-	// If path is a directory, resolve to the first .ward file inside it.
+	if len(args) == 2 {
+		return fileInVault(args[0], args[1])
+	}
+
+	// Resolve user-supplied path relative to the original CWD (before
+	// FindConfigFile changed directory to the project root).
+	path := args[0]
+	if !filepath.IsAbs(path) {
+		if orig := OriginalDir(); orig != "" {
+			path = filepath.Join(orig, path)
+		}
+	}
+	// If path is a directory, resolve to a .ward file inside it.
 	info, err := os.Stat(path)
 	if err != nil {
+		// A bare vault name selects that vault and asks which file.
+		if src := vaultNamed(args[0]); src != nil {
+			return pickFileInVault(src)
+		}
 		// Path doesn't exist — try to find it inside the vaults.
 		if found := findInVaults(filepath.Base(path)); found != "" {
 			return found
 		}
 		// Not a file reference — try it as a scope (vault:secret-path).
-		if len(args) == 1 {
-			if found := findByScope(args[0]); found != "" {
-				return found
-			}
+		if found := findByScope(args[0]); found != "" {
+			return found
 		}
 		return path // let Decrypt report the original error
 	}
@@ -96,6 +99,130 @@ func wardFilePath(args []string) string {
 		return pickWardFile(path)
 	}
 	return path
+}
+
+// vaultNamed returns the configured vault with the given name, or nil.
+func vaultNamed(name string) *config.Source {
+	cfgPath, err := resolvedConfigFile()
+	if err != nil {
+		return nil
+	}
+	cfg, err := config.Load(cfgPath)
+	if err != nil {
+		return nil
+	}
+	return findVault(cfg, name)
+}
+
+// pickVaultThenFile asks which vault to edit (skipped when only one exists),
+// then which file inside it.
+func pickVaultThenFile() string {
+	cfgPath, err := resolvedConfigFile()
+	if err != nil {
+		fatalNoSources()
+	}
+	cfg, err := config.Load(cfgPath)
+	if err != nil {
+		fatal(err)
+	}
+	if len(cfg.Vaults) == 0 {
+		fatalNoSources()
+	}
+	names := make([]string, len(cfg.Vaults))
+	for i, v := range cfg.Vaults {
+		names[i] = v.Name
+	}
+	name, err := promptChoice("Select a vault:", names, os.Stdin, os.Stdout)
+	if err != nil {
+		fatal(err)
+	}
+	return pickFileInVault(findVault(cfg, name))
+}
+
+// pickFileInVault lists every .ward file in the vault and asks which to edit.
+func pickFileInVault(src *config.Source) string {
+	files, err := secrets.Discover([]string{src.Path})
+	if err != nil || len(files) == 0 {
+		fatal(fmt.Errorf("no .ward files found in vault %s (%s)", src.Name, src.Path))
+	}
+	picked, err := pickFromList(files, os.Stdin, os.Stdout)
+	if err != nil {
+		fatal(err)
+	}
+	return picked
+}
+
+// fileInVault resolves arg to a file inside the named vault, prompting when
+// the argument matches more than one.
+func fileInVault(vaultName, arg string) string {
+	src := vaultNamed(vaultName)
+	if src == nil {
+		fatalVaultNotFound(vaultName)
+	}
+	files, err := secrets.Discover([]string{src.Path})
+	if err != nil {
+		fatal(err)
+	}
+	matches := resolveVaultFile(src.Path, files, arg)
+	if len(matches) == 0 {
+		fatal(fmt.Errorf("no .ward file matching %q in vault %s (%s)", arg, src.Name, src.Path))
+	}
+	picked, err := pickFromList(matches, os.Stdin, os.Stdout)
+	if err != nil {
+		fatal(err)
+	}
+	return picked
+}
+
+// resolveVaultFile returns the files under vaultPath that arg addresses. The
+// argument may use slashes or dots, carry the .ward extension or not, name a
+// directory (selecting everything beneath it), or be a bare basename.
+func resolveVaultFile(vaultPath string, files []string, arg string) []string {
+	rel := strings.TrimSuffix(strings.ReplaceAll(arg, ".", "/"), "/ward")
+	rel = strings.Trim(rel, "/")
+	if rel == "" {
+		return nil
+	}
+
+	// Exact file match, relative to the vault root.
+	var exact []string
+	for _, f := range files {
+		if vaultRelPath(vaultPath, f) == rel+".ward" {
+			exact = append(exact, f)
+		}
+	}
+	if len(exact) > 0 {
+		return exact
+	}
+
+	// Directory prefix: select every file beneath it.
+	var beneath []string
+	for _, f := range files {
+		if strings.HasPrefix(vaultRelPath(vaultPath, f), rel+"/") {
+			beneath = append(beneath, f)
+		}
+	}
+	if len(beneath) > 0 {
+		return beneath
+	}
+
+	// Bare basename anywhere in the vault.
+	var byBase []string
+	for _, f := range files {
+		if strings.TrimSuffix(filepath.Base(f), ".ward") == rel {
+			byBase = append(byBase, f)
+		}
+	}
+	return byBase
+}
+
+// vaultRelPath returns file's path relative to the vault root, in slash form.
+func vaultRelPath(vaultPath, file string) string {
+	rel, err := filepath.Rel(vaultPath, file)
+	if err != nil {
+		return file
+	}
+	return filepath.ToSlash(rel)
 }
 
 // findInVaults searches vault source directories for a .ward file whose path
@@ -197,8 +324,7 @@ func pickWardFile(dir string) string {
 	return picked
 }
 
-// pickFromList prompts on out for one of files, reading the choice from in.
-// A single candidate is returned directly without prompting.
+// pickFromList prompts for one of files, shallowest path first.
 func pickFromList(files []string, in io.Reader, out io.Writer) (string, error) {
 	sort.Slice(files, func(i, j int) bool {
 		di, dj := strings.Count(files[i], "/"), strings.Count(files[j], "/")
@@ -207,19 +333,29 @@ func pickFromList(files []string, in io.Reader, out io.Writer) (string, error) {
 		}
 		return files[i] < files[j]
 	})
-	if len(files) == 1 {
-		return files[0], nil
+	return promptChoice("Select a file to edit:", files, in, out)
+}
+
+// promptChoice prints label and the numbered items on out, then reads the
+// selection from in. Items are offered in the order given. A single item is
+// returned directly, without prompting.
+func promptChoice(label string, items []string, in io.Reader, out io.Writer) (string, error) {
+	switch len(items) {
+	case 0:
+		return "", fmt.Errorf("nothing to choose from")
+	case 1:
+		return items[0], nil
 	}
-	fmt.Fprintln(out, "Select a file to edit:")
-	for i, f := range files {
-		fmt.Fprintf(out, "  %d) %s\n", i+1, f)
+	fmt.Fprintln(out, label)
+	for i, it := range items {
+		fmt.Fprintf(out, "  %d) %s\n", i+1, it)
 	}
 	fmt.Fprint(out, "> ")
 	var choice int
-	if _, err := fmt.Fscan(in, &choice); err != nil || choice < 1 || choice > len(files) {
+	if _, err := fmt.Fscan(in, &choice); err != nil || choice < 1 || choice > len(items) {
 		return "", fmt.Errorf("invalid choice")
 	}
-	return files[choice-1], nil
+	return items[choice-1], nil
 }
 
 func writeTempFile(originalPath string, content []byte) (string, error) {
