@@ -11,7 +11,7 @@ import (
 
 func NewTreeCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:               "tree [dot.path]",
+		Use:               "tree [scope]",
 		Short:             "Show the merged tree with source file and line for each value",
 		Args:              cobra.MaximumNArgs(1),
 		ValidArgsFunction: completeDotPaths,
@@ -61,12 +61,13 @@ func runTree(args []string) {
 	}
 
 	if len(args) == 1 {
-		node, err := eng.GetAtPath(result, args[0])
+		sc := secrets.ParseScope(args[0])
+		node, err := eng.GetAtPath(result, sc.TreePath())
 		if err != nil {
 			fatal(err)
 		}
-		fmt.Println(args[0])
-		printTreeWithOrigin(node, 1, conflicts, args[0], envCollisions)
+		fmt.Println(sc.FullPath())
+		printTreeWithOrigin(node, 1, conflicts, sc.TreePath(), envCollisions)
 	} else {
 		printTreeWithOrigin(&secrets.Node{Children: result.Tree}, 0, conflicts, "", envCollisions)
 	}
