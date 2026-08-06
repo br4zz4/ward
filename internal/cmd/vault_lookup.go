@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/br4zz4/ward/internal/config"
 )
@@ -17,12 +18,21 @@ func findVault(cfg *config.Config, name string) *config.Source {
 	return nil
 }
 
-// fatalVaultNotFound prints a styled error and exits when the vault (first
-// dot-path segment) does not exist. set/unset never create vaults.
+// fatalVaultNotFound prints a styled error and exits when the named vault does
+// not exist. Commands never create vaults implicitly.
 func fatalVaultNotFound(vaultName string) {
-	fmt.Fprintf(os.Stderr, "\n  %s✗ vault %q not found%s\n\n", clrLightRed+clrBold, vaultName, clrReset)
-	fmt.Fprintf(os.Stderr, "  the first segment of the dot-path must be an existing vault.\n")
-	fmt.Fprintf(os.Stderr, "  %s→%s see vaults with  %sward vault list%s\n", clrGray, clrReset, clrCyan, clrReset)
-	fmt.Fprintf(os.Stderr, "  %s→%s add one with     %sward vault add %s <path>%s\n\n", clrGray, clrReset, clrCyan, vaultName, clrReset)
+	fmt.Fprint(os.Stderr, vaultNotFoundMessage(vaultName))
 	os.Exit(1)
+}
+
+// vaultNotFoundMessage builds the styled "vault not found" text. The vault is
+// always named explicitly — by a `vault:` prefix, --vault, or its own argument
+// — so the message never refers to dot-path segments.
+func vaultNotFoundMessage(vaultName string) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "\n  %s✗ vault %q not found%s\n\n", clrLightRed+clrBold, vaultName, clrReset)
+	fmt.Fprintf(&b, "  no vault with that name is configured.\n")
+	fmt.Fprintf(&b, "  %s→%s see vaults with  %sward vault list%s\n", clrGray, clrReset, clrCyan, clrReset)
+	fmt.Fprintf(&b, "  %s→%s add one with     %sward vault add %s <path>%s\n\n", clrGray, clrReset, clrCyan, vaultName, clrReset)
+	return b.String()
 }

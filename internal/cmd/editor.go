@@ -47,17 +47,6 @@ func newSecretEditor() *secretEditor {
 	return &secretEditor{eng: eng, cfg: cfg, cfgPath: cfgPath, files: files}
 }
 
-// vaultFor resolves the vault named by the dot-path's first segment, exiting
-// with a styled error when it does not exist.
-func (e *secretEditor) vaultFor(dotPath string) *config.Source {
-	name := firstSegment(dotPath)
-	src := findVault(e.cfg, name)
-	if src == nil {
-		fatalVaultNotFound(name)
-	}
-	return src
-}
-
 // vaultForScope resolves the vault for a scope. A qualified scope names the
 // vault directly; an unqualified one is resolved to the single vault whose
 // files define the secret-path, exiting when ambiguous or absent.
