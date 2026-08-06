@@ -185,10 +185,18 @@ func fileInVault(vaultName, arg string) string {
 //
 // The path is tried exactly as typed before dots are read as separators, so a
 // file or directory whose name legitimately contains a dot stays addressable.
+// Match strength decides before spelling does: an exact file match in any form
+// beats a directory or basename match in any other. Within one strength the
+// literal spelling wins.
 func resolveVaultFile(vaultPath string, files []string, arg string) []string {
-	for _, rel := range vaultRelForms(arg) {
-		if matches := matchVaultRel(vaultPath, files, rel); len(matches) > 0 {
-			return matches
+	forms := vaultRelForms(arg)
+	for _, stage := range []func(string, []string, string) []string{
+		exactFileMatches, dirPrefixMatches, basenameMatches,
+	} {
+		for _, rel := range forms {
+			if matches := stage(vaultPath, files, rel); len(matches) > 0 {
+				return matches
+			}
 		}
 	}
 	return nil
@@ -210,28 +218,37 @@ func vaultRelForms(arg string) []string {
 	return forms
 }
 
-// matchVaultRel resolves one vault-relative form against the vault's files:
-// an exact file, else a directory prefix, else a bare basename.
-func matchVaultRel(vaultPath string, files []string, rel string) []string {
-	var exact, beneath, byBase []string
+// exactFileMatches returns the file at exactly this vault-relative path.
+func exactFileMatches(vaultPath string, files []string, rel string) []string {
+	var out []string
 	for _, f := range files {
-		switch relPath := vaultRelPath(vaultPath, f); {
-		case relPath == rel+".ward":
-			exact = append(exact, f)
-		case strings.HasPrefix(relPath, rel+"/"):
-			beneath = append(beneath, f)
+		if vaultRelPath(vaultPath, f) == rel+".ward" {
+			out = append(out, f)
 		}
+	}
+	return out
+}
+
+// dirPrefixMatches returns every file beneath this vault-relative directory.
+func dirPrefixMatches(vaultPath string, files []string, rel string) []string {
+	var out []string
+	for _, f := range files {
+		if strings.HasPrefix(vaultRelPath(vaultPath, f), rel+"/") {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
+// basenameMatches returns every file whose filename alone is rel.
+func basenameMatches(_ string, files []string, rel string) []string {
+	var out []string
+	for _, f := range files {
 		if strings.TrimSuffix(filepath.Base(f), ".ward") == rel {
-			byBase = append(byBase, f)
+			out = append(out, f)
 		}
 	}
-	if len(exact) > 0 {
-		return exact
-	}
-	if len(beneath) > 0 {
-		return beneath
-	}
-	return byBase
+	return out
 }
 
 // vaultRelPath returns file's path relative to the vault root, in slash form.

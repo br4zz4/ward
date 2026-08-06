@@ -221,6 +221,41 @@ func TestResolveVaultFile_dot_notation_still_falls_back(t *testing.T) {
 	}
 }
 
+func TestResolveVaultFile_exact_beats_basename_across_forms(t *testing.T) {
+	// arrange — the dot form names one file exactly, while the literal form
+	// only matches another file's basename
+	files := []string{
+		".ward/vaults/app/archive/infra.production.ward",
+		".ward/vaults/app/infra/production.ward",
+	}
+
+	// act
+	got := resolveVaultFile(".ward/vaults/app", files, "infra.production")
+
+	// assert — an exact match must win over a weaker basename match, whichever
+	// form produced it, so this stays equivalent to "infra/production"
+	if len(got) != 1 || got[0] != ".ward/vaults/app/infra/production.ward" {
+		t.Fatalf("expected the exact infra/production.ward, got %v", got)
+	}
+}
+
+func TestResolveVaultFile_dot_and_slash_forms_agree(t *testing.T) {
+	// arrange
+	files := []string{
+		".ward/vaults/app/archive/infra.production.ward",
+		".ward/vaults/app/infra/production.ward",
+	}
+
+	// act — the README promises these two spellings name the same file
+	dotted := resolveVaultFile(".ward/vaults/app", files, "infra.production")
+	slashed := resolveVaultFile(".ward/vaults/app", files, "infra/production")
+
+	// assert
+	if len(dotted) != 1 || len(slashed) != 1 || dotted[0] != slashed[0] {
+		t.Fatalf("expected both spellings to agree, got %v vs %v", dotted, slashed)
+	}
+}
+
 func TestResolveVaultFile_no_match(t *testing.T) {
 	// act
 	got := resolveVaultFile(".ward/vaults/app", vaultFileFixture(), "nope")
