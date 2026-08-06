@@ -90,7 +90,11 @@ func wardFilePath(args []string) string {
 			return found
 		}
 		// Not a file reference — try it as a scope (vault:secret-path).
-		if found := findByScope(args[0]); found != "" {
+		found, scopeErr := findByScope(args[0])
+		if scopeErr != nil {
+			fatal(scopeErr)
+		}
+		if found != "" {
 			return found
 		}
 		return path // let Decrypt report the original error
@@ -278,25 +282,32 @@ func findInVaults(partial string) string {
 
 // findByScope resolves a scope argument (vault:secret-path or bare dot-path)
 // to the .ward file defining it. When the scope's path spans several files,
-// the user picks one. Returns "" when the argument matches nothing.
-func findByScope(arg string) string {
+// the user picks one.
+//
+// An empty path with a nil error means the argument simply matched nothing —
+// the caller may then try to interpret it some other way. Anything that went
+// genuinely wrong (an unreadable project, a missing key, a malformed file) is
+// returned as an error rather than reported later as a missing file.
+func findByScope(arg string) (string, error) {
+	sc := secrets.ParseScope(arg)
+	// A qualified scope names its vault explicitly, so an unknown one is an
+	// error in the argument — say so before decrypting anything.
+	if sc.Vault != "" && vaultNamed(sc.Vault) == nil {
+		fatalVaultNotFound(sc.Vault)
+	}
 	eng, err := newEngine()
 	if err != nil {
-		return ""
+		return "", err
 	}
 	files, err := eng.LoadFiles()
 	if err != nil {
-		return ""
+		return "", err
 	}
-	targets := scopeTargetFiles(files, secrets.ParseScope(arg))
+	targets := scopeTargetFiles(files, sc)
 	if len(targets) == 0 {
-		return ""
+		return "", nil
 	}
-	picked, err := pickFromList(targets, os.Stdin, os.Stdout)
-	if err != nil {
-		fatal(err)
-	}
-	return picked
+	return pickFromList(targets, os.Stdin, os.Stdout)
 }
 
 // scopeTargetFiles returns the .ward files whose data defines the scope's path
