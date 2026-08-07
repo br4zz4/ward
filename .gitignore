@@ -30,3 +30,4 @@ completions/
 .PKGINFO
 packaging/ward-apk.rsa
 progress-*
+.bk.yaml

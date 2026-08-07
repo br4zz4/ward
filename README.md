@@ -64,22 +64,6 @@ brew install --cask ward
 
 Shell completions are installed automatically.
 
-**Debian / Ubuntu**
-
-```sh
-curl -sL $(curl -s https://api.github.com/repos/br4zz4/ward/releases/latest \
-  | grep browser_download_url | grep linux_amd64.deb | cut -d'"' -f4) -o ward.deb
-sudo dpkg -i ward.deb
-```
-
-**Alpine Linux**
-
-```sh
-curl -sL $(curl -s https://api.github.com/repos/br4zz4/ward/releases/latest \
-  | grep browser_download_url | grep linux_amd64.apk | cut -d'"' -f4) -o ward.apk
-apk add --allow-untrusted ward.apk
-```
-
 **asdf**
 
 ```sh
