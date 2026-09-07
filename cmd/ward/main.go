@@ -33,6 +33,7 @@ func main() {
 	var mcpMode bool
 	var rawFlag bool
 	var verboseFlag bool
+	var aiModeFlag bool
 
 	root := &cobra.Command{
 		Use:     "ward",
@@ -45,6 +46,7 @@ func main() {
 				os.Exit(1)
 			}
 			cmd.SetConfigFile(configPath)
+			cmd.SetAIMode(aiModeFlag)
 		},
 	}
 
@@ -55,6 +57,7 @@ func main() {
 	root.PersistentFlags().BoolVar(&mcpMode, "mcp", false, "start in MCP server mode (for AI integrations)")
 	root.PersistentFlags().BoolVar(&rawFlag, "raw", false, "show original value, skip OTP generation")
 	root.PersistentFlags().BoolVarP(&verboseFlag, "verbose", "v", false, "show OTP metadata (issuer, algorithm, time remaining)")
+	root.PersistentFlags().BoolVar(&aiModeFlag, "ai-mode", false, "suppress secret values (AI agent mode)")
 
 	// Keep commands in registration order (not alphabetical) so each group
 	// reads in the order the commands are added below.

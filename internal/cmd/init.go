@@ -146,6 +146,7 @@ func NewInitCmd() *cobra.Command {
 						r.desc)
 				}
 				fmt.Printf("\n  %srun ward --help for all commands%s\n\n", clrGray, clrReset)
+				printAIModeBanner()
 			}
 		},
 	}

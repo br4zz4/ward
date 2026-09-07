@@ -50,6 +50,7 @@ func newInstallClaudePluginCmd() *cobra.Command {
 			downloadPluginFiles(pluginDir)
 			registerMarketplace(claudeDir, marketplaceDir)
 			installPlugin(claudeDir, scope)
+			printAIModeBanner()
 		},
 	}
 }

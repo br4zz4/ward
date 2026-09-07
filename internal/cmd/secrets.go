@@ -51,6 +51,9 @@ func runSecrets(c *cobra.Command, args []string, prefixed bool) {
 
 	// -v is ignored in this table view; OTP values show their generated code.
 	printEnvEntries(entries, func(v string) string {
+		if IsAIMode() {
+			return "<sensitive>"
+		}
 		return otpValue(v, time.Now(), flagRaw(c), false)
 	})
 }

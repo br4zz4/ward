@@ -3,6 +3,7 @@ package mcp
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -77,6 +78,42 @@ func fail(err error) *mcp.CallToolResult {
 	return mcp.NewToolResultError(err.Error())
 }
 
+// aiGetInstruction builds the structured JSON reply for ward_get in AI mode:
+// the value is never exposed, only the shell command that would fetch it.
+func aiGetInstruction(path string) string {
+	shellCmd := "ward get"
+	if path != "" {
+		shellCmd += " " + path
+	}
+	payload := map[string]string{
+		"path":         path,
+		"sensitive":    "true",
+		"description":  "No description available",
+		"instructions": "Run in a shell: " + shellCmd,
+		"hint":         "Ward secrets are never exposed in AI context. Use bash to access values directly.",
+	}
+	out, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Sprintf("ward: AI mode: run %s in a shell to access the value", shellCmd)
+	}
+	return string(out)
+}
+
+// aiFileInstruction builds the JSON reply for ward_file_extract in AI mode.
+func aiFileInstruction(filename string) string {
+	payload := map[string]string{
+		"filename":     filename,
+		"sensitive":    "true",
+		"instructions": "Run in a shell: ward file extract " + filename + " <dest-dir>",
+		"hint":         "Ward file secrets are never exposed in AI context. Use bash to write the file to disk without reading it.",
+	}
+	out, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Sprintf("ward: AI mode: run 'ward file extract %s <dest-dir>' in a shell to write the file to disk", filename)
+	}
+	return string(out)
+}
+
 func Serve() error {
 	s := server.NewMCPServer("ward", "1.0.0",
 		server.WithToolCapabilities(true),
@@ -93,32 +130,28 @@ func Serve() error {
 
 	s.AddTool(
 		mcp.NewTool("ward_get",
-			mcp.WithDescription("Return the merged value at a dot-path (or full tree if no path given)"),
+			mcp.WithDescription("Return the merged value at a dot-path (or full tree if no path given). "+
+				"In AI mode the value is never returned: the tool replies with the shell command to run instead."),
 			mcp.WithString("path", mcp.Description("scope to a secret: 'vault1:group.key1' (one vault) or 'group.key1' (searches all vaults; ambiguous = error)")),
 			mcp.WithString("dir", mcp.Description("project directory containing .ward/config.yaml (default: current directory)")),
 		),
 		func(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			// --raw: agents need the stored value, not an ephemeral OTP code.
-			args := []string{"get", "--raw"}
-			if p := req.GetString("path", ""); p != "" {
-				args = append(args, p)
-			}
-			out, err := run(dirArgs(req.GetString("dir", ""), args...)...)
-			if err != nil {
-				return fail(err), nil
-			}
-			return ok(out), nil
+			// AI mode: secrets are never exposed in context — reply with the
+			// shell command so the agent can run it in bash without reading it.
+			p := req.GetString("path", "")
+			return ok(aiGetInstruction(p)), nil
 		},
 	)
 
 	s.AddTool(
 		mcp.NewTool("ward_tree",
-			mcp.WithDescription("Show merged tree with source file and line for each value"),
+			mcp.WithDescription("Show merged tree with source file and line for each value. "+
+				"In AI mode values are hidden as <sensitive>."),
 			mcp.WithString("path", mcp.Description("optional scope: 'vault1:group.key1' (one vault) or 'group.key1' (overlay)")),
 			mcp.WithString("dir", mcp.Description("project directory containing .ward/config.yaml (default: current directory)")),
 		),
 		func(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			args := []string{"tree"}
+			args := []string{"tree", "--ai-mode"}
 			if p := req.GetString("path", ""); p != "" {
 				args = append(args, p)
 			}
@@ -132,13 +165,14 @@ func Serve() error {
 
 	s.AddTool(
 		mcp.NewTool("ward_envs",
-			mcp.WithDescription("Show environment variables that would be injected by ward exec"),
+			mcp.WithDescription("Show environment variables that would be injected by ward exec. "+
+				"In AI mode values are hidden as <sensitive>."),
 			mcp.WithString("path", mcp.Description("optional scope to select env vars; note: 'ward secrets' is the canonical command name now")),
 			mcp.WithBoolean("prefixed", mcp.Description("use full dot-path names as env var keys")),
 			mcp.WithString("dir", mcp.Description("project directory containing .ward/config.yaml (default: current directory)")),
 		),
 		func(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			args := []string{"envs"}
+			args := []string{"envs", "--ai-mode"}
 			if req.GetBool("prefixed", false) {
 				args = append(args, "--prefixed")
 			}
@@ -296,27 +330,16 @@ func Serve() error {
 
 	s.AddTool(
 		mcp.NewTool("ward_file_extract",
-			mcp.WithDescription("Retrieve a file secret's raw content by original filename"),
+			mcp.WithDescription("Retrieve a file secret's raw content by original filename. "+
+				"In AI mode the content is never returned: the tool replies with the shell command to run instead."),
 			mcp.WithString("filename", mcp.Required(), mcp.Description("original filename including extension, e.g. service-account.json")),
 			mcp.WithString("dir", mcp.Description("project directory containing .ward/config.yaml (default: current directory)")),
 		),
 		func(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			filename := req.GetString("filename", "")
-
-			tmp, err := os.MkdirTemp("", "ward-file-extract-*")
-			if err != nil {
-				return fail(err), nil
-			}
-			defer os.RemoveAll(tmp)
-
-			if _, err := run(dirArgs(req.GetString("dir", ""), "file", "extract", filename, tmp)...); err != nil {
-				return fail(err), nil
-			}
-			data, err := os.ReadFile(tmp + "/" + filename)
-			if err != nil {
-				return fail(err), nil
-			}
-			return ok(string(data)), nil
+			// AI mode: file secrets are never exposed in context — point the
+			// agent at the bash command that writes the file to disk.
+			return ok(aiFileInstruction(filename)), nil
 		},
 	)
 
@@ -439,6 +462,28 @@ All MCP tools accept an optional **dir** parameter for the same purpose:
 
 Use **dir** whenever the agent is not already inside the target project directory.
 Omit it only when the MCP server was started from inside the project root.
+
+## AI mode — secrets are never exposed in context
+
+ward runs in **AI mode** when the --ai-mode flag is passed, when the WARD_AI_MODE=1
+env var is set, or automatically for the MCP tools below. In AI mode secret **values**
+are never returned to the agent:
+
+- ward_get and ward_file_extract reply with the **shell command** to run instead
+  (e.g. "ward get vault1:group.key1"), so the agent can execute it in bash and pipe
+  or redirect the value without ever reading it.
+- ward_tree and ward_envs show keys/paths with values hidden as "<sensitive>".
+
+If a value is needed, run it in a **shell** (bash tool), not through an MCP read tool:
+
+` + "```" + `sh
+ward get vault1:group.key1            # prints the value to stdout
+ward get vault1:group.key1 | pbcopy   # copy without echoing into context
+` + "```" + `
+
+To keep AI mode on for the CLI too, set WARD_AI_MODE=1 in your agent's environment
+(e.g. OpenCode opencode.json → "env": { "WARD_AI_MODE": "1" }, or Claude Code
+.claude.json → same).
 
 ## Key commands (also available as MCP tools)
 

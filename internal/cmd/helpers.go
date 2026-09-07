@@ -461,7 +461,9 @@ func printTreeWithOrigin(node *secrets.Node, indent int, conflicts map[string]se
 		if l.originFile != "" {
 			text := l.text
 			vl := visibleLen(text)
-			if vl > maxLen {
+			// In AI mode values are already the short <sensitive> placeholder,
+			// so width truncation would only mangle it — keep the line intact.
+			if vl > maxLen && !IsAIMode() {
 				text = truncateANSI(text, maxLen)
 				vl = maxLen
 			}
@@ -575,7 +577,7 @@ func collectListLines(node *secrets.Node, indent int, conflicts map[string]secre
 			// Winner: key green, value light gray
 			last := c.Sources[len(c.Sources)-1]
 			*lines = append(*lines, listLine{
-				text:        fmt.Sprintf("%s%s%s:%s %s%s%s", indentStr, clrGreen, k, clrReset, clrGrayLight, truncateValue(fmt.Sprintf("%v", child.Value), treeValueMaxCols), clrReset),
+				text:        fmt.Sprintf("%s%s%s:%s %s%s%s", indentStr, clrGreen, k, clrReset, clrGrayLight, truncateValue(aiValue(fmt.Sprintf("%v", child.Value)), treeValueMaxCols), clrReset),
 				originFile:  last.File,
 				originLine:  last.Line,
 				conflict:    true,
@@ -610,7 +612,7 @@ func collectListLines(node *secrets.Node, indent int, conflicts map[string]secre
 				valueColor = clrGray
 			}
 			*lines = append(*lines, listLine{
-				text:        fmt.Sprintf("%s%s%s%s:%s %s%s%s", indentStr, keyColor, k, colonColor, clrReset, valueColor, truncateValue(fmt.Sprintf("%v", child.Value), treeValueMaxCols), clrReset),
+				text:        fmt.Sprintf("%s%s%s%s:%s %s%s%s", indentStr, keyColor, k, colonColor, clrReset, valueColor, truncateValue(aiValue(fmt.Sprintf("%v", child.Value)), treeValueMaxCols), clrReset),
 				originFile:  child.Origin.File,
 				originLine:  child.Origin.Line,
 				envConflict: isEnvConflict,
