@@ -96,6 +96,7 @@ func main() {
 		cmd.NewSetCmd(),
 		cmd.NewUnsetCmd(),
 		cmd.NewTreeCmd(),
+		cmd.NewCatalogCmd(),
 	)...)
 	all = append(all, group(groupVault,
 		cmd.NewInitCmd(),

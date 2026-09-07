@@ -1,0 +1,3 @@
+vaults:
+  - name: app
+    path: .ward/vaults/app

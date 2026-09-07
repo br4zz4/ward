@@ -17,6 +17,7 @@ type LineMap map[string]int
 type ParsedFile struct {
 	File     string
 	Data     map[string]interface{}
+	Meta     map[string]interface{} // _meta metadata block (descriptions/types), not secret data
 	Lines    LineMap  // dot-path → line number
 	RawLines []string // source lines for snippet display
 }
@@ -56,9 +57,19 @@ func Load(path, vaultName, vaultRoot string, dec sops.Decryptor) (ParsedFile, er
 		extractNode(node.Content[0], "", data, lines)
 	}
 
+	// The reserved `_meta` top-level key carries metadata about the secrets in
+	// this file (descriptions, types). It is metadata, not secret data: it must
+	// never merge into the secrets tree or become an env var, so it is lifted
+	// out of Data and exposed separately on the ParsedFile.
+	meta := map[string]interface{}{}
+	if m, ok := data["_meta"].(map[string]interface{}); ok {
+		meta = m
+		delete(data, "_meta")
+	}
+
 	rawLines := strings.Split(string(raw), "\n")
 
-	return ParsedFile{File: path, Data: data, Lines: lines, RawLines: rawLines}, nil
+	return ParsedFile{File: path, Data: data, Meta: meta, Lines: lines, RawLines: rawLines}, nil
 }
 
 // fileSecretSubdir returns the subdirectory segments between the vault root and

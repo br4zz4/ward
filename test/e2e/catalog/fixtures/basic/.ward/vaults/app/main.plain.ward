@@ -1,0 +1,21 @@
+app:
+  main:
+    name: myapp
+    region: us-east-1
+    db:
+      host: localhost
+      port: "5432"
+      password: supersecret
+_meta:
+  app.main.name:
+    description: "Nombre de la aplicación"
+    type: string
+  app.main.db.host:
+    description: "Hostname del banco"
+    type: string
+  app.main.db.port:
+    description: "Puerto del banco"
+    type: number
+  app.main.db.password:
+    description: "Contraseña del banco — sensible"
+    type: string

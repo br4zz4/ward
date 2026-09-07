@@ -144,6 +144,21 @@ func Serve() error {
 	)
 
 	s.AddTool(
+		mcp.NewTool("ward_catalog",
+			mcp.WithDescription("List secret paths with descriptions and types (values never shown). "+
+				"Metadata comes from the _meta block of each .ward file."),
+			mcp.WithString("dir", mcp.Description("project directory containing .ward/config.yaml (default: current directory)")),
+		),
+		func(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			out, err := run(dirArgs(req.GetString("dir", ""), "catalog", "--json")...)
+			if err != nil {
+				return fail(err), nil
+			}
+			return ok(out), nil
+		},
+	)
+
+	s.AddTool(
 		mcp.NewTool("ward_tree",
 			mcp.WithDescription("Show merged tree with source file and line for each value. "+
 				"In AI mode values are hidden as <sensitive>."),
@@ -473,6 +488,8 @@ are never returned to the agent:
   (e.g. "ward get vault1:group.key1"), so the agent can execute it in bash and pipe
   or redirect the value without ever reading it.
 - ward_tree and ward_envs show keys/paths with values hidden as "<sensitive>".
+- ward_catalog lists secret paths with descriptions/types — values are never shown,
+  making it the safe way to discover what secrets exist.
 
 If a value is needed, run it in a **shell** (bash tool), not through an MCP read tool:
 
@@ -490,6 +507,7 @@ To keep AI mode on for the CLI too, set WARD_AI_MODE=1 in your agent's environme
 ` + "```" + `sh
 ward get [dot-path]          # merged value at path (or full tree)
 ward tree [dot-path]         # merged tree with source file and line per value
+ward catalog [--json]        # list secret paths with descriptions (values never shown)
 ward secrets [scope]      # (envs is the deprecated alias)
 ward raw [file]              # decrypted raw YAML of a .ward file (all files when none given)
 ward inspect [dot-path]      # ancestry chain showing where each value comes from
