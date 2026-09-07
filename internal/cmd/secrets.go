@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/br4zz4/ward/internal/secrets"
 	"github.com/spf13/cobra"
@@ -18,14 +19,14 @@ func NewSecretsCmd() *cobra.Command {
 		Short:             "Show the secrets (env vars) that would be injected by exec",
 		Args:              cobra.ArbitraryArgs,
 		ValidArgsFunction: completeDotPaths,
-		Run:               func(_ *cobra.Command, args []string) { runSecrets(args, prefixed) },
+		Run:               func(c *cobra.Command, args []string) { runSecrets(c, args, prefixed) },
 	}
 
 	c.Flags().BoolVar(&prefixed, "prefixed", false, "use full path env var names")
 	return c
 }
 
-func runSecrets(args []string, prefixed bool) {
+func runSecrets(c *cobra.Command, args []string, prefixed bool) {
 	scopes := args
 	firstScope := ""
 	if len(scopes) > 0 {
@@ -48,11 +49,14 @@ func runSecrets(args []string, prefixed bool) {
 		fatal(stampEnvCommand(err, "secrets"))
 	}
 
-	printEnvEntries(entries)
+	// -v is ignored in this table view; OTP values show their generated code.
+	printEnvEntries(entries, func(v string) string {
+		return otpValue(v, time.Now(), flagRaw(c), false)
+	})
 }
 
 // printEnvEntries renders env entries with colour-coded keys and aligned values.
-func printEnvEntries(entries map[string]secrets.EnvEntry) {
+func printEnvEntries(entries map[string]secrets.EnvEntry, transform func(string) string) {
 	keys := make([]string, 0, len(entries))
 	for k := range entries {
 		keys = append(keys, k)
@@ -79,7 +83,7 @@ func printEnvEntries(entries map[string]secrets.EnvEntry) {
 		if len(k) > maxKey {
 			maxKey = len(k)
 		}
-		if v := truncateValue(fmt.Sprintf("%v", entries[k].Value), valMaxCols); len(v) > maxVal {
+		if v := truncateValue(transform(entries[k].Value), valMaxCols); len(v) > maxVal {
 			maxVal = len(v)
 		}
 	}
@@ -87,7 +91,7 @@ func printEnvEntries(entries map[string]secrets.EnvEntry) {
 	for _, k := range keys {
 		e := entries[k]
 		keyPad := strings.Repeat(" ", maxKey-len(k))
-		valStr := truncateValue(fmt.Sprintf("%v", e.Value), valMaxCols)
+		valStr := truncateValue(transform(e.Value), valMaxCols)
 		valPad := strings.Repeat(" ", maxVal-len(valStr))
 		color := clrGreen
 		if e.Overrides {

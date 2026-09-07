@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 )
@@ -16,8 +17,8 @@ func NewExecCmd() *cobra.Command {
 		Args:               cobra.MinimumNArgs(1),
 		DisableFlagParsing: true,
 		ValidArgsFunction:  completeDotPaths,
-		Run: func(_ *cobra.Command, args []string) {
-			scopes, cmdArgs, prefixed := parseExecArgs(args)
+		Run: func(c *cobra.Command, args []string) {
+			scopes, cmdArgs, prefixed, execRaw, execVerbose := parseExecArgs(args)
 
 			if len(cmdArgs) == 0 {
 				fmt.Fprintln(os.Stderr, "ward: exec requires a command after --")
@@ -43,9 +44,12 @@ func NewExecCmd() *cobra.Command {
 			if err != nil {
 				fatal(stampEnvCommand(err, "exec"))
 			}
+			raw := execRaw || flagRaw(c)
+			verbose := execVerbose || flagVerbose(c)
+			now := time.Now()
 			envVars := make(map[string]string, len(entries))
 			for k, en := range entries {
-				envVars[k] = en.Value
+				envVars[k] = otpValue(en.Value, now, raw, verbose)
 			}
 
 			cmd := exec.Command(cmdArgs[0], cmdArgs[1:]...)
@@ -68,24 +72,40 @@ func NewExecCmd() *cobra.Command {
 	}
 }
 
-// parseExecArgs parses: [--prefixed] [dot.path...] -- <cmd> [args...]
-func parseExecArgs(args []string) (scopes []string, cmdArgs []string, prefixed bool) {
-	rest := make([]string, 0, len(args))
-	for _, a := range args {
-		if a == "--prefixed" {
-			prefixed = true
-			continue
-		}
-		rest = append(rest, a)
-	}
-	for i, a := range rest {
+// parseExecArgs parses: [--prefixed] [--raw] [-v|--verbose] [dot.path...] -- <cmd> [args...]
+// The OTP flags are recognised only before --; everything after -- is passed
+// through verbatim to the command being executed.
+func parseExecArgs(args []string) (scopes []string, cmdArgs []string, prefixed, raw, verbose bool) {
+	dashIdx := -1
+	for i, a := range args {
 		if a == "--" {
-			scopes = rest[:i]
-			cmdArgs = rest[i+1:]
-			return
+			dashIdx = i
+			break
 		}
 	}
-	cmdArgs = rest
+	preArgs := args
+	if dashIdx >= 0 {
+		preArgs = args[:dashIdx]
+	}
+	rest := make([]string, 0, len(preArgs))
+	for _, a := range preArgs {
+		switch a {
+		case "--prefixed":
+			prefixed = true
+		case "--raw":
+			raw = true
+		case "-v", "--verbose":
+			verbose = true
+		default:
+			rest = append(rest, a)
+		}
+	}
+	scopes = rest
+	if dashIdx >= 0 {
+		cmdArgs = args[dashIdx+1:]
+	} else {
+		cmdArgs = rest
+	}
 	return
 }
 

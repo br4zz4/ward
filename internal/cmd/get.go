@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/br4zz4/ward/internal/secrets"
 	"github.com/br4zz4/ward/internal/ward"
@@ -18,7 +19,7 @@ func NewGetCmd() *cobra.Command {
 		ValidArgsFunction: completeDotPaths,
 	}
 	sf := registerScopeFlags(c)
-	c.Run = func(_ *cobra.Command, args []string) {
+	c.Run = func(c *cobra.Command, args []string) {
 		sc, err := resolveScopeArg(sf, args)
 		if err != nil {
 			fatal(err)
@@ -41,16 +42,19 @@ func NewGetCmd() *cobra.Command {
 		}
 		printEngineWarnings(eng)
 
-		dotPath, node := resolveGetTarget(eng, result, sc)
+dotPath, node := resolveGetTarget(eng, result, sc)
 
-		if node.Children == nil {
-			// leaf — print raw value
-			fmt.Println(node.Value)
-			return
-		}
-		// subtree — print tree
-		printTree(&secrets.Node{Children: map[string]*secrets.Node{lastSegment(dotPath): node}}, 0)
+	now := time.Now()
+	if node.Children == nil {
+		// leaf — print the OTP code when the value is a TOTP secret
+		fmt.Println(otpValue(fmt.Sprintf("%v", node.Value), now, flagRaw(c), flagVerbose(c)))
+		return
 	}
+	// subtree — print tree, applying the same OTP transform to each leaf
+	printTreeWith(&secrets.Node{Children: map[string]*secrets.Node{lastSegment(dotPath): node}}, 0, func(v string) string {
+		return otpValue(v, now, flagRaw(c), flagVerbose(c))
+	})
+}
 	return c
 }
 

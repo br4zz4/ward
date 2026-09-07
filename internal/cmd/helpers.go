@@ -390,19 +390,32 @@ const (
 
 // printTree renders a node as plain YAML-like text (used by get).
 func printTree(node *secrets.Node, indent int) {
+	printTreeWith(node, indent, nil)
+}
+
+// printTreeWith renders a node as plain YAML-like text, passing every leaf
+// value through transform (when non-nil) before printing.
+func printTreeWith(node *secrets.Node, indent int, transform func(string) string) {
+	leaf := func(v interface{}) string {
+		s := fmt.Sprintf("%v", v)
+		if transform != nil {
+			s = transform(s)
+		}
+		return s
+	}
 	prefix := strings.Repeat("  ", indent)
 	if node.Children != nil {
 		for _, k := range sortedKeys(node.Children) {
 			child := node.Children[k]
 			if child.Children != nil {
 				fmt.Printf("%s%s:\n", prefix, k)
-				printTree(child, indent+1)
+				printTreeWith(child, indent+1, transform)
 			} else {
-				fmt.Printf("%s%s: %v\n", prefix, k, child.Value)
+				fmt.Printf("%s%s: %s\n", prefix, k, leaf(child.Value))
 			}
 		}
 	} else {
-		fmt.Printf("%s%v\n", prefix, node.Value)
+		fmt.Printf("%s%s\n", prefix, leaf(node.Value))
 	}
 }
 

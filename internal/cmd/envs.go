@@ -15,8 +15,8 @@ func NewEnvsCmd() *cobra.Command {
 		Hidden:            true,
 		Args:              cobra.ArbitraryArgs,
 		ValidArgsFunction: completeDotPaths,
-		Run: func(_ *cobra.Command, args []string) {
-			runSecrets(args, prefixed)
+		Run: func(c *cobra.Command, args []string) {
+			runSecrets(c, args, prefixed)
 			warnDeprecated("envs", "secrets")
 		},
 	}
