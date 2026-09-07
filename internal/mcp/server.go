@@ -47,6 +47,7 @@ func run(args ...string) (string, error) {
 		bin = "ward"
 	}
 	cmd := exec.Command(bin, args...)
+	cmd.Env = aiModeEnv()
 	out, err := cmd.CombinedOutput()
 	text := stripANSI(strings.TrimSpace(string(out)))
 	if err != nil {
@@ -62,12 +63,20 @@ func runWithStdin(stdin string, args ...string) (string, error) {
 	}
 	cmd := exec.Command(bin, args...)
 	cmd.Stdin = bytes.NewBufferString(stdin)
+	cmd.Env = aiModeEnv()
 	out, err := cmd.CombinedOutput()
 	text := stripANSI(strings.TrimSpace(string(out)))
 	if err != nil {
 		return "", fmt.Errorf("%s", text)
 	}
 	return text, nil
+}
+
+// aiModeEnv returns the child process environment with WARD_AI_MODE=1 set, so
+// every ward subprocess spawned by the MCP server runs in AI mode — values are
+// never exposed to the agent, and exec refuses env-dumping commands.
+func aiModeEnv() []string {
+	return append(os.Environ(), "WARD_AI_MODE=1")
 }
 
 func ok(text string) *mcp.CallToolResult {

@@ -25,6 +25,12 @@ func NewExecCmd() *cobra.Command {
 				os.Exit(1)
 			}
 
+			// AI mode: refuse commands that would dump the injected secrets
+			// into the transcript (env, echo $VAR, printenv, ...).
+			if IsAIMode() && execWouldLeak(cmdArgs) {
+				aiModeExecRefusal()
+			}
+
 			enforceVaultStructure()
 			eng, err := newEngine()
 			if err != nil {
