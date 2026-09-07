@@ -98,7 +98,8 @@ func Serve() error {
 			mcp.WithString("dir", mcp.Description("project directory containing .ward/config.yaml (default: current directory)")),
 		),
 		func(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			args := []string{"get"}
+			// --raw: agents need the stored value, not an ephemeral OTP code.
+			args := []string{"get", "--raw"}
 			if p := req.GetString("path", ""); p != "" {
 				args = append(args, p)
 			}
