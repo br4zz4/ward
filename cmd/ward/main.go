@@ -31,6 +31,8 @@ func main() {
 	var configPath string
 	var dirPath string
 	var mcpMode bool
+	var rawFlag bool
+	var verboseFlag bool
 
 	root := &cobra.Command{
 		Use:     "ward",
@@ -51,6 +53,8 @@ func main() {
 	// --mcp is intercepted before command dispatch (see the os.Args scan above);
 	// declaring it here makes it visible in the Flags section of --help.
 	root.PersistentFlags().BoolVar(&mcpMode, "mcp", false, "start in MCP server mode (for AI integrations)")
+	root.PersistentFlags().BoolVar(&rawFlag, "raw", false, "show original value, skip OTP generation")
+	root.PersistentFlags().BoolVarP(&verboseFlag, "verbose", "v", false, "show OTP metadata (issuer, algorithm, time remaining)")
 
 	// Keep commands in registration order (not alphabetical) so each group
 	// reads in the order the commands are added below.
