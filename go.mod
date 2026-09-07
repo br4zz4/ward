@@ -6,6 +6,7 @@ require (
 	filippo.io/age v1.3.1
 	github.com/getsops/sops/v3 v3.12.2
 	github.com/mark3labs/mcp-go v0.49.0
+	github.com/pquerna/otp v1.1.0
 	github.com/spf13/cobra v1.10.2
 	gopkg.in/yaml.v3 v3.0.1
 )
@@ -55,6 +56,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sts v1.41.6 // indirect
 	github.com/aws/smithy-go v1.24.0 // indirect
 	github.com/blang/semver v3.5.1+incompatible // indirect
+	github.com/boombuler/barcode v1.1.0 // indirect
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/cloudflare/circl v1.6.3 // indirect
