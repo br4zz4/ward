@@ -254,6 +254,79 @@ If `--upcase` is active, the name is uppercased. The name follows the same leaf-
 
 ---
 
+## OTP Code Generation
+
+ward detects TOTP secrets automatically and generates their current 6-digit code
+on the fly, so you don't need a separate authenticator app. Two value formats
+are supported:
+
+| Format | Example |
+|---|---|
+| `otpauth://` URI | `otpauth://totp/Example:alice@google.com?secret=JBSWY3DPEHPK3PXP&issuer=Example` |
+| Bare base32 secret | `JBSWY3DPEHPK3PXP` (16, 32 or 64 chars, `[A-Z2-7]`) |
+
+`ward get`, `ward secrets` and `ward exec` show or inject the generated code by
+default. `ward tree` and `ward export` always show the original value.
+
+```sh
+ward get vault:myapp.otp          # → 287082 (6-digit code)
+ward get vault:myapp.otp --raw    # → otpauth://totp/Example:... (original)
+ward secrets                      # → OTP values appear as codes
+ward exec -- ./publish.sh         # → OTP values injected as codes
+```
+
+### --raw
+
+`--raw` is a global flag that skips OTP generation and shows the original stored
+value. Useful for scripts that need the URI/secret itself.
+
+```sh
+ward --raw get vault:myapp.otp
+ward --raw secrets
+ward --raw exec -- ./publish.sh
+```
+
+### -v / --verbose
+
+`-v` (or `--verbose`) is a global flag that prints OTP metadata — issuer,
+account, algorithm, digits, period and seconds remaining in the current cycle —
+to stderr before the code. `ward secrets` ignores it (its table view can't fit
+multi-line metadata).
+
+```sh
+ward get vault:myapp.otp -v
+Issuer: Example
+Account: alice@google.com
+Algorithm: SHA1
+Digits: 6
+Period: 30s
+Remaining: 1s
+287082
+```
+
+For a bare secret, issuer/account are omitted and the defaults are annotated:
+
+```
+Algorithm: SHA1 (default)
+Digits: 6 (default)
+Period: 30s (default)
+Remaining: 1s
+```
+
+### Exec caveat
+
+The code injected by `ward exec` is **static**: it is generated once when the
+command starts and is not refreshed. TOTP codes expire after their period
+(30s by default), so `exec` should only be used for short-lived commands.
+
+### Defaults for bare secrets
+
+A bare base32 secret (no URI) uses SHA1, 6 digits and a 30-second period — the
+Google Authenticator defaults. An `otpauth://` URI overrides these with its own
+`algorithm`, `digits` and `period` parameters when present.
+
+---
+
 ## CLI flags
 
 All commands accept:
