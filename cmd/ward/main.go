@@ -110,6 +110,7 @@ func main() {
 		cmd.NewConfigCmd(),
 		cmd.NewInstallCmd(),
 		cmd.NewUninstallCmd(),
+		cmd.NewVersionCmd(version),
 	)...)
 
 	// Deprecated aliases — hidden from help, still functional.
