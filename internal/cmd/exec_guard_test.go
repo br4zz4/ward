@@ -41,6 +41,26 @@ func TestExecWouldLeak_echo_var(t *testing.T) {
 	}
 }
 
+func TestExecWouldLeak_printf_var(t *testing.T) {
+	// printf that prints a variable value — blocked. Reading is ward get/secrets.
+	if !execWouldLeak([]string{"printf", "%s", "$MY_SECRET"}) {
+		t.Errorf("printf $VAR should be flagged as leaking")
+	}
+	if !execWouldLeak([]string{"printf", "%s\\n", "$MY_SECRET"}) {
+		t.Errorf("printf format-safe $VAR should be flagged as leaking")
+	}
+}
+
+func TestExecWouldLeak_echo_literal_not_flagged(t *testing.T) {
+	// echo of a fixed literal is fine (no variable value printed)
+	if execWouldLeak([]string{"echo", "hello"}) {
+		t.Errorf("echo hello should not be flagged")
+	}
+	if execWouldLeak([]string{"printf", "ok\\n"}) {
+		t.Errorf("printf literal should not be flagged")
+	}
+}
+
 func TestExecWouldLeak_sh_c_echo(t *testing.T) {
 	if !execWouldLeak([]string{"sh", "-c", "echo $MY_SECRET"}) {
 		t.Errorf("sh -c 'echo $VAR' should be flagged as leaking")

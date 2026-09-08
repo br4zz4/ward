@@ -39,6 +39,9 @@ func execWouldLeak(args []string) bool {
 }
 
 // tokensWouldLeak checks a single command (argv form): binary + args.
+// It blocks ENVIRONMENT DUMP commands (env/printenv/export/declare/set) and any
+// echo/printf that would print a variable value. Reading values is done with
+// `ward get` / `ward secrets` — exec is for RUNNING commands, not for reading.
 func tokensWouldLeak(args []string) bool {
 	if len(args) == 0 {
 		return false
@@ -55,6 +58,8 @@ func tokensWouldLeak(args []string) bool {
 		}
 		return false
 	case "echo", "printf":
+		// echo $VAR / printf "%s\n" "$VAR" print the value to stdout — the
+		// leak form. Reading values is `ward get` / `ward secrets`, not exec.
 		for _, a := range args[1:] {
 			if strings.Contains(a, "$") {
 				return true
