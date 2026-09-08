@@ -22,15 +22,18 @@ func IsAIMode() bool {
 }
 
 // aiModeRefusal prints a styled refusal explaining that secret values are
-// never exposed in AI mode and suggesting the shell command to run instead.
-func aiModeRefusal(shellCmd string) {
+// never exposed in AI mode. It must NOT tell the agent to run `ward get` (that
+// would read the value): the agent may EXECUTE a command that uses the secret,
+// but must never READ it.
+func aiModeRefusal(scope string) {
 	fmt.Fprintf(os.Stderr,
 		"\n  %s✗ AI mode active — secret values are never exposed in AI context%s\n\n"+
-			"  %s→%s access this value in a shell (not in AI context):\n\n"+
-			"      %s%s%s\n\n",
+			"  %s→%s you may EXECUTE commands that use the secret, but never READ it:\n\n"+
+			"      %sward exec -- sh -c '<command using the env var>'%s\n\n"+
+			"      (e.g. ward exec -- sh -c 'curl -H \"Authorization: Bearer $API_KEY\" https://api.example.com')\n\n",
 		clrLightRed, clrReset,
 		clrGray, clrReset,
-		clrBold, shellCmd, clrReset)
+		clrBold, clrReset)
 	os.Exit(1)
 }
 

@@ -88,22 +88,26 @@ func fail(err error) *mcp.CallToolResult {
 }
 
 // aiGetInstruction builds the structured JSON reply for ward_get in AI mode:
-// the value is never exposed, only the shell command that would fetch it.
+// the value is never exposed, and the guidance must NOT tell the agent to run
+// `ward get` (that would read it). The agent may EXECUTE a command that uses
+// the secret, but must never READ the value.
 func aiGetInstruction(path string) string {
-	shellCmd := "ward get"
+	secretRef := "this secret"
 	if path != "" {
-		shellCmd += " " + path
+		secretRef = "the secret at '" + path + "'"
 	}
+	instructions := "Never read " + secretRef + ". To use it in a command without "+
+		"seeing it, run: ward exec -- sh -c '<command using the env var>'"
 	payload := map[string]string{
 		"path":         path,
 		"sensitive":    "true",
 		"description":  "No description available",
-		"instructions": "Run in a shell: " + shellCmd,
-		"hint":         "Ward secrets are never exposed in AI context. Use bash to access values directly.",
+		"instructions": instructions,
+		"hint":         "Ward never exposes secret values in AI context. You may EXECUTE commands that use the secret (ward exec), but you must never READ it.",
 	}
 	out, err := json.Marshal(payload)
 	if err != nil {
-		return fmt.Sprintf("ward: AI mode: run %s in a shell to access the value", shellCmd)
+		return fmt.Sprintf("ward: AI mode: never read this secret; execute commands that use it via 'ward exec -- sh -c <cmd>'")
 	}
 	return string(out)
 }

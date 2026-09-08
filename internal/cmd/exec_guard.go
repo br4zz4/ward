@@ -4,29 +4,52 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 )
 
 // execWouldLeak reports whether the command tokens would print injected
-// secrets to stdout — the obvious patterns an AI agent could use to exfiltrate
-// values that exist only in the child process environment. In AI mode these
-// commands are refused so the values never reach the agent's context.
+// secrets to stdout — the patterns an agent could use to exfiltrate values
+// that exist only in the child process environment. The guard is
+// UNCONDITIONAL: these commands dump the environment or echo secret values,
+// which is never what `ward exec` is for (use `ward secrets` to inspect).
 //
-// The check only covers the obvious tools (env, printenv, echo $VAR, export,
-// declare, set, cat /proc/*/environ). Interpreters with obfuscation are out of
-// scope: the real enforcement is that the secret value never reaches the agent
-// in the first place.
+// Covered: env/printenv/export/declare/set, echo/printf $VAR, cat /proc/*/environ,
+// and compound shell scripts (sh -c 'env', sh -c 'echo $KEY', ...).
+// Interpreters with obfuscation are out of scope: the real enforcement is that
+// the secret value never reaches the caller in the first place.
 func execWouldLeak(args []string) bool {
 	if len(args) == 0 {
 		return false
 	}
 	bin := filepath.Base(args[0])
+	// Compound shell invocation: sh -c 'script' / bash -lc 'script' — inspect
+	// the script by splitting it into individual commands.
+	if bin == "sh" || bin == "bash" || bin == "zsh" || bin == "dash" || bin == "ksh" {
+		for i := 1; i < len(args); i++ {
+			if i+1 < len(args) && (args[i] == "-c" || args[i] == "-lc") {
+				if scriptContainsLeak(args[i+1]) {
+					return true
+				}
+			}
+		}
+		return false
+	}
+	return tokensWouldLeak(args)
+}
+
+// tokensWouldLeak checks a single command (argv form): binary + args.
+func tokensWouldLeak(args []string) bool {
+	if len(args) == 0 {
+		return false
+	}
+	bin := filepath.Base(args[0])
 	switch bin {
-	case "env", "printenv", "export", "declare", "set", "envs":
+	case "env", "printenv", "export", "declare", "set", "envs", "typeset":
 		return true
-	case "cat":
+	case "cat", "less", "more", "head", "tail", "grep", "dd":
 		for _, a := range args[1:] {
-			if strings.Contains(a, "/environ") {
+			if strings.Contains(a, "environ") {
 				return true
 			}
 		}
@@ -39,43 +62,43 @@ func execWouldLeak(args []string) bool {
 		}
 		return false
 	default:
-		// sh -c 'echo $VAR' / bash -c 'printenv' — the shell wrapper form.
-		for i := 1; i < len(args); i++ {
-			a := args[i]
-			if i+1 < len(args) && (a == "-c" || a == "-lc" || a == "-c ") {
-				script := args[i+1]
-				if containsLeakPattern(script) {
-					return true
-				}
-			}
-		}
 		return false
 	}
 }
 
-// containsLeakPattern reports whether a shell script string contains an obvious
-// env-leak idiom: echoing a variable or dumping the environment.
-func containsLeakPattern(script string) bool {
+// scriptContainsLeak inspects a shell script string for leak idioms. The script
+// is split into individual commands so `test "$X" = "y" && echo ok` (legitimate,
+// does not print the value) is allowed while `echo $SECRET` and `env` are not.
+func scriptContainsLeak(script string) bool {
+	// Fast path: obvious dump words anywhere in the script.
 	lower := strings.ToLower(script)
-	if strings.Contains(lower, "printenv") || strings.Contains(lower, "environ") || strings.Contains(lower, "export ") || strings.Contains(lower, "declare") {
-		return true
+	for _, w := range []string{"printenv", "environ", "export ", "declare", "typeset", "envs"} {
+		if strings.Contains(lower, w) {
+			return true
+		}
 	}
-	// echo $X or echo ${X}
-	if strings.Contains(lower, "echo") && strings.Contains(script, "$") {
-		return true
+	// Split on command separators (;, |, &, newline) and inspect each command.
+	parts := regexp.MustCompile(`[;&|\n]`).Split(script, -1)
+	for _, part := range parts {
+		if tokensWouldLeak(strings.Fields(part)) {
+			return true
+		}
 	}
 	return false
 }
 
-// aiModeExecRefusal prints the guard message for a blocked exec in AI mode and
-// exits non-zero, explaining why and how to access the value instead.
-func aiModeExecRefusal() {
+// execRefusal prints the guard message for a blocked exec and exits non-zero,
+// explaining why and how to use secrets safely instead.
+func execRefusal() {
 	fmt.Fprintf(os.Stderr,
-		"\n  %s✗ AI mode — this command would expose secrets in context%s\n\n"+
+		"\n  %s✗ blocked — this command would print secret values%s\n\n"+
 			"  %s→%s %senv%s, %secho $VAR%s, %sexport%s, %scat /proc/*/environ%s and similar\n"+
-			"    dump the injected secrets into the transcript. Use them only in a shell\n"+
-			"    you control, never through an AI agent.\n\n",
+			"    dump the injected secrets to stdout. To inspect which vars exist, use %sward secrets%s;\n"+
+			"    to run a command that USES a secret without printing it, pass it inside %ssh -c%s:\n\n"+
+			"      %sward exec -- sh -c '<command using $VAR>'%s\n\n",
 		clrLightRed+clrBold, clrReset,
-		clrGray, clrReset, clrBold, clrReset, clrBold, clrReset, clrBold, clrReset, clrBold, clrReset)
+		clrGray, clrReset, clrBold, clrReset, clrBold, clrReset, clrBold, clrReset, clrBold, clrReset,
+		clrBold, clrReset, clrBold, clrReset,
+		clrBold, clrReset)
 	os.Exit(1)
 }

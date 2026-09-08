@@ -32,7 +32,7 @@ func NewGetCmd() *cobra.Command {
 		}
 
 		if IsAIMode() {
-			aiModeRefusal(fmt.Sprintf("ward get %s", sc.FullPath()))
+			aiModeRefusal(sc.FullPath())
 		}
 
 		enforceVaultStructure()

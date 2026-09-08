@@ -35,7 +35,7 @@ func TestAiGetInstruction_withPath(t *testing.T) {
 	// act
 	got := aiGetInstruction("shared.db.password")
 
-	// assert: valid JSON with path, sensitivity flag and shell command
+	// assert: valid JSON with path, sensitivity flag and guidance
 	var m map[string]string
 	if err := json.Unmarshal([]byte(got), &m); err != nil {
 		t.Fatalf("expected valid JSON, got: %q (%v)", got, err)
@@ -46,8 +46,17 @@ func TestAiGetInstruction_withPath(t *testing.T) {
 	if m["sensitive"] != "true" {
 		t.Errorf("expected sensitive=true, got: %q", m["sensitive"])
 	}
-	if !reflect.DeepEqual(strings.Fields(m["instructions"]), []string{"Run", "in", "a", "shell:", "ward", "get", "shared.db.password"}) {
-		t.Errorf("unexpected instructions: %q", m["instructions"])
+	// The guidance must NOT tell the agent to run `ward get` (that would read
+	// the value). It must say never to read it and how to EXECUTE using it.
+	if strings.Contains(m["instructions"], "ward get ") || strings.Contains(m["instructions"], "ward get\"") {
+		t.Errorf("instructions must not suggest running ward get: %q", m["instructions"])
+	}
+	if !strings.Contains(m["instructions"], "ward exec") {
+		t.Errorf("instructions must show how to execute using the secret: %q", m["instructions"])
+	}
+	lower := strings.ToLower(m["instructions"])
+	if !strings.Contains(lower, "never") {
+		t.Errorf("instructions must say to never read the value: %q", m["instructions"])
 	}
 }
 
@@ -55,9 +64,12 @@ func TestAiGetInstruction_emptyPath(t *testing.T) {
 	// act
 	got := aiGetInstruction("")
 
-	// assert: instructions fall back to plain 'ward get'
-	if !strings.Contains(got, "ward get\"") && !strings.Contains(got, "ward get ") {
-		t.Errorf("expected instructions for full tree access, got: %q", got)
+	// assert: guidance explains execution via ward exec, never reading
+	if strings.Contains(got, "ward get") {
+		t.Errorf("instructions must not suggest running ward get: %q", got)
+	}
+	if !strings.Contains(got, "ward exec") {
+		t.Errorf("expected instructions to show ward exec usage, got: %q", got)
 	}
 }
 

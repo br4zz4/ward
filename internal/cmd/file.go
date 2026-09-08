@@ -85,7 +85,7 @@ func newFileExtractCmd() *cobra.Command {
 			originalName := filepath.Base(args[0])
 
 			if IsAIMode() {
-				aiModeRefusal(fmt.Sprintf("ward file extract %s <dest-dir>", originalName))
+				aiModeRefusal(originalName)
 			}
 
 			destDir := "."

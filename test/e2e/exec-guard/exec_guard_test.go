@@ -24,35 +24,46 @@ func TestMain(m *testing.M) {
 
 func fix(name string) string { return testutil.FixtureDir("exec", name) }
 
-func TestExec_ai_mode_blocks_env(t *testing.T) {
-	t.Setenv("WARD_AI_MODE", "1")
+// The guard is UNCONDITIONAL: env/echo $VAR are blocked even without AI mode.
+
+func TestExec_blocks_env(t *testing.T) {
 	out, stderr, code := testutil.Run(t, bin, fix("basic"), "exec", "--", "env")
 	if code == 0 {
 		t.Fatalf("expected blocked (non-zero exit), got 0")
 	}
 	clean := testutil.StripANSI(out+stderr)
-	if !testutil.Contains(clean, "AI mode") {
-		t.Errorf("expected AI mode guard message, got: %q", clean)
+	if !testutil.Contains(clean, "blocked") {
+		t.Errorf("expected guard message, got: %q", clean)
 	}
 	// secrets must not leak
 	if testutil.Contains(clean, "region=us-east-1") {
-		t.Errorf("secret leaked in AI mode exec: %q", clean)
+		t.Errorf("secret leaked in blocked exec: %q", clean)
 	}
 }
 
-func TestExec_ai_mode_blocks_echo_var(t *testing.T) {
-	t.Setenv("WARD_AI_MODE", "1")
-	_, stderr, code := testutil.Run(t, bin, fix("basic"), "exec", "--", "sh", "-c", "echo $DEPLOY_MAIN_REGION")
+func TestExec_blocks_echo_var(t *testing.T) {
+	_, stderr, code := testutil.Run(t, bin, fix("basic"), "exec", "--", "sh", "-c", "echo $region")
 	if code == 0 {
 		t.Fatalf("expected blocked (non-zero exit), got 0")
 	}
-	if !testutil.Contains(testutil.StripANSI(stderr), "AI mode") {
-		t.Errorf("expected AI mode guard message, got: %q", stderr)
+	if !testutil.Contains(testutil.StripANSI(stderr), "blocked") {
+		t.Errorf("expected guard message, got: %q", stderr)
 	}
 }
 
-func TestExec_ai_mode_allows_normal_command(t *testing.T) {
+func TestExec_blocks_env_in_ai_mode_tool(t *testing.T) {
+	// MCP server spawns subprocesses with WARD_AI_MODE=1; the guard is the same.
 	t.Setenv("WARD_AI_MODE", "1")
+	_, stderr, code := testutil.Run(t, bin, fix("basic"), "exec", "--", "printenv")
+	if code == 0 {
+		t.Fatalf("expected blocked (non-zero exit), got 0")
+	}
+	if !testutil.Contains(testutil.StripANSI(stderr), "blocked") {
+		t.Errorf("expected guard message, got: %q", stderr)
+	}
+}
+
+func TestExec_allows_normal_command(t *testing.T) {
 	out, _, code := testutil.Run(t, bin, fix("basic"), "exec", "--", "sh", "-c", "echo hello")
 	if code != 0 {
 		t.Fatalf("expected normal command to run, got %d", code)
@@ -62,13 +73,13 @@ func TestExec_ai_mode_allows_normal_command(t *testing.T) {
 	}
 }
 
-func TestExec_normal_mode_env_still_works(t *testing.T) {
-	// without AI mode, env dumping is allowed (human in a shell they control)
-	out, _, code := testutil.Run(t, bin, fix("basic"), "exec", "--", "env")
+func TestExec_allows_secret_use_without_printing(t *testing.T) {
+	// the intended pattern: use the secret inside sh -c without printing it
+	out, _, code := testutil.Run(t, bin, fix("basic"), "exec", "--", "sh", "-c", `test "$region" = "us-east-1" && echo ok`)
 	if code != 0 {
 		t.Fatalf("exit %d", code)
 	}
-	if !testutil.Contains(out, "region=us-east-1") {
-		t.Errorf("expected region=us-east-1 injected, got: %q", out)
+	if !testutil.Contains(out, "ok") {
+		t.Errorf("expected ok (secret used, not printed), got: %q", out)
 	}
 }
