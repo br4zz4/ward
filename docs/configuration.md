@@ -347,3 +347,36 @@ All commands accept:
 |---|---|
 | `--on-conflict=error\|override` | Override `on_conflict` from config for this invocation. |
 | `--prefixed` | Use full dot-path as env var name instead of flat leaf name. |
+
+## Machine-readable output (`--json`)
+
+`secrets` and `get` accept `--json` for apps and scripts that consume secrets programmatically (e.g. `ward-rails`). It changes the output format only — value semantics still follow the global flags: `--raw` disables OTP code generation, `--prefixed` changes the key names.
+
+**`ward --raw secrets --json [scope...]`** — a JSON object keyed by env var name, values untruncated:
+
+```json
+{
+  "DATABASE_URL": "postgres://staging.acme.internal/app",
+  "REDIS_URL": "redis://staging.acme.internal:6379"
+}
+```
+
+With `--prefixed`, keys are the full paths (`MYAPP_SECRETS_MAIN_CODE_STAGING_DATABASE_URL`). Multiple scopes union exactly like the table view.
+
+**`ward --raw get --json <scope>`** — a single leaf:
+
+```json
+{
+  "path": "myapp.secrets.main.code.staging.DATABASE_URL",
+  "value": "postgres://staging.acme.internal/app"
+}
+```
+
+A subtree is refused: `--json` requires a leaf secret.
+
+Rules:
+
+- **AI mode is incompatible.** With `--ai-mode` or `WARD_AI_MODE=1`, `--json` exits non-zero without emitting anything — values are never exposed to agents, and a machine-readable format would defeat that guarantee.
+- **stdout is JSON or empty.** On any failure (missing key, conflict, bad scope, subtree) the exit status is non-zero, the explanation goes to stderr, and stdout stays empty — so consumers never parse a partial payload.
+- **No truncation.** The table view truncates long values to fit the terminal; JSON never does (multi-line file secrets survive intact).
+
