@@ -216,7 +216,15 @@ ward secrets myapp:environments.staging shared:environments.staging
 ward secrets --prefixed
 # MYAPP_DATABASE_URL  = postgres://staging.acme.internal/app
 # MYAPP_REDIS_URL     = redis://staging.acme.internal:6379
+
+# Machine-readable output for apps and scripts
+ward --raw secrets --json myapp:environments.staging
+# { "DATABASE_URL": "postgres://staging.acme.internal/app", ... }
 ```
+
+`--json` prints a JSON object keyed by env var name with untruncated values
+(though `--raw` still controls OTP handling). It is refused in AI mode, where
+secret values are never exposed.
 
 ### `ward exec [scope...] -- <command>`
 

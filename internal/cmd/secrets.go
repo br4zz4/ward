@@ -1,7 +1,9 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 	"time"
@@ -13,20 +15,26 @@ import (
 // NewSecretsCmd shows the secrets (env vars) that would be injected by exec.
 func NewSecretsCmd() *cobra.Command {
 	var prefixed bool
+	var jsonOut bool
 
 	c := &cobra.Command{
-		Use:               "secrets [--prefixed] [scope...]",
+		Use:               "secrets [--prefixed] [--json] [scope...]",
 		Short:             "Show the secrets (env vars) that would be injected by exec",
 		Args:              cobra.ArbitraryArgs,
 		ValidArgsFunction: completeDotPaths,
-		Run:               func(c *cobra.Command, args []string) { runSecrets(c, args, prefixed) },
+		Run:               func(c *cobra.Command, args []string) { runSecrets(c, args, prefixed, jsonOut) },
 	}
 
 	c.Flags().BoolVar(&prefixed, "prefixed", false, "use full path env var names")
+	c.Flags().BoolVar(&jsonOut, "json", false, "print as a JSON object (values untruncated; refused in AI mode)")
 	return c
 }
 
-func runSecrets(c *cobra.Command, args []string, prefixed bool) {
+func runSecrets(c *cobra.Command, args []string, prefixed, jsonOut bool) {
+	if jsonOut && IsAIMode() {
+		fmt.Fprintln(os.Stderr, "ward: --json is unavailable in AI mode — secret values are never exposed")
+		os.Exit(1)
+	}
 	scopes := args
 	firstScope := ""
 	if len(scopes) > 0 {
@@ -49,6 +57,11 @@ func runSecrets(c *cobra.Command, args []string, prefixed bool) {
 		fatal(stampEnvCommand(err, "secrets"))
 	}
 
+	if jsonOut {
+		printJSONSecrets(c, entries)
+		return
+	}
+
 	// -v is ignored in this table view; OTP values show their generated code.
 	printEnvEntries(entries, func(v string) string {
 		if IsAIMode() {
@@ -56,6 +69,22 @@ func runSecrets(c *cobra.Command, args []string, prefixed bool) {
 		}
 		return otpValue(v, time.Now(), flagRaw(c), false)
 	})
+}
+
+// printJSONSecrets renders the env entries as a JSON object keyed by env var
+// name, with untruncated values. encoding/json sorts map keys, so output is
+// deterministic.
+func printJSONSecrets(c *cobra.Command, entries map[string]secrets.EnvEntry) {
+	now := time.Now()
+	out := make(map[string]string, len(entries))
+	for k, e := range entries {
+		out[k] = otpValue(e.Value, now, flagRaw(c), false)
+	}
+	enc, err := json.MarshalIndent(out, "", "  ")
+	if err != nil {
+		fatal(err)
+	}
+	fmt.Println(string(enc))
 }
 
 // printEnvEntries renders env entries with colour-coded keys and aligned values.

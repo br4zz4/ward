@@ -335,6 +335,12 @@ All commands accept:
 |---|---|
 | `-c, --config <path>` | Path to config file. Default: `.ward/config.yaml`. |
 
+`secrets` and `get` also accept:
+
+| Flag | Description |
+|---|---|
+| `--json` | Machine-readable output. `secrets --json` prints a JSON object (env var name → value, untruncated); `get --json` prints `{"path","value"}` and refuses a subtree. Refused in AI mode. |
+
 `exec` and `envs` also accept:
 
 | Flag | Description |

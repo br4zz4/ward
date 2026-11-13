@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -19,6 +20,8 @@ func NewGetCmd() *cobra.Command {
 		ValidArgsFunction: completeDotPaths,
 	}
 	sf := registerScopeFlags(c)
+	var jsonOut bool
+	c.Flags().BoolVar(&jsonOut, "json", false, "print the resolved value as JSON (refused in AI mode)")
 	c.Run = func(c *cobra.Command, args []string) {
 		sc, err := resolveScopeArg(sf, args)
 		if err != nil {
@@ -49,6 +52,10 @@ func NewGetCmd() *cobra.Command {
 dotPath, node := resolveGetTarget(eng, result, sc)
 
 	now := time.Now()
+	if jsonOut {
+		printJSONValue(dotPath, node, now, flagRaw(c))
+		return
+	}
 	if node.Children == nil {
 		// leaf — print the OTP code when the value is a TOTP secret
 		fmt.Println(otpValue(fmt.Sprintf("%v", node.Value), now, flagRaw(c), flagVerbose(c)))
@@ -60,6 +67,22 @@ dotPath, node := resolveGetTarget(eng, result, sc)
 	})
 }
 	return c
+}
+
+// printJSONValue renders a leaf as {"path","value"}. A subtree is refused so
+// machine consumers never get an ambiguous payload.
+func printJSONValue(dotPath string, node *secrets.Node, now time.Time, raw bool) {
+	if node.Children != nil {
+		fatal(fmt.Errorf("--json requires a leaf secret, %s is a subtree", dotPath))
+	}
+	enc, err := json.MarshalIndent(map[string]string{
+		"path":  dotPath,
+		"value": otpValue(fmt.Sprintf("%v", node.Value), now, raw, false),
+	}, "", "  ")
+	if err != nil {
+		fatal(err)
+	}
+	fmt.Println(string(enc))
 }
 
 // resolveGetTarget returns the dot-path and node a get resolves to. A qualified
