@@ -14,11 +14,44 @@ func SetAIMode(v bool) {
 	aiModeFlag = v
 }
 
+// agentEnvKeys are environment variables that AI agent runtimes set on the
+// processes they spawn. When any of them is present, ward is being invoked
+// from within an AI agent and secret values must be suppressed — even if the
+// user never configured WARD_AI_MODE.
+var agentEnvKeys = []string{
+	"OPENCODE_PID",      // OpenCode (TUI/server)
+	"OPENCODE_MODEL",    // OpenCode
+	"OPENCODE",          // OpenCode
+	"OPENCLAW_DEFAULT_MODEL", // OpenClaw (Cassandra)
+	"DEFAULT_CLAUDE_MODEL",   // Claude Code
+	"CLAUDE_CODE_ENTRYPOINT", // Claude Code
+}
+
 // IsAIMode reports whether secret values must be suppressed from output.
-// True when the --ai-mode flag was passed OR the WARD_AI_MODE env var is set
-// to "1". MCP tools always run in AI mode by passing --ai-mode explicitly.
+// True when the --ai-mode flag was passed, when the WARD_AI_MODE env var is
+// set to "1", or when the process runs under a known AI agent (auto-detect).
+// MCP tools always run in AI mode by passing --ai-mode explicitly.
 func IsAIMode() bool {
-	return aiModeFlag || os.Getenv("WARD_AI_MODE") == "1"
+	if aiModeFlag {
+		return true
+	}
+	if v := os.Getenv("WARD_AI_MODE"); v != "" {
+		return v == "1"
+	}
+	return runningUnderAgent()
+}
+
+// runningUnderAgent reports whether the process environment carries markers of
+// an AI agent runtime (OpenCode, Claude Code, OpenClaw, ...). Agents inject
+// these into every subprocess they spawn — including the bash tool — so this
+// is the reliable way to know "an AI is asking" without user configuration.
+func runningUnderAgent() bool {
+	for _, k := range agentEnvKeys {
+		if os.Getenv(k) != "" {
+			return true
+		}
+	}
+	return false
 }
 
 // aiModeRefusal prints a styled refusal explaining that secret values are
