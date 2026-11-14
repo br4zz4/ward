@@ -28,9 +28,9 @@ func FixtureDir(cmd, name string) string {
 
 // Run executes the ward binary with the given working directory and args.
 // Returns stdout, stderr, and exit code.
-// Agent markers (OPENCODE_*, CLAUDE_*, ...) are stripped from the child
-// environment so tests simulate a human terminal — unless the caller sets
-// WARD_AI_MODE=1 explicitly (which the AI-mode tests do).
+// The child environment defaults to WARD_AI_MODE=0 so tests simulate a human
+// caller even when the suite itself runs under an agent — unless the test sets
+// WARD_AI_MODE explicitly (which the AI-mode tests do).
 func Run(t *testing.T, bin, dir string, args ...string) (stdout, stderr string, code int) {
 	t.Helper()
 	var outBuf, errBuf bytes.Buffer
@@ -38,7 +38,7 @@ func Run(t *testing.T, bin, dir string, args ...string) (stdout, stderr string, 
 	c.Dir = dir
 	c.Stdout = &outBuf
 	c.Stderr = &errBuf
-	c.Env = stripAgentEnv(os.Environ())
+	c.Env = childEnv()
 	err := c.Run()
 	stdout = outBuf.String()
 	stderr = errBuf.String()
@@ -52,34 +52,17 @@ func Run(t *testing.T, bin, dir string, args ...string) (stdout, stderr string, 
 	return
 }
 
-// stripAgentEnv removes agent-runtime markers from an environment slice so the
-// ward child process does NOT auto-detect an AI agent (simulating a human).
-// WARD_AI_MODE is preserved so AI-mode tests can force it on explicitly.
-func stripAgentEnv(env []string) []string {
-	out := make([]string, 0, len(env))
+// childEnv builds the environment for a ward child process. Ward detects AI mode
+// from its parent process chain, so a suite running under an agent would trip
+// auto-detection; WARD_AI_MODE=0 is injected unless the test already set it.
+func childEnv() []string {
+	env := os.Environ()
 	for _, e := range env {
-		k, _, _ := strings.Cut(e, "=")
-		if isAgentMarker(k) {
-			continue
+		if k, _, _ := strings.Cut(e, "="); k == "WARD_AI_MODE" {
+			return env
 		}
-		out = append(out, e)
 	}
-	return out
-}
-
-// isAgentMarker reports whether an env var name identifies an AI agent runtime.
-// Kept in sync with the agent markers ward auto-detects (internal/cmd/ai_mode.go).
-func isAgentMarker(k string) bool {
-	if k == "OPENCODE" || strings.HasPrefix(k, "OPENCODE_") {
-		return true
-	}
-	if strings.HasPrefix(k, "OPENCLAW_") {
-		return true
-	}
-	if strings.HasPrefix(k, "CLAUDE_") || k == "DEFAULT_CLAUDE_MODEL" {
-		return true
-	}
-	return false
+	return append(env, "WARD_AI_MODE=0")
 }
 
 // BuildBin builds the ward binary and returns its path.
@@ -114,7 +97,7 @@ func RunWithStdin(t *testing.T, bin, dir, input string, args ...string) int {
 	c.Stdin = strings.NewReader(input)
 	c.Stdout = nil
 	c.Stderr = nil
-	c.Env = stripAgentEnv(os.Environ())
+	c.Env = childEnv()
 	err := c.Run()
 	if err != nil {
 		if ee, ok := err.(*exec.ExitError); ok {
@@ -135,7 +118,7 @@ func RunWithStdinFull(t *testing.T, bin, dir, input string, args ...string) (std
 	c.Stdin = strings.NewReader(input)
 	c.Stdout = &outBuf
 	c.Stderr = &errBuf
-	c.Env = stripAgentEnv(os.Environ())
+	c.Env = childEnv()
 	err := c.Run()
 	stdout = outBuf.String()
 	stderr = errBuf.String()
@@ -153,7 +136,7 @@ func RunWithStdinFull(t *testing.T, bin, dir, input string, args ...string) (std
 func RunCmd(t *testing.T, name string, args ...string) int {
 	t.Helper()
 	c := exec.Command(name, args...)
-	c.Env = stripAgentEnv(os.Environ())
+	c.Env = childEnv()
 	err := c.Run()
 	if err != nil {
 		if ee, ok := err.(*exec.ExitError); ok {

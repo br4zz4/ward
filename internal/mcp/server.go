@@ -494,8 +494,9 @@ Omit it only when the MCP server was started from inside the project root.
 ## AI mode — secrets are never exposed in context
 
 ward runs in **AI mode** when the --ai-mode flag is passed, when the WARD_AI_MODE=1
-env var is set, or automatically for the MCP tools below. In AI mode secret **values**
-are never returned to the agent:
+env var is set, when ward detects an agent in its parent process chain (CLI calls
+from a bash tool), or automatically for the MCP tools below. In AI mode secret
+**values** are never returned to the agent:
 
 - ward_get and ward_file_extract reply with the **shell command** to run instead
   (e.g. "ward get vault1:group.key1"), so the agent can execute it in bash and pipe
@@ -504,14 +505,17 @@ are never returned to the agent:
 - ward_catalog lists secret paths with descriptions/types — values are never shown,
   making it the safe way to discover what secrets exist.
 
-If a value is needed, run it in a **shell** (bash tool), not through an MCP read tool:
+If a value is needed, EXECUTE a command that consumes it — never read it:
 
 ` + "```" + `sh
-ward get vault1:group.key1            # prints the value to stdout
-ward get vault1:group.key1 | pbcopy   # copy without echoing into context
+ward exec -- sh -c 'curl -H "Authorization: Bearer $API_KEY" https://api.example.com'
+ward exec -- sh -c 'psql "$DATABASE_URL" -c "select 1"'
 ` + "```" + `
 
-To keep AI mode on for the CLI too, set WARD_AI_MODE=1 in your agent's environment
+ward get, ward file extract and --json refuse in AI mode: they exist to read
+a value, which must never enter agent context.
+
+To pin AI mode for the CLI too, set WARD_AI_MODE=1 in your agent's environment
 (e.g. OpenCode opencode.json → "env": { "WARD_AI_MODE": "1" }, or Claude Code
 .claude.json → same).
 

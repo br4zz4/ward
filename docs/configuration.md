@@ -327,6 +327,22 @@ Google Authenticator defaults. An `otpauth://` URI overrides these with its own
 
 ---
 
+## AI mode
+
+Ward never prints secret values to an AI agent. AI mode is active when any of
+these holds:
+
+| Trigger | Notes |
+|---|---|
+| `--ai-mode` flag | Explicit, per invocation. |
+| `WARD_AI_MODE=1` | Explicit; any other non-empty value (`0`) forces AI mode off. |
+| Agent in the parent process chain | Auto-detection: ward walks its parent pids and matches known agent binaries (`opencode`, `claude`, `codex`, `cursor-agent`, ...). Skipped when stdout is a terminal, so a human shell is never blocked — even one inherited from an agent. |
+| MCP server | `ward --mcp` runs its read tools with `--ai-mode` internally. |
+
+Use `WARD_AI_MODE=0` to opt out of auto-detection in a shell that sits inside an
+agent's environment. Values are hidden in `secrets`, `tree` and `get`; `get`,
+`file extract` and `--json` refuse outright.
+
 ## CLI flags
 
 All commands accept:
@@ -334,6 +350,7 @@ All commands accept:
 | Flag | Description |
 |---|---|
 | `-c, --config <path>` | Path to config file. Default: `.ward/config.yaml`. |
+| `--ai-mode` | Suppress secret values (AI agent mode). |
 
 `secrets` and `get` also accept:
 
