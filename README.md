@@ -348,6 +348,33 @@ ward set myapp:staging.database_url postgres://...
 ward set --vault myapp --secret staging.database_url postgres://...
 ```
 
+#### Value source
+
+| Argument | Without `--literal` | With `--literal` |
+|---|---|---|
+| `@<path>` | contents of the file | the string `@<path>` |
+| `@@<x>` | the string `@<x>` | the string `@@<x>` |
+| `-` | contents of stdin | the string `-` |
+| anything else | the string as given | the string as given |
+
+```sh
+ward set app:ci.SA_JSON @sa.json
+pbpaste | ward set app:ci.TOKEN -
+ward set --literal app:handle @org
+```
+
+Rules for content read from a file or stdin: one trailing newline (`\n` or
+`\r\n`) is removed and inner newlines are kept; an empty value, invalid UTF-8
+(base64-encode binary data first) or more than 1 MiB is an error; a relative
+`@<path>` resolves against the directory `ward` was run from, even with
+`--dir`; `-` requires piped input (a terminal is an error). Any read error
+aborts without writing, and the success line shows the origin
+(`(from <path>)` / `(from stdin)`), never the value. The MCP `ward_set` tool
+always stores the value literally.
+
+**Compat break (0.6.0):** values starting with `@` or equal to `-` are no
+longer stored literally; use `--literal` or `@@`.
+
 - Updates the value when the path already lives in exactly one file.
 - Creates a new `.ward` file (named after the path) when no file defines it,
   printing a notice.

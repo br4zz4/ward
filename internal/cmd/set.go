@@ -8,13 +8,25 @@ import (
 
 	"github.com/br4zz4/ward/internal/secrets"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 )
 
 func NewSetCmd() *cobra.Command {
 	c := &cobra.Command{
-		Use:   "set [scope] <value>",
+		Use:   "set [scope] <value|@file|->",
 		Short: "Set a single secret at a scope",
-		Args:  cobra.ArbitraryArgs,
+		Long: `Set a single secret at a scope.
+
+The value is taken from:
+  <value>      the argument itself
+  @<path>      the contents of a file (relative paths resolve against the directory ward was run from)
+  -            standard input (must be piped)
+  @@<value>    the literal "@<value>"
+
+Content read from a file or stdin loses one trailing newline; it must be
+non-empty, valid UTF-8 and at most 1 MiB. Use --literal to store the argument
+exactly as given (including values starting with "@" or equal to "-").`,
+		Args: cobra.ArbitraryArgs,
 		ValidArgsFunction: func(c *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 			if len(args) > 0 {
 				return nil, cobra.ShellCompDirectiveNoFileComp
@@ -23,8 +35,14 @@ func NewSetCmd() *cobra.Command {
 		},
 	}
 	sf := registerScopeFlags(c)
+	var literal bool
+	c.Flags().BoolVar(&literal, "literal", false, `store the value as-is; do not read @file or - (stdin)`)
 	c.Run = func(_ *cobra.Command, args []string) {
-		scopePositional, value := splitSetArgs(sf, args)
+		scopePositional, rawValue := splitSetArgs(sf, args)
+		value, source, err := resolveSetValue(rawValue, literal, os.Stdin, term.IsTerminal(int(os.Stdin.Fd())))
+		if err != nil {
+			fatal(err)
+		}
 
 		sc, err := resolveScopeArg(sf, scopePositional)
 		if err != nil {
@@ -54,7 +72,7 @@ func NewSetCmd() *cobra.Command {
 		tree.Set(dotPath, value)
 		ed.save(targetPath, tree)
 
-		reportSet(sc.FullPath(), targetPath, created)
+		reportSet(sc.FullPath(), targetPath, created, source)
 		if warn := envCollisionWarning(ed.eng, dotPath); warn != "" {
 			fmt.Fprint(os.Stderr, warn)
 		}
@@ -89,8 +107,12 @@ func resolveSetTarget(targets []string, dotPath, vaultPath, cfgPath string) (pat
 }
 
 // reportSet prints the success line and, for a new file, the creation notice.
-func reportSet(dotPath, targetPath string, created bool) {
-	fmt.Fprintf(os.Stderr, "  %s✓%s set %s%s%s\n", clrGreen, clrReset, clrBold, dotPath, clrReset)
+func reportSet(dotPath, targetPath string, created bool, source string) {
+	origin := ""
+	if source != "" {
+		origin = fmt.Sprintf(" %s(from %s)%s", clrGray, source, clrReset)
+	}
+	fmt.Fprintf(os.Stderr, "  %s✓%s set %s%s%s%s\n", clrGreen, clrReset, clrBold, dotPath, clrReset, origin)
 	if created {
 		fmt.Fprintf(os.Stderr, "  %s→%s a new file was created: %s%s%s (no existing file defined this path)\n",
 			clrGray, clrReset, clrCyan, targetPath, clrReset)

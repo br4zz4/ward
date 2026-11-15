@@ -375,13 +375,13 @@ func Serve() error {
 		mcp.NewTool("ward_set",
 			mcp.WithDescription("Set a single secret at a full dot-path"),
 			mcp.WithString("path", mcp.Required(), mcp.Description("scope of the secret to set: 'vault1:group.key1' (colon qualifies the vault)")),
-			mcp.WithString("value", mcp.Required(), mcp.Description("value to set")),
+			mcp.WithString("value", mcp.Required(), mcp.Description("value to store as-is (never read from a file or stdin; '@' and '-' are literal)")),
 			mcp.WithString("dir", mcp.Description("project directory containing .ward/config.yaml (default: current directory)")),
 		),
 		func(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			path := req.GetString("path", "")
 			value := req.GetString("value", "")
-			out, err := run(dirArgs(req.GetString("dir", ""), "set", path, value)...)
+			out, err := run(dirArgs(req.GetString("dir", ""), "set", "--literal", "--", path, value)...)
 			if err != nil {
 				return fail(err), nil
 			}
