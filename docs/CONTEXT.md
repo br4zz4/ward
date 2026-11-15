@@ -31,3 +31,7 @@ _Avoid_: display name, alias
 **Scope**:
 The `[vault:]secret-path` argument that selects which secrets a command operates on; the vault qualifier may be a sub-vault name (`myfish::restricted:secrets.production`).
 _Avoid_: dot-path (when a vault qualifier is meant)
+
+**Value source**:
+Where `ward set` takes a secret's value from: the argument itself (literal), a file (`@<path>`), or stdin (`-`).
+_Avoid_: input, payload
