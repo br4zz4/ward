@@ -71,7 +71,7 @@ func (e *secretEditor) vaultForScope(sc secrets.Scope) *config.Source {
 	var matches []*config.Source
 	for i := range e.cfg.Vaults {
 		v := &e.cfg.Vaults[i]
-		full := v.Name + "." + sc.SecretPath
+		full := v.CanonicalName() + "." + sc.SecretPath
 		if len(secrets.FilesMatching(e.files, full, secrets.Exists)) > 0 {
 			matches = append(matches, v)
 		}

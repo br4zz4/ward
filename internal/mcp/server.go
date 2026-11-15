@@ -467,6 +467,9 @@ A scope selects which part of the merged tree a command acts on:
   same-name collisions across vaults still error. For get (single value) it is a
   single lookup — ambiguous across vaults is an error.
 - multiple scopes — space-separate to union explicit subtrees (exec/secrets).
+- ns::sub:group.key1 — a sub-vault (e.g. myfish::restricted:secrets.production).
+  A bare namespace (myfish:) is the default sub-vault (same as myfish::default:)
+  and never includes its other sub-vaults.
 
 A plain dotted path like vault1.group.key1 is treated as a secret-path, NOT as
 vault vault1 — to target a vault use the colon form vault1:group.key1.
@@ -563,6 +566,11 @@ Each vault can use its own encryption key. Resolution order per vault (highest p
 1. ` + "`" + `WARD_KEY_<NAME>` + "`" + ` env var (e.g. ` + "`" + `WARD_KEY_VAULT2` + "`" + `)
 2. ` + "`" + `.ward/<name>.key` + "`" + ` file — auto-detected when present
 3. Global ` + "`" + `WARD_KEY` + "`" + ` env var / ` + "`" + `encryption` + "`" + ` config
+
+Sub-vaults use ` + "`" + `<namespace>::<name>` + "`" + ` (e.g. ` + "`" + `myfish::restricted` + "`" + `): env
+` + "`" + `WARD_KEY_MYFISH_RESTRICTED` + "`" + `, key file ` + "`" + `.ward/myfish::restricted.key` + "`" + `. The default
+sub-vault (` + "`" + `myfish` + "`" + ` = ` + "`" + `myfish::default` + "`" + `) accepts ` + "`" + `WARD_KEY_MYFISH` + "`" + ` and
+` + "`" + `WARD_KEY_MYFISH_DEFAULT` + "`" + `.
 
 ` + "```" + `yaml
 vaults:

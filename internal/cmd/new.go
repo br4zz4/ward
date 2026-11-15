@@ -32,13 +32,7 @@ func NewNewCmd() *cobra.Command {
 			}
 
 			// find vault by name
-			var vaultSrc *config.Source
-			for i := range cfg.Vaults {
-				if cfg.Vaults[i].Name == vaultName {
-					vaultSrc = &cfg.Vaults[i]
-					break
-				}
-			}
+			vaultSrc := findVault(cfg, vaultName)
 			if vaultSrc == nil {
 				fatal(fmt.Errorf("vault %q not found — use `ward vault list` to see available vaults", vaultName))
 			}
@@ -140,7 +134,7 @@ func newFileStub(vaultName, filePath, cfgPath string) string {
 
 	if cfgErr == nil {
 		for _, src := range cfg.Vaults {
-			if src.Name != vaultName {
+			if src.CanonicalName() != config.CanonicalVaultName(vaultName) {
 				continue
 			}
 			vaultAbs, err := filepath.Abs(filepath.Join(projectRoot, src.Path))
@@ -158,7 +152,7 @@ func newFileStub(vaultName, filePath, cfgPath string) string {
 				subParts = strings.Split(rel, string(filepath.Separator))
 			}
 
-			segments = append([]string{vaultName}, subParts...)
+			segments = append([]string{config.CanonicalVaultName(vaultName)}, subParts...)
 			segments = append(segments, stem)
 			break
 		}
@@ -166,7 +160,7 @@ func newFileStub(vaultName, filePath, cfgPath string) string {
 
 	// Fallback: vault name + stem
 	if len(segments) == 0 {
-		segments = []string{vaultName, stem}
+		segments = []string{config.CanonicalVaultName(vaultName), stem}
 	}
 
 	return buildNestedYAML(segments)

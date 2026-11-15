@@ -141,3 +141,25 @@ func TestResolveNewPath_slash_path_goes_to_vault(t *testing.T) {
 	}
 }
 
+func TestNewFileStub_subvault_roots(t *testing.T) {
+	cases := []struct{ name, wantPrefix string }{
+		{"myfish::restricted", "myfish::restricted:\n"},
+		{"myfish::default", "myfish:\n"},
+	}
+	for _, c := range cases {
+		// arrange
+		projectDir := t.TempDir()
+		vaultRel := ".ward/vaults/" + c.name
+		cfgPath := writeWardYAML(t, projectDir, "  - name: "+c.name+"\n    path: "+vaultRel+"\n")
+		filePath := filepath.Join(projectDir, vaultRel, "secrets.ward")
+		// act
+		got := newFileStub(c.name, filePath, cfgPath)
+		// assert
+		if !strings.HasPrefix(got, c.wantPrefix) {
+			t.Errorf("%s: expected prefix %q, got:\n%s", c.name, c.wantPrefix, got)
+		}
+		if !strings.Contains(got, "secrets:") {
+			t.Errorf("%s: expected secrets: in stub, got:\n%s", c.name, got)
+		}
+	}
+}

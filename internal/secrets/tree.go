@@ -109,7 +109,10 @@ func (t *Tree) Unset(dotPath string) UnsetOutcome {
 func (t *Tree) walkToParent(dotPath string, create bool) (parent map[string]interface{}, key string, ok bool) {
 	parts := strings.Split(dotPath, ".")
 	current := t.root
-	for _, seg := range parts[:len(parts)-1] {
+	for i, seg := range parts[:len(parts)-1] {
+		if i == 0 {
+			seg = t.rootKey(seg)
+		}
 		next, isMap := current[seg].(map[string]interface{})
 		if !isMap {
 			if !create {
@@ -120,7 +123,24 @@ func (t *Tree) walkToParent(dotPath string, create bool) (parent map[string]inte
 		}
 		current = next
 	}
-	return current, parts[len(parts)-1], true
+	last := parts[len(parts)-1]
+	if len(parts) == 1 {
+		last = t.rootKey(last)
+	}
+	return current, last, true
+}
+
+// rootKey maps a canonical vault root onto the file's own key: a file written
+// with the "<vault>::default" root is addressed through the canonical "<vault>".
+func (t *Tree) rootKey(seg string) string {
+	if _, ok := t.root[seg]; ok {
+		return seg
+	}
+	alias := seg + "::default"
+	if _, ok := t.root[alias]; ok {
+		return alias
+	}
+	return seg
 }
 
 // isGroup reports whether v is a nested map (a group), not a scalar leaf.

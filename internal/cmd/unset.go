@@ -27,7 +27,7 @@ func NewUnsetCmd() *cobra.Command {
 
 		ed := newSecretEditor()
 		src := ed.vaultForScope(sc)
-		dotPath := src.Name + "." + sc.SecretPath
+		dotPath := src.CanonicalName() + "." + sc.SecretPath
 
 		// Match leaf or group so a group path resolves to its file and can
 		// report a precise error. More than one → Type-1 conflict.

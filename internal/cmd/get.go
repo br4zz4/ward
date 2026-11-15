@@ -38,6 +38,16 @@ func NewGetCmd() *cobra.Command {
 			aiModeRefusal(sc.FullPath())
 		}
 
+		if sc.Vault != "" {
+			src, err := vaultNamed(sc.Vault)
+			if err != nil {
+				fatal(err)
+			}
+			if src == nil {
+				fatalVaultNotFound(sc.Vault)
+			}
+		}
+
 		enforceVaultStructure()
 		eng, err := newEngine()
 		if err != nil {
