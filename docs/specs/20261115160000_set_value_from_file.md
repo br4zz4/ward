@@ -1,6 +1,6 @@
 ---
 title: ward set lê valor de arquivo (@path) e stdin (-)
-status: done
+status: in_progress
 created: 2026-11-15
 updated: 2026-11-15
 owner: "@o_porpino"
