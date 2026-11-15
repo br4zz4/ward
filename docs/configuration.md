@@ -77,8 +77,8 @@ vaults:
 
 When a vault has no `encryption` block, ward applies the following resolution order:
 
-1. `WARD_KEY_<NAME>` env var (e.g. `WARD_KEY_COMMONS`) — always checked first, works with single or multiple vaults
-2. `.ward/<name>.key` file — auto-detected when present (e.g. `.ward/commons.key`)
+1. `WARD_KEY_<NAME>` env var (e.g. `WARD_KEY_COMMONS`; `::`, `-` and `.` in the name become `_`, so `myfish::restricted` → `WARD_KEY_MYFISH_RESTRICTED`) — always checked first, works with single or multiple vaults. The default vault also accepts `WARD_KEY_<NAME>_DEFAULT` (see [Sub-vaults](#sub-vaults))
+2. `.ward/<name>.key` file — auto-detected when present (e.g. `.ward/commons.key`, `.ward/myfish::restricted.key`)
 3. Global `WARD_KEY` env var — fallback for all vaults
 4. Global `encryption.key_env` or `encryption.key_file` from the config
 
@@ -179,7 +179,7 @@ ward exec myfish::restricted:secrets.production -- deploy
 | `myfish::restricted` | `WARD_KEY_MYFISH_RESTRICTED` | `.ward/myfish::restricted.key` |
 | `myfish::open` | `WARD_KEY_MYFISH_OPEN` | `.ward/myfish::open.key` |
 
-If both env vars (or both key files) of the default vault are present with different contents, the command fails naming both. Two vaults whose names derive the same env var (`myfish-restricted` and `myfish::restricted`) are rejected at load.
+If both env vars (or both key files) of the default vault are present with different contents, the command fails naming both. Two vaults whose names derive the same env var (`myfish-restricted` and `myfish::restricted`) are rejected at load. Only the primary env var counts for this check: a legacy config with `app` and `app-default` still loads (the `_DEFAULT` alias of `app` is not reserved).
 
 CI for production:
 
