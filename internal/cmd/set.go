@@ -12,10 +12,15 @@ import (
 
 func NewSetCmd() *cobra.Command {
 	c := &cobra.Command{
-		Use:               "set [scope] <value>",
-		Short:             "Set a single secret at a scope",
-		Args:              cobra.ArbitraryArgs,
-		ValidArgsFunction: completeDotPaths,
+		Use:   "set [scope] <value>",
+		Short: "Set a single secret at a scope",
+		Args:  cobra.ArbitraryArgs,
+		ValidArgsFunction: func(c *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+			if len(args) > 0 {
+				return nil, cobra.ShellCompDirectiveNoFileComp
+			}
+			return completeDotPaths(c, args, toComplete)
+		},
 	}
 	sf := registerScopeFlags(c)
 	c.Run = func(_ *cobra.Command, args []string) {
