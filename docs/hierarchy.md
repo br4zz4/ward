@@ -118,6 +118,16 @@ the command:
   exactly one vault it is returned; if it exists in more than one vault, `ward`
   reports an ambiguity error.
 
+The vault may be a sub-vault name containing `::`. The vault/path separator is the first **lone** colon (not part of `::`) before the first dot:
+
+```sh
+ward get myfish::restricted:secrets.production.DATABASE_URL   # sub-vault myfish::restricted
+ward get myfish:secrets.staging.DATABASE_URL                  # default sub-vault
+ward get myfish::default:secrets.staging.DATABASE_URL         # same vault as above
+```
+
+A qualified scope is strict: `myfish:` addresses only the default sub-vault and never includes `myfish::restricted`. An unqualified scope overlays every vault, sub-vaults included. See [Sub-vaults](configuration.md#sub-vaults).
+
 A leading colon (`:infra.staging`) is exactly the same as writing no prefix
 (`infra.staging`) — it is optional sugar.
 

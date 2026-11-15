@@ -140,9 +140,13 @@ ward exec myapp:environments.staging -- env | grep DATABASE
 
 ### `ward init`
 
-Initialise ward in the current directory. Creates `.ward/config.yaml`, generates a `.ward/<vault>.key` encryption key (named after the vault, e.g. `.ward/myapp.key`), and creates an initial `.ward/vaults/<vault>/secrets.ward`.
+Initialise ward in the current directory. Creates `.ward/config.yaml`, generates a `.ward/<project>::default.key` encryption key, and creates an initial `.ward/vaults/<project>::default/secrets.ward`.
 
-Prints the `WARD_KEY` token to copy to CI or a secrets manager.
+Prints the `WARD_KEY_<PROJECT>_DEFAULT` token to copy to CI or a secrets manager.
+
+### Sub-vaults (`myfish::restricted`)
+
+Keep production apart from the rest of a project with a second vault that has its own key: `ward vault add myfish::restricted`, then `ward get myfish::restricted:secrets.production.KEY`. `myfish` and `myfish::default` are the same vault, and `myfish:` never includes the restricted one. `ward rotate-key <vault>` rotates one vault's key. See [Sub-vaults](docs/configuration.md#sub-vaults).
 
 ### `ward new <name>`
 
