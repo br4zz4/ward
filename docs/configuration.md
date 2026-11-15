@@ -113,6 +113,103 @@ default_dir: secrets
 
 ---
 
+## Sub-vaults
+
+A project often needs one vault open to the team (general secrets, dev, staging) and another only a few people can decrypt (production). A **sub-vault** is a separate vault named `<namespace>::<name>`, with its own directory and its own key, so the project name stays in the scope and in the key env var.
+
+```yaml
+# .ward/config.yaml
+vaults:
+  - name: myfish::default            # same vault as "myfish"
+    path: .ward/vaults/myfish::default
+  - name: myfish::restricted
+    path: .ward/vaults/myfish::restricted
+  - name: commons                    # external vault, unchanged
+    path: $COMMONS_DIR/.ward/vaults/commons
+```
+
+```
+.ward/
+  config.yaml
+  myfish::default.key                # gitignored
+  myfish::restricted.key             # gitignored
+  vaults/
+    myfish::default/secrets.ward
+    myfish::restricted/secrets.ward
+```
+
+The default vault holds `dev` and `staging`; the restricted one holds `production`. The root YAML key of each file is the vault name (`myfish:` is accepted as well as `myfish::default:` in the default vault):
+
+```yaml
+# .ward/vaults/myfish::default/secrets.ward
+myfish::default:
+  secrets:
+    dev:
+      DATABASE_URL: postgres://localhost/myfish_dev
+    staging:
+      DATABASE_URL: postgres://staging.myfish.internal/app
+
+# .ward/vaults/myfish::restricted/secrets.ward
+myfish::restricted:
+  secrets:
+    production:
+      DATABASE_URL: postgres://prod.myfish.internal/app
+```
+
+```sh
+ward get myfish:secrets.staging.DATABASE_URL              # default vault
+ward get myfish::default:secrets.dev.DATABASE_URL         # same vault, long form
+ward get myfish::restricted:secrets.production.DATABASE_URL
+ward exec myfish:secrets.staging -- deploy                # never touches restricted
+ward exec myfish::restricted:secrets.production -- deploy
+```
+
+### Rules
+
+- A vault name is `<namespace>` or `<namespace>::<name>`: one `::` level only. `a::b::c`, `::b`, `a::` and a lone `:` in the name are rejected when the config loads.
+- `myfish` and `myfish::default` are the same vault; declaring both is an error. Any other sub-vault (`myfish::open`, `myfish::restricted`) is a regular vault reached only by its full name — `myfish:` never includes it. The name after `::` is yours to choose; ward gives it no meaning (restriction comes only from who holds the key).
+- Without a qualifier, reads overlay every vault that has the path (as before). A teammate without the restricted key sees that vault skipped with a `⚠ missing key` warning.
+- `--prefixed` turns `::` into `_`: `myfish_restricted_secrets_production_DATABASE_URL`.
+
+### Keys
+
+| Vault | Env vars | Key files |
+|---|---|---|
+| `myfish` / `myfish::default` | `WARD_KEY_MYFISH`, `WARD_KEY_MYFISH_DEFAULT` | `.ward/myfish.key`, `.ward/myfish::default.key` |
+| `myfish::restricted` | `WARD_KEY_MYFISH_RESTRICTED` | `.ward/myfish::restricted.key` |
+| `myfish::open` | `WARD_KEY_MYFISH_OPEN` | `.ward/myfish::open.key` |
+
+If both env vars (or both key files) of the default vault are present with different contents, the command fails naming both. Two vaults whose names derive the same env var (`myfish-restricted` and `myfish::restricted`) are rejected at load.
+
+CI for production:
+
+```sh
+WARD_KEY_MYFISH_RESTRICTED=ward-xxx ward exec myfish::restricted:secrets.production -- deploy
+```
+
+### Creating and rotating
+
+```sh
+ward vault add myfish::restricted          # path defaults to .ward/vaults/myfish::restricted
+```
+
+Generates `.ward/myfish::restricted.key` (gitignored), creates the directory with an encrypted `secrets.ward` rooted at `myfish::restricted:`, registers the vault and prints `WARD_KEY_MYFISH_RESTRICTED=ward-…`. When the path already holds `.ward` files the vault is only registered.
+
+```sh
+ward rotate-key myfish::restricted
+```
+
+Rotates only that vault: re-encrypts its files, backs the old key up to `.ward/myfish::restricted.key.bkp-<timestamp>` (gitignored) and prints the new `WARD_KEY_MYFISH_RESTRICTED=ward-…` for CI. The key must live in a key file; a vault whose key exists only in an env var fails with `rotate-key requires a key file`. Without a vault name, `rotate-key` rotates the project's single key and fails, listing the vaults, when the project has several distinct keys.
+
+### Caveats
+
+- `::` in directory and key file names is valid on macOS and Linux, not on Windows.
+- `rsync` and `scp` read `host::module/` as daemon syntax: pass these paths as `./.ward/vaults/myfish::restricted/`.
+- The Finder shows `:` as `/`.
+- Layouts created before sub-vaults are not migrated automatically.
+
+---
+
 ## File types
 
 ward discovers every `*.ward` file under each vault. There are three kinds:
@@ -160,9 +257,9 @@ never appears in the tree or env var names.
 ward init
 ```
 
-Generates a fresh encryption key at `.ward/<vault>.key` (named after the vault, e.g. `.ward/myapp.key`), adds it to `.gitignore`, creates `.ward/config.yaml` and an initial `.ward/vaults/<vault>/secrets.ward`. Prints a `WARD_KEY` token for use in CI.
+Creates the default sub-vault `<project>::default`: a fresh encryption key at `.ward/<project>::default.key`, an initial `.ward/vaults/<project>::default/secrets.ward` rooted at `<project>::default:`, and `.ward/config.yaml`. The key is added to `.gitignore`. Prints the `WARD_KEY_<PROJECT>_DEFAULT` token for use in CI (`WARD_KEY_<PROJECT>` works too).
 
-The bare `.ward/.key` and `.ward.key` paths are still honoured as fallbacks when present, so existing projects keep working.
+Projects created before sub-vaults (`name: myapp`, `.ward/vaults/myapp/`, `.ward/myapp.key`) keep working unchanged — `myapp` already is the default sub-vault. The bare `.ward/.key` and `.ward.key` paths are still honoured as fallbacks when present.
 
 ### WARD_KEY token
 
