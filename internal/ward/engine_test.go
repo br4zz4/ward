@@ -266,3 +266,93 @@ func TestSkippedVaults_reports_locked_vault(t *testing.T) {
 		t.Errorf("expected [a], got %v", got)
 	}
 }
+
+func subvaultEngine(t *testing.T, name string, decKey string, dec sops.Decryptor) *Engine {
+	t.Helper()
+	dir := t.TempDir()
+	vA := filepath.Join(dir, "a")
+	vB := filepath.Join(dir, "b")
+	os.MkdirAll(vA, 0755)
+	os.MkdirAll(vB, 0755)
+	os.WriteFile(filepath.Join(vA, "main.ward"),
+		[]byte("-----BEGIN AGE ENCRYPTED FILE-----\nxxx\n"), 0644)
+	os.WriteFile(filepath.Join(vB, "conf.plain.ward"), []byte("b:\n  ok: \"1\"\n"), 0644)
+	cfg := &config.Config{
+		Encryption: config.Encryption{Engine: "age+armor"},
+		Vaults: []config.Source{
+			{Name: name, Path: vA},
+			{Name: "b", Path: vB},
+		},
+	}
+	return NewEngineWithVaultDecryptors(cfg, sops.RequireKeyDecryptor{}, map[string]sops.Decryptor{decKey: dec})
+}
+
+func TestLoad_missing_subvault_key_warns_with_derived_hint(t *testing.T) {
+	// arrange
+	eng := subvaultEngine(t, "myfish::restricted", "myfish::restricted", sops.MissingKeyDecryptor{})
+
+	// act
+	_, err := eng.MergeForView()
+
+	// assert
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	warns := eng.Warnings()
+	if len(warns) != 1 {
+		t.Fatalf("expected one warning, got %v", warns)
+	}
+	for _, want := range []string{"myfish::restricted", "WARD_KEY_MYFISH_RESTRICTED", ".ward/myfish::restricted.key"} {
+		if !strings.Contains(warns[0], want) {
+			t.Errorf("warning %q missing %q", warns[0], want)
+		}
+	}
+}
+
+func TestLoad_missing_default_subvault_key_uses_canonical_name(t *testing.T) {
+	// arrange
+	eng := subvaultEngine(t, "myfish::default", "myfish", sops.MissingKeyDecryptor{})
+
+	// act
+	_, err := eng.MergeForView()
+
+	// assert
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	warns := eng.Warnings()
+	if len(warns) != 1 {
+		t.Fatalf("expected one warning, got %v", warns)
+	}
+	if !strings.Contains(warns[0], "vault myfish ") {
+		t.Errorf("expected canonical display name, got %q", warns[0])
+	}
+	if strings.Contains(warns[0], "myfish::default") && !strings.Contains(warns[0], ".ward/myfish::default.key") {
+		t.Errorf("unexpected declared name in display: %q", warns[0])
+	}
+	if !strings.Contains(warns[0], "WARD_KEY_MYFISH") {
+		t.Errorf("expected WARD_KEY_MYFISH in hint, got %q", warns[0])
+	}
+}
+
+func TestKeyHintFor_subvault_without_declared_hint(t *testing.T) {
+	// act
+	got := keyHintFor("myfish::restricted", map[string]string{})
+
+	// assert
+	for _, want := range []string{"WARD_KEY_MYFISH_RESTRICTED", ".ward/myfish::restricted.key"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("hint %q missing %q", got, want)
+		}
+	}
+}
+
+func TestKeyHintFor_default_cites_alias(t *testing.T) {
+	// act
+	got := keyHintFor("myfish", map[string]string{})
+
+	// assert
+	if !strings.Contains(got, "WARD_KEY_MYFISH") {
+		t.Errorf("hint %q missing WARD_KEY_MYFISH", got)
+	}
+}

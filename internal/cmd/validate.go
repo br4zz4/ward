@@ -58,13 +58,17 @@ func validateVaultStructure(cfg *config.Config, cfgPath string) []string {
 			}
 
 			// Check 2: YAML key path must match vault name + subdir segments + file stem
-			expected := expectedFileDotPath(vault.Name, vaultAbs, path)
+			expected := expectedFileDotPath(vault.CanonicalName(), vaultAbs, path)
 			expectedSegments := strings.Split(expected, ".")
 
 			actual, keyErr := leadingKeyPath(path, len(expectedSegments))
 			if keyErr != nil {
 				// encrypted or unreadable — skip silently
 				return nil
+			}
+			alias := vault.CanonicalName() + config.NamespaceSep + config.DefaultSubVault
+			if actual == alias || strings.HasPrefix(actual, alias+".") {
+				actual = vault.CanonicalName() + strings.TrimPrefix(actual, alias)
 			}
 			if actual != expected {
 				violations = append(violations, fmt.Sprintf(
@@ -110,6 +114,7 @@ func mustValidateStructure(cfg *config.Config, cfgPath string) {
 // expectedFileDotPath builds the dot-path the file's root key should follow.
 // e.g. vault "app", file ".ward/vaults/app/secrets/test.ward" → "app.secrets.test"
 func expectedFileDotPath(vaultName, vaultAbs, filePath string) string {
+	vaultName = config.CanonicalVaultName(vaultName)
 	rel, err := filepath.Rel(vaultAbs, filePath)
 	if err != nil {
 		return vaultName

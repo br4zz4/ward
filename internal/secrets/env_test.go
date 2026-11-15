@@ -350,3 +350,44 @@ func TestToFlatEnvEntriesScoped_nested_no_dataloss(t *testing.T) {
 		t.Error("HOST_T lost — shallow merge dropped a nested leaf")
 	}
 }
+
+func TestToEnvEntries_subvault_root_sanitizes_separator(t *testing.T) {
+	// arrange
+	tree := map[string]*Node{
+		"myfish::restricted": {Children: map[string]*Node{
+			"secrets": {Children: map[string]*Node{
+				"production": {Children: map[string]*Node{
+					"DATABASE_URL": {Value: "postgres://prod"},
+				}},
+			}},
+		}},
+	}
+	// act
+	got := ToEnvEntries(tree)
+	// assert
+	e, ok := got["myfish_restricted_secrets_production_DATABASE_URL"]
+	if !ok {
+		t.Fatalf("expected sanitized key, got %v", got)
+	}
+	if e.Value != "postgres://prod" {
+		t.Errorf("got value %q", e.Value)
+	}
+}
+
+func TestPrefixedName_subvault(t *testing.T) {
+	// act
+	got := prefixedName("myfish::restricted.secrets.x")
+	// assert
+	if got != "myfish_restricted_secrets_x" {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestScopeForm_subvault(t *testing.T) {
+	// act
+	got := scopeForm("myfish::restricted.secrets.x")
+	// assert
+	if got != "myfish::restricted:secrets.x" {
+		t.Errorf("got %q", got)
+	}
+}

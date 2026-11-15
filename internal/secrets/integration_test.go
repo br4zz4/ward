@@ -236,3 +236,49 @@ func TestLoad_plain_ward_is_structured(t *testing.T) {
 		t.Errorf("expected port 8080, got %v", cfgNode["port"])
 	}
 }
+
+func loadMergedVault(t *testing.T, vaultName, root string) map[string]*secrets.Node {
+	t.Helper()
+	dir := t.TempDir()
+	path := writeWard(t, dir, "secrets.plain.ward", root+":\n  secrets:\n    dev:\n      DATABASE_URL: \"postgres://dev\"\n")
+	pf, err := secrets.Load(path, vaultName, dir, sops.MockDecryptor{})
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	tree, err := secrets.Merge([]secrets.ParsedFile{pf}, config.MergeModeOverride, "")
+	if err != nil {
+		t.Fatalf("merge: %v", err)
+	}
+	return tree
+}
+
+func TestLoad_default_subvault_root_becomes_canonical(t *testing.T) {
+	for _, root := range []string{"myfish::default", "myfish"} {
+		// act
+		tree := loadMergedVault(t, "myfish", root)
+		// assert
+		if _, ok := tree["myfish::default"]; ok {
+			t.Errorf("root %q: tree must not keep myfish::default", root)
+		}
+		node, err := secrets.Lookup(tree, "myfish.secrets.dev.DATABASE_URL")
+		if err != nil {
+			t.Fatalf("root %q: %v", root, err)
+		}
+		if node.Value != "postgres://dev" {
+			t.Errorf("root %q: got %v", root, node.Value)
+		}
+	}
+}
+
+func TestLoad_restricted_subvault_root_kept(t *testing.T) {
+	// act
+	tree := loadMergedVault(t, "myfish::restricted", "myfish::restricted")
+	// assert
+	n, ok := tree["myfish::restricted"]
+	if !ok {
+		t.Fatalf("expected tree[myfish::restricted], got keys %v", tree)
+	}
+	if n.Children["secrets"] == nil {
+		t.Error("expected secrets under myfish::restricted")
+	}
+}
