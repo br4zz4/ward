@@ -159,7 +159,7 @@ func Load(path string) (*Config, error) {
 			return nil, fmt.Errorf("%w in %s", err, path)
 		}
 	}
-	if err := checkVaultIdentities(cfg.Vaults); err != nil {
+	if err := CheckVaultIdentities(cfg.Vaults); err != nil {
 		return nil, fmt.Errorf("%w in %s", err, path)
 	}
 
@@ -207,9 +207,9 @@ func Load(path string) (*Config, error) {
 	return cfg, nil
 }
 
-// checkVaultIdentities rejects vaults that share a canonical name or whose
+// CheckVaultIdentities rejects vaults that share a canonical name or whose
 // derived key env vars overlap (e.g. myfish-restricted and myfish::restricted).
-func checkVaultIdentities(vaults []Source) error {
+func CheckVaultIdentities(vaults []Source) error {
 	canon := map[string]string{}
 	envs := map[string]string{}
 	for _, v := range vaults {

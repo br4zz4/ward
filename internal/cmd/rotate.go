@@ -17,10 +17,21 @@ import (
 
 func NewRotateKeyCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "rotate-key",
-		Short: "Rotate the encryption key and re-encrypt all vault files",
-		Args:  cobra.NoArgs,
-		Run: func(_ *cobra.Command, _ []string) {
+		Use:   "rotate-key [vault]",
+		Short: "Rotate the encryption key and re-encrypt vault files",
+		Long: `Rotate the encryption key and re-encrypt vault files.
+
+With a vault, only that vault's key is rotated and only its files are
+re-encrypted. Without one, the project's single key is rotated; a project with
+several distinct keys must name the vault.`,
+		Args: cobra.MaximumNArgs(1),
+		ValidArgsFunction: func(c *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+			if len(args) > 0 {
+				return nil, cobra.ShellCompDirectiveNoFileComp
+			}
+			return completeVaultNames(c, args, toComplete)
+		},
+		Run: func(_ *cobra.Command, args []string) {
 			cfgPath, err := resolvedConfigFile()
 			if err != nil {
 				fatal(fmt.Errorf("finding config: %w", err))
@@ -29,30 +40,122 @@ func NewRotateKeyCmd() *cobra.Command {
 			if err != nil {
 				fatal(err)
 			}
-			keyFile, err := resolveKeyFile(cfg)
-			if err != nil {
-				fatal(err)
+			if len(args) == 1 {
+				rotateOneVault(cfg, args[0])
+				return
 			}
-			if keyFile == "" {
-				fatal(fmt.Errorf("no encryption key configured"))
-			}
-
-			canonicalKeyPath := canonicalKeyFile(cfg)
-
-			vaultPaths := make([]string, len(cfg.Vaults))
-			for i, v := range cfg.Vaults {
-				vaultPaths[i] = v.Path
-			}
-
-			bkpPath, err := rotateKey(keyFile, canonicalKeyPath, vaultPaths)
-			if err != nil {
-				fatal(err)
-			}
-
-			fmt.Println("Key rotated successfully.")
-			fmt.Printf("Old key backed up to: %s\n", bkpPath)
+			rotateProjectKey(cfg)
 		},
 	}
+}
+
+// rotateProjectKey keeps the single-key behaviour: every vault shares one key.
+func rotateProjectKey(cfg *config.Config) {
+	if names := distinctKeyVaults(cfg); len(names) > 1 {
+		fatal(fmt.Errorf("this project has more than one key (vaults: %s) — rotate one with `ward rotate-key <vault>`",
+			strings.Join(names, ", ")))
+	}
+	keyFile, err := resolveKeyFile(cfg)
+	if err != nil {
+		fatal(err)
+	}
+	if keyFile == "" {
+		fatal(fmt.Errorf("no encryption key configured"))
+	}
+
+	vaultPaths := make([]string, len(cfg.Vaults))
+	for i, v := range cfg.Vaults {
+		vaultPaths[i] = v.Path
+	}
+
+	canonical := canonicalKeyFile(cfg)
+	bkpPath, err := rotateKey(keyFile, canonical, vaultPaths)
+	if err != nil {
+		fatal(err)
+	}
+	fmt.Println("Key rotated successfully.")
+	fmt.Printf("Old key backed up to: %s\n", bkpPath)
+	protectBackups()
+}
+
+// distinctKeyVaults returns the vault names when their effective key files
+// differ (a vault's own, else the global one); nil when they all share one.
+func distinctKeyVaults(cfg *config.Config) []string {
+	seen := map[string]bool{}
+	var names []string
+	for _, v := range cfg.Vaults {
+		eff := v.Encryption.KeyFile
+		if eff == "" {
+			eff = cfg.Encryption.KeyFile
+		}
+		seen[eff] = true
+		names = append(names, v.CanonicalName())
+	}
+	if len(seen) <= 1 {
+		return nil
+	}
+	return names
+}
+
+// rotateOneVault rotates a single vault's key file and re-encrypts only its files.
+func rotateOneVault(cfg *config.Config, name string) {
+	v := findVault(cfg, name)
+	if v == nil {
+		fatalVaultNotFound(name)
+	}
+	keyPath := v.Encryption.KeyFile
+	if keyPath == "" {
+		fatal(fmt.Errorf("rotate-key requires a key file for vault %s — the key is only available via env, so the new key would have nowhere to be stored", v.CanonicalName()))
+	}
+	if _, err := os.Stat(keyPath); err != nil {
+		fatal(fmt.Errorf("rotate-key requires a key file for vault %s — %s not found", v.CanonicalName(), keyPath))
+	}
+	current, err := resolveKeyFileForVault(*v)
+	if err != nil {
+		fatal(err)
+	}
+	if current == "" {
+		fatal(fmt.Errorf("no encryption key configured for vault %s", v.CanonicalName()))
+	}
+
+	bkpPath, err := rotateKey(current, keyPath, []string{v.Path})
+	if err != nil {
+		fatal(err)
+	}
+
+	newKey, err := os.ReadFile(keyPath)
+	if err != nil {
+		fatal(fmt.Errorf("reading new key: %w", err))
+	}
+	for _, cand := range config.KeyFileCandidates(v.Name) {
+		if cand == keyPath {
+			continue
+		}
+		if _, err := os.Stat(cand); err == nil {
+			if err := os.WriteFile(cand, newKey, 0600); err != nil {
+				fatal(fmt.Errorf("updating %s: %w", cand, err))
+			}
+		}
+	}
+
+	fmt.Printf("Key for vault %s rotated successfully.\n", v.CanonicalName())
+	fmt.Printf("Old key backed up to: %s\n", bkpPath)
+	token := strings.TrimSpace(string(newKey))
+	if !strings.HasPrefix(token, "ward-") {
+		token = "ward-" + base64.URLEncoding.EncodeToString(newKey)
+	}
+	envs := config.KeyEnvNames(v.Name)
+	fmt.Printf("Update your CI secret:\n  %s=%s\n", envs[0], token)
+	if len(envs) > 1 {
+		fmt.Printf("  (%s is accepted as well)\n", envs[1])
+	}
+	protectBackups()
+}
+
+// protectBackups keeps key backups out of git: *.key does not match them.
+func protectBackups() {
+	_ = ensureGitignore(".ward/*.key.bkp-*")
+	_ = ensureGitignore(".ward/.key.bkp-*")
 }
 
 // canonicalKeyFile returns the path where the key is stored on disk (from config or default).
@@ -123,7 +226,7 @@ func rotateKey(keyFile, canonicalKeyPath string, vaultDirs []string) (string, er
 
 	// commit point: backup canonical key, install new raw key, rename staging files
 	timestamp := time.Now().UTC().Format("20060102150405")
-	bkpPath := filepath.Join(wardDir, ".key.bkp-"+timestamp)
+	bkpPath := canonicalKeyPath + ".bkp-" + timestamp
 
 	canonicalData, err := os.ReadFile(canonicalKeyPath)
 	if err != nil {

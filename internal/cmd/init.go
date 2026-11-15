@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 
 	wardage "github.com/br4zz4/ward/internal/age"
+	"github.com/br4zz4/ward/internal/config"
 )
 
 // wardConfigTemplate is the config written by ward init.
@@ -50,8 +51,9 @@ func NewInitCmd() *cobra.Command {
 			}
 
 			projectName := currentDirName()
-			vaultDir := fmt.Sprintf(".ward/vaults/%s", projectName)
-			keyFile := fmt.Sprintf(".ward/%s.key", projectName)
+			vaultName := projectName + config.NamespaceSep + config.DefaultSubVault
+			vaultDir := fmt.Sprintf(".ward/vaults/%s", vaultName)
+			keyFile := fmt.Sprintf(".ward/%s.key", vaultName)
 
 			// 1. Create .ward/ directory and config
 			if err := os.MkdirAll(".ward", 0755); err != nil {
@@ -65,7 +67,7 @@ func NewInitCmd() *cobra.Command {
 			// Encode token now while the file still holds the raw age key
 			wardToken, tokenErr := encodeWardKey(keyFile)
 
-			configContent := fmt.Sprintf(wardConfigTemplate, projectName, projectName, projectName, projectName, projectName, projectName)
+			configContent := fmt.Sprintf(wardConfigTemplate, vaultName, vaultName, vaultName, vaultName, vaultName, vaultName)
 			if err := writeIfAbsent(".ward/config.yaml", configContent); err != nil {
 				fatal(err)
 			}
@@ -80,7 +82,7 @@ func NewInitCmd() *cobra.Command {
 			if err := os.MkdirAll(vaultDir, 0755); err != nil {
 				fatal(fmt.Errorf("creating %s/: %w", vaultDir, err))
 			}
-			stub := initSecretsStub(projectName)
+			stub := initSecretsStub(vaultName)
 			if err := encryptIfAbsent(vaultDir+"/secrets.ward", stub, keyFile); err != nil {
 				fatal(err)
 			}
@@ -120,8 +122,8 @@ func NewInitCmd() *cobra.Command {
 
 				// — WARD_KEY section —
 				ruler("WARD_KEY", clrYellow)
-				fmt.Printf("  %s%s%s\n\n", clrGray, token, clrReset)
-				fmt.Printf("  %s↑ copy this to CI / secrets manager%s\n\n", clrGray, clrReset)
+				fmt.Printf("  %s%s=%s%s\n\n", clrGray, config.KeyEnvName(vaultName), token, clrReset)
+				fmt.Printf("  %s↑ copy this to CI / secrets manager (%s works too)%s\n\n", clrGray, config.KeyEnvName(projectName), clrReset)
 
 				// — USEFUL COMMANDS section —
 				ruler("USEFUL COMMANDS", clrOrange)
