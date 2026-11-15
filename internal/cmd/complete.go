@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"sort"
 	"strings"
 
 	"github.com/br4zz4/ward/internal/config"
@@ -51,8 +52,9 @@ func completeWardFiles(_ *cobra.Command, _ []string, toComplete string) ([]strin
 	return results, cobra.ShellCompDirectiveNoFileComp
 }
 
-// completeDotPaths provides shell completion for `ward get` by listing all
-// dot-path keys available in the merged tree.
+// completeDotPaths completes scope arguments in the `vault:secret-path` form.
+// Before the colon it offers vault names (with a trailing colon and no space);
+// after it, the secret-paths inside that vault.
 func completeDotPaths(_ *cobra.Command, _ []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 	eng, err := newEngine()
 	if err != nil {
@@ -62,13 +64,31 @@ func completeDotPaths(_ *cobra.Command, _ []string, toComplete string) ([]string
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
-	all := collectDotPaths(result.Tree, "")
+	return completeScopes(result.Tree, toComplete)
+}
+
+func completeScopes(tree map[string]*secrets.Node, toComplete string) ([]string, cobra.ShellCompDirective) {
 	var matches []string
-	for _, p := range all {
-		if toComplete == "" || strings.HasPrefix(p, toComplete) {
-			matches = append(matches, p)
+	if !strings.Contains(toComplete, ":") {
+		for vault := range tree {
+			if strings.HasPrefix(vault+":", toComplete) {
+				matches = append(matches, vault+":")
+			}
+		}
+		sort.Strings(matches)
+		return matches, cobra.ShellCompDirectiveNoSpace | cobra.ShellCompDirectiveNoFileComp
+	}
+	vault, _, _ := strings.Cut(toComplete, ":")
+	node, ok := tree[vault]
+	if !ok || node.Children == nil {
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+	for _, p := range collectDotPaths(node.Children, "") {
+		if full := vault + ":" + p; strings.HasPrefix(full, toComplete) {
+			matches = append(matches, full)
 		}
 	}
+	sort.Strings(matches)
 	return matches, cobra.ShellCompDirectiveNoFileComp
 }
 
