@@ -3,7 +3,11 @@
 package set_test
 
 import (
+	"bytes"
+	"io/fs"
 	"os"
+	"path/filepath"
+	"reflect"
 	"testing"
 
 	"github.com/br4zz4/ward/test/e2e/testutil"
@@ -270,5 +274,346 @@ func TestSet_qualified_still_works_when_another_vault_is_locked(t *testing.T) {
 	out, _, _ := testutil.Run(t, bin, dir, "get", "app:main.db.host")
 	if !testutil.Contains(out, "changed") {
 		t.Errorf("expected value written, got: %q", out)
+	}
+}
+
+func newProject(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	copyFixture(t, fix("basic"), dir)
+	return dir
+}
+
+func writeValue(t *testing.T, content []byte) string {
+	t.Helper()
+	p := filepath.Join(t.TempDir(), "value")
+	if err := os.WriteFile(p, content, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
+
+func snapshot(t *testing.T, root string) map[string][]byte {
+	t.Helper()
+	out := map[string][]byte{}
+	err := filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		b, readErr := os.ReadFile(p)
+		if readErr != nil {
+			return readErr
+		}
+		out[p] = b
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return out
+}
+
+func assertUntouched(t *testing.T, before, after map[string][]byte) {
+	t.Helper()
+	if !reflect.DeepEqual(before, after) {
+		t.Errorf("project files were created or altered by a failed set")
+	}
+}
+
+func getValue(t *testing.T, dir, scope string) string {
+	t.Helper()
+	out, stderr, code := testutil.Run(t, bin, dir, "get", scope)
+	if code != 0 {
+		t.Fatalf("get %s exit %d: %q", scope, code, stderr)
+	}
+	return out
+}
+
+func TestSet_value_from_file(t *testing.T) {
+	// arrange
+	dir := newProject(t)
+	p := writeValue(t, []byte("projects/1/locations/global/x\n"))
+
+	// act
+	_, stderr, code := testutil.Run(t, bin, dir, "set", "app:ci.WIF", "@"+p)
+
+	// assert
+	if code != 0 {
+		t.Fatalf("set exit %d: %q", code, stderr)
+	}
+	if !testutil.Contains(testutil.StripANSI(stderr), "(from "+p+")") {
+		t.Errorf("expected (from %s) in stderr, got: %q", p, stderr)
+	}
+	if got := getValue(t, dir, "app:ci.WIF"); got != "projects/1/locations/global/x\n" {
+		t.Errorf("expected value without trailing newline, got: %q", got)
+	}
+}
+
+func TestSet_value_from_multiline_file_preserves_inner_newlines(t *testing.T) {
+	// arrange
+	dir := newProject(t)
+	json3 := "{\n  \"type\": \"service_account\",\n  \"id\": \"1\"\n}"
+	p := writeValue(t, []byte(json3+"\n"))
+
+	// act
+	_, stderr, code := testutil.Run(t, bin, dir, "set", "app:ci.SA_JSON", "@"+p)
+
+	// assert
+	if code != 0 {
+		t.Fatalf("set exit %d: %q", code, stderr)
+	}
+	if got := getValue(t, dir, "app:ci.SA_JSON"); got != json3+"\n" {
+		t.Errorf("expected multiline value preserved, got: %q", got)
+	}
+}
+
+func TestSet_value_from_file_removes_trailing_crlf(t *testing.T) {
+	// arrange
+	dir := newProject(t)
+	p := writeValue(t, []byte("abc\r\n"))
+
+	// act
+	_, stderr, code := testutil.Run(t, bin, dir, "set", "app:ci.k", "@"+p)
+
+	// assert
+	if code != 0 {
+		t.Fatalf("set exit %d: %q", code, stderr)
+	}
+	if got := getValue(t, dir, "app:ci.k"); got != "abc\n" {
+		t.Errorf("expected abc without CR, got: %q", got)
+	}
+}
+
+func TestSet_missing_file_fails_and_writes_nothing(t *testing.T) {
+	// arrange
+	dir := newProject(t)
+	missing := filepath.Join(t.TempDir(), "nao-existe")
+	before := snapshot(t, dir)
+
+	// act
+	_, stderr, code := testutil.Run(t, bin, dir, "set", "app:ci.k", "@"+missing)
+
+	// assert
+	if code == 0 {
+		t.Fatal("expected non-zero exit for missing file")
+	}
+	stripped := testutil.StripANSI(stderr)
+	if !testutil.Contains(stripped, missing) || !testutil.Contains(stripped, "--literal") {
+		t.Errorf("expected stderr with path and --literal, got: %q", stripped)
+	}
+	assertUntouched(t, before, snapshot(t, dir))
+}
+
+func TestSet_empty_file_fails_and_writes_nothing(t *testing.T) {
+	// arrange
+	dir := newProject(t)
+	p := writeValue(t, []byte("\n"))
+	before := snapshot(t, dir)
+
+	// act
+	_, _, code := testutil.Run(t, bin, dir, "set", "app:ci.k", "@"+p)
+
+	// assert
+	if code == 0 {
+		t.Fatal("expected non-zero exit for empty value")
+	}
+	assertUntouched(t, before, snapshot(t, dir))
+}
+
+func TestSet_non_utf8_file_fails_and_writes_nothing(t *testing.T) {
+	// arrange
+	dir := newProject(t)
+	p := writeValue(t, []byte{0xff, 0xfe})
+	before := snapshot(t, dir)
+
+	// act
+	_, stderr, code := testutil.Run(t, bin, dir, "set", "app:ci.k", "@"+p)
+
+	// assert
+	if code == 0 {
+		t.Fatal("expected non-zero exit for non UTF-8 content")
+	}
+	if !testutil.Contains(testutil.StripANSI(stderr), "UTF-8") {
+		t.Errorf("expected stderr to mention UTF-8, got: %q", stderr)
+	}
+	assertUntouched(t, before, snapshot(t, dir))
+}
+
+func TestSet_file_above_one_mib_fails_and_writes_nothing(t *testing.T) {
+	// arrange
+	dir := newProject(t)
+	p := writeValue(t, bytes.Repeat([]byte("a"), 1048577))
+	before := snapshot(t, dir)
+
+	// act
+	_, stderr, code := testutil.Run(t, bin, dir, "set", "app:ci.k", "@"+p)
+
+	// assert
+	if code == 0 {
+		t.Fatal("expected non-zero exit above 1 MiB")
+	}
+	if !testutil.Contains(testutil.StripANSI(stderr), "limit") {
+		t.Errorf("expected stderr to mention the limit, got: %q", stderr)
+	}
+	assertUntouched(t, before, snapshot(t, dir))
+}
+
+func TestSet_relative_file_resolves_against_invocation_dir_with_dir_flag(t *testing.T) {
+	// arrange
+	proj := newProject(t)
+	work := t.TempDir()
+	if err := os.WriteFile(filepath.Join(work, "v"), []byte("from-work\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	// act
+	_, stderr, code := testutil.Run(t, bin, work, "--dir", proj, "set", "app:ci.k", "@v")
+
+	// assert
+	if code != 0 {
+		t.Fatalf("set exit %d: %q", code, stderr)
+	}
+	if got := getValue(t, proj, "app:ci.k"); got != "from-work\n" {
+		t.Errorf("expected content of the file in the invocation dir, got: %q", got)
+	}
+}
+
+func TestSet_double_at_escape_stores_single_at(t *testing.T) {
+	// arrange
+	dir := newProject(t)
+
+	// act
+	_, stderr, code := testutil.Run(t, bin, dir, "set", "app:ci.k", "@@org/x")
+
+	// assert
+	if code != 0 {
+		t.Fatalf("set exit %d: %q", code, stderr)
+	}
+	if got := getValue(t, dir, "app:ci.k"); got != "@org/x\n" {
+		t.Errorf("expected @org/x, got: %q", got)
+	}
+	if testutil.Contains(testutil.StripANSI(stderr), "(from") {
+		t.Errorf("expected no origin for a literal, got: %q", stderr)
+	}
+}
+
+func TestSet_literal_flag_stores_at_path_without_reading(t *testing.T) {
+	// arrange
+	dir := newProject(t)
+	p := writeValue(t, []byte("file-content\n"))
+
+	// act
+	_, stderr, code := testutil.Run(t, bin, dir, "set", "--literal", "app:ci.k", "@"+p)
+
+	// assert
+	if code != 0 {
+		t.Fatalf("set exit %d: %q", code, stderr)
+	}
+	if got := getValue(t, dir, "app:ci.k"); got != "@"+p+"\n" {
+		t.Errorf("expected literal @path, got: %q", got)
+	}
+	if testutil.Contains(testutil.StripANSI(stderr), "(from") {
+		t.Errorf("expected no origin for a literal, got: %q", stderr)
+	}
+}
+
+func TestSet_literal_flag_stores_dash(t *testing.T) {
+	// arrange
+	dir := newProject(t)
+
+	// act
+	_, stderr, code := testutil.Run(t, bin, dir, "set", "--literal", "app:ci.k", "-")
+
+	// assert
+	if code != 0 {
+		t.Fatalf("set exit %d: %q", code, stderr)
+	}
+	if got := getValue(t, dir, "app:ci.k"); got != "-\n" {
+		t.Errorf("expected literal dash, got: %q", got)
+	}
+}
+
+func TestSet_literal_flag_stores_double_at_as_is(t *testing.T) {
+	// arrange
+	dir := newProject(t)
+
+	// act
+	_, stderr, code := testutil.Run(t, bin, dir, "set", "--literal", "app:ci.k", "@@x")
+
+	// assert
+	if code != 0 {
+		t.Fatalf("set exit %d: %q", code, stderr)
+	}
+	if got := getValue(t, dir, "app:ci.k"); got != "@@x\n" {
+		t.Errorf("expected @@x, got: %q", got)
+	}
+}
+
+func TestSet_literal_flag_with_vault_and_secret_flags(t *testing.T) {
+	// arrange
+	dir := newProject(t)
+
+	// act
+	_, stderr, code := testutil.Run(t, bin, dir, "set", "--vault", "app", "--secret", "ci.k", "--literal", "@x")
+
+	// assert
+	if code != 0 {
+		t.Fatalf("set exit %d: %q", code, stderr)
+	}
+	if got := getValue(t, dir, "app:ci.k"); got != "@x\n" {
+		t.Errorf("expected @x, got: %q", got)
+	}
+}
+
+func TestSet_value_from_stdin_pipe(t *testing.T) {
+	// arrange
+	dir := newProject(t)
+
+	// act
+	_, stderr, code := testutil.RunWithStdinFull(t, bin, dir, "s3cr3t\n", "set", "app:ci.k", "-")
+
+	// assert
+	if code != 0 {
+		t.Fatalf("set exit %d: %q", code, stderr)
+	}
+	if !testutil.Contains(testutil.StripANSI(stderr), "(from stdin)") {
+		t.Errorf("expected (from stdin), got: %q", stderr)
+	}
+	if got := getValue(t, dir, "app:ci.k"); got != "s3cr3t\n" {
+		t.Errorf("expected s3cr3t, got: %q", got)
+	}
+}
+
+func TestSet_empty_stdin_fails_and_writes_nothing(t *testing.T) {
+	// arrange
+	dir := newProject(t)
+	before := snapshot(t, dir)
+
+	// act
+	_, _, code := testutil.RunWithStdinFull(t, bin, dir, "", "set", "app:ci.k", "-")
+
+	// assert
+	if code == 0 {
+		t.Fatal("expected non-zero exit for empty stdin")
+	}
+	assertUntouched(t, before, snapshot(t, dir))
+}
+
+func TestSet_plain_literal_has_no_origin_in_stderr(t *testing.T) {
+	// arrange
+	dir := newProject(t)
+
+	// act
+	_, stderr, code := testutil.Run(t, bin, dir, "set", "app:ci.k", "postgres://x")
+
+	// assert
+	if code != 0 {
+		t.Fatalf("set exit %d: %q", code, stderr)
+	}
+	if testutil.Contains(testutil.StripANSI(stderr), "(from") {
+		t.Errorf("expected no (from in stderr, got: %q", stderr)
+	}
+	if got := getValue(t, dir, "app:ci.k"); got != "postgres://x\n" {
+		t.Errorf("expected postgres://x, got: %q", got)
 	}
 }

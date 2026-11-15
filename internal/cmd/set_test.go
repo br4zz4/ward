@@ -1,8 +1,11 @@
 package cmd
 
 import (
+	"io"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strings"
 	"testing"
 
 	"github.com/br4zz4/ward/internal/config"
@@ -281,6 +284,80 @@ func TestSetLeaf_setting_new_key_does_not_drop_file_content(t *testing.T) {
 		if _, ok := staging[key]; !ok {
 			t.Fatalf("expected key %q to be preserved after set, but it was dropped", key)
 		}
+	}
+}
+
+var reportSetANSI = regexp.MustCompile(`\x1b\[[0-9;]*m`)
+
+func captureStderr(t *testing.T, fn func()) string {
+	t.Helper()
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	prev := os.Stderr
+	os.Stderr = w
+	done := make(chan string)
+	go func() {
+		b, _ := io.ReadAll(r)
+		done <- string(b)
+	}()
+	func() {
+		defer func() {
+			os.Stderr = prev
+			w.Close()
+		}()
+		fn()
+	}()
+	return reportSetANSI.ReplaceAllString(<-done, "")
+}
+
+func TestReportSet_with_source_shows_origin(t *testing.T) {
+	// arrange
+	src := filepath.Join(t.TempDir(), "v")
+
+	// act
+	out := captureStderr(t, func() { reportSet("app.ci.WIF", "/x/a.ward", false, src) })
+
+	// assert
+	if !strings.Contains(out, "set app.ci.WIF") {
+		t.Errorf("expected success line, got: %q", out)
+	}
+	if !strings.Contains(out, "(from "+src+")") {
+		t.Errorf("expected (from %s), got: %q", src, out)
+	}
+}
+
+func TestReportSet_with_stdin_source(t *testing.T) {
+	// act
+	out := captureStderr(t, func() { reportSet("app.k.v", "/x/a.ward", false, "stdin") })
+
+	// assert
+	if !strings.Contains(out, "(from stdin)") {
+		t.Errorf("expected (from stdin), got: %q", out)
+	}
+}
+
+func TestReportSet_without_source_has_no_origin(t *testing.T) {
+	// act
+	out := captureStderr(t, func() { reportSet("app.k.v", "/x/a.ward", false, "") })
+
+	// assert
+	if !strings.Contains(out, "set app.k.v") {
+		t.Errorf("expected success line, got: %q", out)
+	}
+	if strings.Contains(out, "(from") {
+		t.Errorf("expected no origin, got: %q", out)
+	}
+}
+
+func TestReportSet_created_notice_kept_with_source(t *testing.T) {
+	// act
+	out := captureStderr(t, func() { reportSet("app.k.v", "/x/new.ward", true, "stdin") })
+
+	// assert
+	if !strings.Contains(out, "a new file was created") || !strings.Contains(out, "(from stdin)") {
+		t.Errorf("expected creation notice and origin, got: %q", out)
 	}
 }
 
