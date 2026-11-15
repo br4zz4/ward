@@ -1,6 +1,6 @@
 ---
 title: ward set lê valor de arquivo (@path) e stdin (-)
-status: proposed
+status: done
 created: 2026-11-15
 updated: 2026-11-15
 owner: "@o_porpino"
@@ -197,26 +197,26 @@ Merge in this order: #<pr1>
 
 # definition of done
 
-- [ ] Todo cenário de "acceptance criteria" foi validado (automatizado ou verificado com comando exato)
-- [ ] Testes automáticos passando — suíte verde, não só a parte nova (`make test && make test.integration && make test.e2e`)
-- [ ] Toda task do "how" executada
-- [ ] Documentação atualizada (README + `docs/CONTEXT.md`)
-- [ ] Staging: `staging: none` (sem staging declarado no `AGENTS.md` do repo)
-- [ ] `@<path>` grava o conteúdo do arquivo, sem a quebra final e com "(from <path>)" no stderr (e2e)
-- [ ] JSON multilinha preserva as quebras internas (e2e)
-- [ ] `\r\n` final é removido (unit)
-- [ ] Arquivo inexistente: exit ≠ 0, mensagem com path e `--literal`, nenhum `.ward` alterado (e2e)
-- [ ] Arquivo vazio ou só com `\n`: exit ≠ 0 e nada gravado (unit + e2e)
-- [ ] Conteúdo não UTF-8: exit ≠ 0, mensagem com "UTF-8" (unit)
-- [ ] Conteúdo > 1 MiB: exit ≠ 0, mensagem de limite (unit)
-- [ ] `--dir` com `@` relativo resolve contra o cwd de invocação (unit + e2e)
-- [ ] `@@x` grava `@x` (unit + e2e)
-- [ ] `--literal` grava `@...`, `@@...` e `-` como estão, inclusive com `--vault/--secret` (unit + e2e)
-- [ ] `printf 's3cr3t\n' | ward set app:k -` grava `s3cr3t` com "(from stdin)" (e2e)
-- [ ] `-` com stdin TTY: erro sugerindo pipe e nada gravado (unit via `stdinIsTTY=true`)
-- [ ] Valor literal comum mantém o comportamento e o stderr não contém "(from" (e2e)
-- [ ] MCP `ward_set` com `@/etc/hosts` grava literal (teste em `internal/mcp`)
-- [ ] Nenhum path hardcoded com `/`: uso de `filepath` (revisão); suíte verde em macOS e Linux (CI)
+- [x] Todo cenário de "acceptance criteria" foi validado (automatizado ou verificado com comando exato)
+- [x] Testes automáticos passando — suíte verde, não só a parte nova (`make test && make test.integration && make test.e2e`)
+- [x] Toda task do "how" executada
+- [x] Documentação atualizada (README + `docs/CONTEXT.md`)
+- [x] Staging: `staging: none` (sem staging declarado no `AGENTS.md` do repo)
+- [x] `@<path>` grava o conteúdo do arquivo, sem a quebra final e com "(from <path>)" no stderr (e2e)
+- [x] JSON multilinha preserva as quebras internas (e2e)
+- [x] `\r\n` final é removido (unit)
+- [x] Arquivo inexistente: exit ≠ 0, mensagem com path e `--literal`, nenhum `.ward` alterado (e2e)
+- [x] Arquivo vazio ou só com `\n`: exit ≠ 0 e nada gravado (unit + e2e)
+- [x] Conteúdo não UTF-8: exit ≠ 0, mensagem com "UTF-8" (unit)
+- [x] Conteúdo > 1 MiB: exit ≠ 0, mensagem de limite (unit)
+- [x] `--dir` com `@` relativo resolve contra o cwd de invocação (unit + e2e)
+- [x] `@@x` grava `@x` (unit + e2e)
+- [x] `--literal` grava `@...`, `@@...` e `-` como estão, inclusive com `--vault/--secret` (unit + e2e)
+- [x] `printf 's3cr3t\n' | ward set app:k -` grava `s3cr3t` com "(from stdin)" (e2e)
+- [x] `-` com stdin TTY: erro sugerindo pipe e nada gravado (unit via `stdinIsTTY=true`)
+- [x] Valor literal comum mantém o comportamento e o stderr não contém "(from" (e2e)
+- [x] MCP `ward_set` com `@/etc/hosts` grava literal (teste em `internal/mcp`)
+- [x] Nenhum path hardcoded com `/`: uso de `filepath` (revisão); suíte verde em macOS e Linux (CI)
 - [ ] Release `v0.6.0` publicado e instalado via asdf
 
 ## documentation

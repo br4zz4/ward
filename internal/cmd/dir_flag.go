@@ -31,7 +31,7 @@ func applyDirFlag(dir string) error {
 // ward was invoked from, ignoring any later --dir change.
 func resolveInvocationPath(p string) string {
 	if filepath.IsAbs(p) {
-		return p
+		return filepath.Clean(p)
 	}
 	base := invocationDir
 	if base == "" {

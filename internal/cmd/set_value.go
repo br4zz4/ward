@@ -31,7 +31,7 @@ func resolveSetValue(raw string, literal bool, stdin io.Reader, stdinIsTTY bool)
 		defer f.Close()
 		value, err := readSetValue(f)
 		if err != nil {
-			return "", "", readValueError(path, raw, err)
+			return "", "", fmt.Errorf("value from %s: %w", path, err)
 		}
 		return value, path, nil
 	case raw == "-":
