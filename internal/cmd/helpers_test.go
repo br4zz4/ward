@@ -1,6 +1,14 @@
 package cmd
 
-import "testing"
+import (
+	"encoding/base64"
+	"errors"
+	"os"
+	"strings"
+	"testing"
+
+	"github.com/br4zz4/ward/internal/config"
+)
 
 func TestTruncateValue_empty(t *testing.T) {
 	// arrange + act
@@ -95,5 +103,149 @@ func TestWardKeyEnvName(t *testing.T) {
 		if got := wardKeyEnvName(name); got != want {
 			t.Errorf("wardKeyEnvName(%q) = %q, want %q", name, got, want)
 		}
+	}
+}
+
+func TestWardKeyEnvName_namespace_separator(t *testing.T) {
+	// act
+	got := wardKeyEnvName("myfish::restricted")
+
+	// assert
+	if got != "WARD_KEY_MYFISH_RESTRICTED" {
+		t.Errorf("got %q", got)
+	}
+}
+
+func subvaultToken(raw string) string {
+	return "ward-" + base64.URLEncoding.EncodeToString([]byte(raw))
+}
+
+func clearKeyEnvs(t *testing.T) {
+	t.Helper()
+	for _, k := range []string{"WARD_KEY", "WARD_KEY_MYFISH", "WARD_KEY_MYFISH_DEFAULT", "WARD_KEY_MYFISH_OPEN", "WARD_KEY_MYFISH_RESTRICTED"} {
+		t.Setenv(k, "")
+	}
+}
+
+func assertResolvedKey(t *testing.T, v config.Source, want string) {
+	t.Helper()
+	path, err := resolveKeyFileForVault(v)
+	if err != nil {
+		t.Fatalf("%s: unexpected error: %v", v.Name, err)
+	}
+	if path == "" {
+		t.Fatalf("%s: expected a resolved key file", v.Name)
+	}
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != want {
+		t.Errorf("%s: key content = %q, want %q", v.Name, got, want)
+	}
+}
+
+func TestResolveKeyFileForVault_default_with_default_env_only(t *testing.T) {
+	for _, name := range []string{"myfish::default", "myfish"} {
+		// arrange
+		clearKeyEnvs(t)
+		t.Setenv("WARD_KEY_MYFISH_DEFAULT", subvaultToken("AGE-SECRET-KEY-1AAA"))
+		// act + assert
+		assertResolvedKey(t, config.Source{Name: name}, "AGE-SECRET-KEY-1AAA")
+	}
+}
+
+func TestResolveKeyFileForVault_default_with_plain_env_only(t *testing.T) {
+	for _, name := range []string{"myfish::default", "myfish"} {
+		// arrange
+		clearKeyEnvs(t)
+		t.Setenv("WARD_KEY_MYFISH", subvaultToken("AGE-SECRET-KEY-1AAA"))
+		// act + assert
+		assertResolvedKey(t, config.Source{Name: name}, "AGE-SECRET-KEY-1AAA")
+	}
+}
+
+func TestResolveKeyFileForVault_default_with_both_equal_envs(t *testing.T) {
+	for _, name := range []string{"myfish::default", "myfish"} {
+		// arrange
+		clearKeyEnvs(t)
+		tok := subvaultToken("AGE-SECRET-KEY-1AAA")
+		t.Setenv("WARD_KEY_MYFISH", tok)
+		t.Setenv("WARD_KEY_MYFISH_DEFAULT", tok)
+		// act + assert
+		assertResolvedKey(t, config.Source{Name: name}, "AGE-SECRET-KEY-1AAA")
+	}
+}
+
+func TestResolveKeyFileForVault_default_with_divergent_envs_errors(t *testing.T) {
+	for _, name := range []string{"myfish::default", "myfish"} {
+		// arrange
+		clearKeyEnvs(t)
+		t.Setenv("WARD_KEY_MYFISH", subvaultToken("AGE-SECRET-KEY-1AAA"))
+		t.Setenv("WARD_KEY_MYFISH_DEFAULT", subvaultToken("AGE-SECRET-KEY-1BBB"))
+		// act
+		_, err := resolveKeyFileForVault(config.Source{Name: name})
+		// assert
+		if err == nil {
+			t.Fatalf("%s: expected error", name)
+		}
+		for _, want := range []string{"WARD_KEY_MYFISH", "WARD_KEY_MYFISH_DEFAULT"} {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("%s: error %q missing %q", name, err.Error(), want)
+			}
+		}
+	}
+}
+
+func TestResolveKeyFileForVault_open_not_unlocked_by_default_env(t *testing.T) {
+	// arrange
+	clearKeyEnvs(t)
+	t.Setenv("WARD_KEY_MYFISH", subvaultToken("AGE-SECRET-KEY-1AAA"))
+	// act
+	path, err := resolveKeyFileForVault(config.Source{Name: "myfish::open"})
+	// assert
+	var ku *errKeyUnavailable
+	if err != nil && !errors.As(err, &ku) {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if path != "" {
+		t.Errorf("expected no key for myfish::open, got %q", path)
+	}
+}
+
+func TestResolveKeyFileForVault_restricted_env(t *testing.T) {
+	// arrange
+	clearKeyEnvs(t)
+	t.Setenv("WARD_KEY_MYFISH_RESTRICTED", subvaultToken("AGE-SECRET-KEY-1RRR"))
+	// act + assert
+	assertResolvedKey(t, config.Source{Name: "myfish::restricted"}, "AGE-SECRET-KEY-1RRR")
+}
+
+func TestBuildVaultDecryptors_indexes_by_canonical_name(t *testing.T) {
+	// arrange
+	clearKeyEnvs(t)
+	t.Setenv("WARD_KEY_MYFISH_DEFAULT", subvaultToken("AGE-SECRET-KEY-1AAA"))
+	t.Setenv("WARD_KEY_MYFISH_RESTRICTED", subvaultToken("AGE-SECRET-KEY-1RRR"))
+	cfg := &config.Config{
+		Encryption: config.Encryption{Engine: "age+armor"},
+		Vaults: []config.Source{
+			{Name: "myfish::default", Path: ".ward/vaults/myfish::default"},
+			{Name: "myfish::restricted", Path: ".ward/vaults/myfish::restricted"},
+		},
+	}
+	// act
+	decs, err := BuildVaultDecryptors(cfg)
+	// assert
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := decs["myfish"]; !ok {
+		t.Errorf("expected key %q, got %v", "myfish", decs)
+	}
+	if _, ok := decs["myfish::default"]; ok {
+		t.Errorf("did not expect declared name as key: %v", decs)
+	}
+	if _, ok := decs["myfish::restricted"]; !ok {
+		t.Errorf("expected key myfish::restricted, got %v", decs)
 	}
 }

@@ -403,8 +403,13 @@ func keyHintFor(vault string, hintFor map[string]string) string {
 	if h := hintFor[vault]; h != "" {
 		return h
 	}
-	return fmt.Sprintf("set %s to the contents of your age key, or provide .ward/%s.key",
-		config.KeyEnvName(vault), vault)
+	envs := config.KeyEnvNames(vault)
+	envText := envs[0]
+	if len(envs) > 1 {
+		envText += " (or " + strings.Join(envs[1:], ", ") + ")"
+	}
+	return fmt.Sprintf("set %s to the contents of your age key, or provide %s",
+		envText, strings.Join(config.KeyFileCandidates(vault), " or "))
 }
 
 // missingKeySummary builds the fatal-message tail listing how to unlock every
@@ -435,7 +440,7 @@ func buildVaultRootIndex(cfg *config.Config) func(string) vaultInfo {
 		if err != nil {
 			abs = v.Path
 		}
-		infos[i] = vaultInfo{name: v.Name, root: abs}
+		infos[i] = vaultInfo{name: v.CanonicalName(), root: abs}
 	}
 	return func(path string) vaultInfo {
 		absPath, err := filepath.Abs(path)

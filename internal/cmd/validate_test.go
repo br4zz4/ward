@@ -149,3 +149,81 @@ func TestLeadingKeyPath_reads_plain_ward(t *testing.T) {
 		t.Errorf("expected app.config, got %q", got)
 	}
 }
+
+func subvaultViolations(t *testing.T, vaultName, root string) []string {
+	t.Helper()
+	dir := t.TempDir()
+	vaultPath := filepath.Join(".ward", "vaults", vaultName)
+	vaultDir := filepath.Join(dir, vaultPath)
+	if err := os.MkdirAll(vaultDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	content := root + ":\n  secrets:\n    key: val\n"
+	if err := os.WriteFile(filepath.Join(vaultDir, "secrets.ward"), []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+	cfg := &config.Config{Vaults: []config.Source{{Name: vaultName, Path: vaultPath}}}
+	orig, _ := os.Getwd()
+	t.Cleanup(func() { os.Chdir(orig) })
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	return validateVaultStructure(cfg, ".ward/config.yaml")
+}
+
+func TestValidateVaultStructure_default_accepts_default_root(t *testing.T) {
+	// act
+	violations := subvaultViolations(t, "myfish::default", "myfish::default")
+	// assert
+	if len(violations) != 0 {
+		t.Errorf("expected no violations, got: %v", violations)
+	}
+}
+
+func TestValidateVaultStructure_default_accepts_short_root(t *testing.T) {
+	// act
+	violations := subvaultViolations(t, "myfish::default", "myfish")
+	// assert
+	if len(violations) != 0 {
+		t.Errorf("expected no violations, got: %v", violations)
+	}
+}
+
+func TestValidateVaultStructure_default_wrong_root_is_violation(t *testing.T) {
+	// act
+	violations := subvaultViolations(t, "myfish::default", "other")
+	// assert
+	if len(violations) == 0 {
+		t.Error("expected a violation for wrong root key")
+	}
+}
+
+func TestValidateVaultStructure_restricted_accepts_full_name_root(t *testing.T) {
+	// act
+	violations := subvaultViolations(t, "myfish::restricted", "myfish::restricted")
+	// assert
+	if len(violations) != 0 {
+		t.Errorf("expected no violations, got: %v", violations)
+	}
+}
+
+func TestValidateVaultStructure_restricted_rejects_parent_root(t *testing.T) {
+	// act
+	violations := subvaultViolations(t, "myfish::restricted", "myfish")
+	// assert
+	if len(violations) == 0 {
+		t.Error("expected a violation for parent root in restricted vault")
+	}
+}
+
+func TestExpectedFileDotPath_default_vault_uses_canonical_prefix(t *testing.T) {
+	// arrange
+	vaultAbs := "/proj/.ward/vaults/myfish::default"
+	file := filepath.Join(vaultAbs, "secrets.plain.ward")
+	// act
+	got := expectedFileDotPath("myfish::default", vaultAbs, file)
+	// assert
+	if got != "myfish.secrets" {
+		t.Errorf("expected myfish.secrets, got %q", got)
+	}
+}

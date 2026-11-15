@@ -164,7 +164,7 @@ func (e *EnvConflictError) prefixedExample() string {
 // preserved as written. Mirrors ToEnvEntries, which walks from the root.
 // e.g. "app.staging.token" → "app_staging_token".
 func prefixedName(dotPath string) string {
-	return strings.ReplaceAll(strings.ReplaceAll(dotPath, ".", "_"), "-", "_")
+	return strings.NewReplacer("::", "_", ".", "_", "-", "_").Replace(dotPath)
 }
 
 // leafRef is a leaf node with its full dot-path.
@@ -276,7 +276,7 @@ func flatEntriesFromLeafs(byEnvKey map[string][]leafRef, preferPrefix string) (m
 // envKey builds the env var name for a leaf. Case is always preserved as written in the YAML.
 // Hyphens are converted to underscores. Nested keys are joined with "_".
 func envKey(prefix, k string) string {
-	safe := strings.ReplaceAll(k, "-", "_")
+	safe := strings.NewReplacer("::", "_", "-", "_").Replace(k)
 	if prefix == "" {
 		return safe
 	}

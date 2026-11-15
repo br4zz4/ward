@@ -133,7 +133,7 @@ func BuildVaultDecryptors(cfg *config.Config) (map[string]sops.Decryptor, error)
 		if err != nil {
 			return nil, err
 		}
-		result[v.Name] = dec
+		result[v.CanonicalName()] = dec
 	}
 	return result, nil
 }
@@ -152,8 +152,11 @@ func resolveKeyFile(cfg *config.Config) (string, error) {
 
 	// 1b. WARD_KEY_<VAULT> — single-vault shorthand, no config needed
 	if len(cfg.Vaults) == 1 {
-		envName := wardKeyEnvName(cfg.Vaults[0].Name)
-		if token := os.Getenv(envName); token != "" {
+		envName, token, err := vaultEnvToken(cfg.Vaults[0].Name)
+		if err != nil {
+			return "", err
+		}
+		if token != "" {
 			keyFile, err := writeTempKey(token)
 			if err != nil {
 				return "", fmt.Errorf("decoding %s: %w", envName, err)
@@ -204,6 +207,26 @@ func resolveKeyFile(cfg *config.Config) (string, error) {
 	return "", nil
 }
 
+// vaultEnvToken returns the first env var (among the names a vault accepts)
+// that carries a key, with its value. When several are set with different
+// values it fails, naming them, rather than silently picking one.
+func vaultEnvToken(vaultName string) (envName, token string, err error) {
+	for _, name := range config.KeyEnvNames(vaultName) {
+		val := os.Getenv(name)
+		if val == "" {
+			continue
+		}
+		if envName == "" {
+			envName, token = name, val
+			continue
+		}
+		if val != token {
+			return "", "", fmt.Errorf("%s and %s are both set with different keys for vault %s — keep one", envName, name, config.CanonicalVaultName(vaultName))
+		}
+	}
+	return envName, token, nil
+}
+
 // errKeyUnavailable signals that a vault declares a key source (key_env or
 // key_file) that is not available right now. It is not fatal on its own: reads
 // skip the vault with a warning, writes fail with the hint.
@@ -216,8 +239,11 @@ func (e *errKeyUnavailable) Error() string { return e.hint }
 // Returns "" when no vault-specific key is configured (caller should fall back to global).
 // Returns *errKeyUnavailable when a key source is declared but unavailable.
 func resolveKeyFileForVault(v config.Source) (string, error) {
-	envName := wardKeyEnvName(v.Name)
-	if token := os.Getenv(envName); token != "" {
+	envName, token, err := vaultEnvToken(v.Name)
+	if err != nil {
+		return "", err
+	}
+	if token != "" {
 		keyFile, err := writeTempKey(token)
 		if err != nil {
 			return "", fmt.Errorf("decoding %s: %w", envName, err)

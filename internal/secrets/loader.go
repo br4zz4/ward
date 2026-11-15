@@ -7,6 +7,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/br4zz4/ward/internal/config"
 	"github.com/br4zz4/ward/internal/sops"
 )
 
@@ -54,6 +55,7 @@ func Load(path, vaultName, vaultRoot string, dec sops.Decryptor) (ParsedFile, er
 	data := map[string]interface{}{}
 	lines := LineMap{}
 	if len(node.Content) > 0 {
+		canonicalizeDefaultRoot(node.Content[0], vaultName)
 		extractNode(node.Content[0], "", data, lines)
 	}
 
@@ -70,6 +72,20 @@ func Load(path, vaultName, vaultRoot string, dec sops.Decryptor) (ParsedFile, er
 	rawLines := strings.Split(string(raw), "\n")
 
 	return ParsedFile{File: path, Data: data, Meta: meta, Lines: lines, RawLines: rawLines}, nil
+}
+
+// canonicalizeDefaultRoot renames a top-level "<vault>::default" key to the
+// canonical "<vault>" so the default sub-vault merges under one root.
+func canonicalizeDefaultRoot(root *yaml.Node, vaultName string) {
+	if root.Kind != yaml.MappingNode || vaultName == "" || strings.Contains(vaultName, config.NamespaceSep) {
+		return
+	}
+	alias := vaultName + config.NamespaceSep + config.DefaultSubVault
+	for i := 0; i+1 < len(root.Content); i += 2 {
+		if root.Content[i].Value == alias {
+			root.Content[i].Value = vaultName
+		}
+	}
 }
 
 // fileSecretSubdir returns the subdirectory segments between the vault root and
