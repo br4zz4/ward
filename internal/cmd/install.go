@@ -23,9 +23,9 @@ const (
 func NewInstallCmd() *cobra.Command {
 	parent := &cobra.Command{
 		Use:   "install",
-		Short: "Install integrations and plugins.",
+		Short: "Install integrations, plugins and shell completion.",
 	}
-	parent.AddCommand(newInstallClaudePluginCmd())
+	parent.AddCommand(newInstallClaudePluginCmd(), newInstallCompletionCmd())
 	return parent
 }
 

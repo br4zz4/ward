@@ -62,7 +62,7 @@ brew tap br4zz4/tap
 brew install --cask ward
 ```
 
-Shell completions are installed automatically.
+Shell completions are installed automatically by the Homebrew cask.
 
 **asdf**
 
@@ -85,6 +85,27 @@ git clone https://github.com/br4zz4/ward
 cd ward
 go build -o ~/.local/bin/ward ./cmd/ward
 ```
+
+### Shell completion
+
+The Homebrew cask ships completions; every other install method needs one command:
+
+```sh
+ward install completion          # detects your shell from $SHELL
+ward install completion zsh      # or bash / fish
+```
+
+It writes `_ward` into a writable zsh `fpath` directory (`site-functions`), or into
+`~/.zfunc` with the `fpath` line to add when no standard directory is writable.
+Bash and fish install into their user completion directories, which are loaded
+automatically. Use `--output <path>` to choose the destination, or `--stdout` to let
+a package manager place the script itself.
+
+- zsh: `~/.zfunc/_ward` (or `<prefix>/share/zsh/site-functions/_ward`)
+- bash: `~/.local/share/bash-completion/completions/ward`
+- fish: `~/.config/fish/completions/ward.fish`
+
+Re-run the command after upgrading ward so new commands and flags complete.
 
 ---
 
