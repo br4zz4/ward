@@ -30,7 +30,7 @@ func TestPlain_read_without_key(t *testing.T) {
 		t.Fatal("init failed")
 	}
 	vault := filepath.Base(dir)
-	vaultDir := filepath.Join(dir, ".ward", "vaults", vault)
+	vaultDir := filepath.Join(dir, ".ward", "vaults", vault+"::default")
 	// public plain file
 	os.WriteFile(filepath.Join(vaultDir, "config.plain.ward"),
 		[]byte(vault+":\n  config:\n    port: \"8080\"\n"), 0644)
@@ -52,7 +52,7 @@ func TestPlain_encrypted_without_key_errors(t *testing.T) {
 	}
 	vault := filepath.Base(dir)
 	// remove the key so nothing decrypts
-	os.Remove(filepath.Join(dir, ".ward", vault+".key"))
+	os.Remove(filepath.Join(dir, ".ward", vault+"::default.key"))
 
 	_, _, code := testutil.Run(t, bin, dir, "get", vault+":secret_1")
 	if code == 0 {
@@ -67,10 +67,10 @@ func TestPlain_survives_key_removal(t *testing.T) {
 		t.Fatal("init failed")
 	}
 	vault := filepath.Base(dir)
-	vaultDir := filepath.Join(dir, ".ward", "vaults", vault)
+	vaultDir := filepath.Join(dir, ".ward", "vaults", vault+"::default")
 	os.WriteFile(filepath.Join(vaultDir, "public.plain.ward"),
 		[]byte(vault+":\n  public:\n    name: hello\n"), 0644)
-	os.Remove(filepath.Join(dir, ".ward", vault+".key"))
+	os.Remove(filepath.Join(dir, ".ward", vault+"::default.key"))
 
 	// encrypted secret errors, but plain value is still retrievable and a warning is printed
 	out, stderr, _ := testutil.Run(t, bin, dir, "get", vault+":public.name")

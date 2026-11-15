@@ -642,3 +642,42 @@ vaults:
 		t.Errorf("got %q", cfg.Vaults[0].Encryption.KeyFile)
 	}
 }
+
+func TestLoad_legacy_app_and_app_default_coexist(t *testing.T) {
+	// arrange
+	dir := t.TempDir()
+	cfgPath := writeConfig(t, dir, `
+vaults:
+  - name: app
+    path: .ward/vaults/app
+  - name: app-default
+    path: .ward/vaults/app-default
+`)
+	// act
+	cfg, err := Load(cfgPath)
+	// assert
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(cfg.Vaults) != 2 {
+		t.Errorf("expected 2 vaults, got %d", len(cfg.Vaults))
+	}
+}
+
+func TestLoad_restricted_env_collision_still_rejected(t *testing.T) {
+	// arrange
+	dir := t.TempDir()
+	cfgPath := writeConfig(t, dir, `
+vaults:
+  - name: myfish-restricted
+    path: .ward/vaults/a
+  - name: myfish::restricted
+    path: .ward/vaults/b
+`)
+	// act
+	_, err := Load(cfgPath)
+	// assert
+	if err == nil || !strings.Contains(err.Error(), "WARD_KEY_MYFISH_RESTRICTED") {
+		t.Errorf("expected env collision error, got %v", err)
+	}
+}

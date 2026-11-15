@@ -103,3 +103,14 @@ func TestKeyEnvName_namespace_separator(t *testing.T) {
 		t.Errorf("got %q", got)
 	}
 }
+
+func TestValidateVaultName_rejects_path_characters(t *testing.T) {
+	for _, name := range []string{"a/b", `a\b`, "..", "../x", "a..b", "myfish::re/stricted"} {
+		// act
+		err := ValidateVaultName(name)
+		// assert
+		if err == nil {
+			t.Errorf("ValidateVaultName(%q) expected error", name)
+		}
+	}
+}

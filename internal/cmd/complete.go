@@ -25,8 +25,8 @@ func completeVaultNames(_ *cobra.Command, args []string, toComplete string) ([]s
 	}
 	var names []string
 	for _, v := range cfg.Vaults {
-		if toComplete == "" || strings.HasPrefix(v.Name, toComplete) {
-			names = append(names, v.Name)
+		if toComplete == "" || strings.HasPrefix(v.CanonicalName(), toComplete) {
+			names = append(names, v.CanonicalName())
 		}
 	}
 	return names, cobra.ShellCompDirectiveNoFileComp

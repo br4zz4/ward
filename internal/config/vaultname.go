@@ -18,6 +18,9 @@ func ValidateVaultName(name string) error {
 	if name == "" {
 		return fmt.Errorf("invalid vault name %q: empty", name)
 	}
+	if strings.ContainsAny(name, `/\`) || strings.Contains(name, "..") {
+		return fmt.Errorf("invalid vault name %q: path separators and \"..\" are not allowed", name)
+	}
 	ns, sub, nested := strings.Cut(name, NamespaceSep)
 	if nested {
 		if ns == "" || sub == "" {
@@ -39,13 +42,6 @@ func ValidateVaultName(name string) error {
 
 func splitVaultName(name string) (ns, sub string, nested bool) {
 	return strings.Cut(name, NamespaceSep)
-}
-
-// isDefaultVault reports whether name denotes a default sub-vault (bare
-// namespace or <ns>::default).
-func isDefaultVault(name string) bool {
-	_, sub, nested := splitVaultName(name)
-	return !nested || sub == DefaultSubVault
 }
 
 // CanonicalVaultName returns the short form of a vault name: x::default → x.

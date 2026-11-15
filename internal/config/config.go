@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -159,7 +160,7 @@ func Load(path string) (*Config, error) {
 			return nil, fmt.Errorf("%w in %s", err, path)
 		}
 	}
-	if err := checkVaultIdentities(cfg.Vaults); err != nil {
+	if err := CheckVaultIdentities(cfg.Vaults); err != nil {
 		return nil, fmt.Errorf("%w in %s", err, path)
 	}
 
@@ -207,9 +208,9 @@ func Load(path string) (*Config, error) {
 	return cfg, nil
 }
 
-// checkVaultIdentities rejects vaults that share a canonical name or whose
+// CheckVaultIdentities rejects vaults that share a canonical name or whose
 // derived key env vars overlap (e.g. myfish-restricted and myfish::restricted).
-func checkVaultIdentities(vaults []Source) error {
+func CheckVaultIdentities(vaults []Source) error {
 	canon := map[string]string{}
 	envs := map[string]string{}
 	for _, v := range vaults {
@@ -218,12 +219,11 @@ func checkVaultIdentities(vaults []Source) error {
 			return fmt.Errorf("duplicate vault name: %q and %q are the same vault", prev, v.Name)
 		}
 		canon[c] = v.Name
-		for _, e := range KeyEnvNames(v.Name) {
-			if prev, ok := envs[e]; ok {
-				return fmt.Errorf("vaults %q and %q derive the same key env var %s", prev, v.Name, e)
-			}
-			envs[e] = v.Name
+		e := KeyEnvNames(v.Name)[0]
+		if prev, ok := envs[e]; ok {
+			return fmt.Errorf("vaults %q and %q derive the same key env var %s", prev, v.Name, e)
 		}
+		envs[e] = v.Name
 	}
 	return nil
 }
@@ -235,8 +235,11 @@ func detectKeyFile(name string) (string, error) {
 	var firstData []byte
 	for _, cand := range KeyFileCandidates(name) {
 		data, err := os.ReadFile(cand)
-		if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
 			continue
+		}
+		if err != nil {
+			return "", fmt.Errorf("reading key file %s: %w", cand, err)
 		}
 		if first == "" {
 			first, firstData = cand, data
