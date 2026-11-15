@@ -148,6 +148,18 @@ Prints the `WARD_KEY_<PROJECT>_DEFAULT` token to copy to CI or a secrets manager
 
 Keep production apart from the rest of a project with a second vault that has its own key: `ward vault add myfish::restricted`, then `ward get myfish::restricted:secrets.production.KEY`. `myfish` and `myfish::default` are the same vault, and `myfish:` never includes the restricted one. `ward rotate-key <vault>` rotates one vault's key. See [Sub-vaults](docs/configuration.md#sub-vaults).
 
+### `ward vault add <name> [path]`
+
+Register a vault. The path defaults to `.ward/vaults/<name>`. When the path has no `.ward` files yet, ward generates `.ward/<name>.key` (gitignored), creates the directory with an encrypted `secrets.ward` rooted at `<name>:` and prints the `WARD_KEY_<NAME>=ward-…` token for CI; when it already holds `.ward` files the vault is only registered. Names follow `<namespace>` or `<namespace>::<name>` (one level), e.g. `ward vault add myfish::restricted`.
+
+### `ward vault list`
+
+List the configured vaults and their paths.
+
+### `ward rotate-key [vault]`
+
+Rotate an encryption key and re-encrypt its files. With a vault (`ward rotate-key myfish::restricted`) only that vault's key file is rotated and only its files are re-encrypted; the old key is backed up to `<keyfile>.bkp-<timestamp>` (gitignored) and the new `WARD_KEY_…=ward-…` token is printed for CI. The vault's key must live in a key file (not only in an env var) and must not be shared with another vault. Without a vault it rotates the project's single key, and fails listing the vaults when the project has several distinct keys.
+
 ### `ward new <name>`
 
 Create a new encrypted `.ward` file and open it in `$EDITOR`.
@@ -429,8 +441,8 @@ vaults:
 
 When no `encryption` block is set on a vault, ward resolves its key in order:
 
-1. `WARD_KEY_<NAME>` env var (e.g. `WARD_KEY_SHARED`; hyphens/dots in the name become underscores) — works with single or multiple vaults
-2. `.ward/<name>.key` file — auto-detected when present
+1. `WARD_KEY_<NAME>` env var (e.g. `WARD_KEY_SHARED`; hyphens, dots and `::` in the name become underscores, so `myfish::restricted` → `WARD_KEY_MYFISH_RESTRICTED`) — works with single or multiple vaults. The default vault `myfish` also accepts `WARD_KEY_MYFISH_DEFAULT`
+2. `.ward/<name>.key` file — auto-detected when present (e.g. `.ward/myfish::restricted.key`)
 3. Global `WARD_KEY` / `encryption` config
 
 ### default_dir
@@ -451,8 +463,8 @@ ward exec myapp:environments.staging -- deploy
 ```
 
 Use `WARD_KEY_<NAME>` for single or multiple vaults — no config needed. `<NAME>`
-is the vault name upper-cased, with hyphens and dots replaced by underscores
-(e.g. vault `messenger-api` → `WARD_KEY_MESSENGER_API`):
+is the vault name upper-cased, with hyphens, dots and `::` replaced by underscores
+(e.g. vault `messenger-api` → `WARD_KEY_MESSENGER_API`, sub-vault `myfish::restricted` → `WARD_KEY_MYFISH_RESTRICTED`):
 
 ```sh
 # single vault
