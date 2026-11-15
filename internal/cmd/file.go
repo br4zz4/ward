@@ -128,9 +128,8 @@ func newFileExtractCmd() *cobra.Command {
 
 // splitVaultArg splits "app:main" into ("app", "main") and "app" into ("app", "").
 func splitVaultArg(arg string) (vault, subDir string) {
-	parts := strings.SplitN(arg, ":", 2)
-	if len(parts) == 2 {
-		return parts[0], parts[1]
+	if vault, rest, qualified := secrets.SplitVaultQualifier(arg); qualified {
+		return vault, rest
 	}
 	return arg, ""
 }
@@ -138,7 +137,7 @@ func splitVaultArg(arg string) (vault, subDir string) {
 func resolveVaultDir(cfg *config.Config, vaultName, cfgPath string) string {
 	projectRoot := filepath.Dir(filepath.Dir(cfgPath))
 	for _, src := range cfg.Vaults {
-		if src.Name == vaultName {
+		if src.CanonicalName() == config.CanonicalVaultName(vaultName) {
 			return filepath.Join(projectRoot, src.Path)
 		}
 	}

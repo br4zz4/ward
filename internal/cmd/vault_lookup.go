@@ -11,7 +11,7 @@ import (
 // findVault returns the config source matching name, or nil.
 func findVault(cfg *config.Config, name string) *config.Source {
 	for i := range cfg.Vaults {
-		if cfg.Vaults[i].Name == name {
+		if cfg.Vaults[i].CanonicalName() == config.CanonicalVaultName(name) {
 			return &cfg.Vaults[i]
 		}
 	}

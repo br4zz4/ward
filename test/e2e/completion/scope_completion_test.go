@@ -3,6 +3,8 @@
 package completion_test
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -87,5 +89,60 @@ func TestScopeCompletion_get_unknown_vault_lists_nothing(t *testing.T) {
 	got, _ := complete(t, "get", "inexistente:")
 	if len(got) != 0 {
 		t.Errorf("expected no candidates, got %v", got)
+	}
+}
+
+func TestScopeCompletion_subvault_namespace_separator(t *testing.T) {
+	dir := t.TempDir()
+	wardDir := filepath.Join(dir, ".ward")
+	for _, v := range []string{"myfish::default", "myfish::restricted"} {
+		vaultDir := filepath.Join(wardDir, "vaults", v)
+		if err := os.MkdirAll(vaultDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+		root := v
+		if v == "myfish::default" {
+			root = "myfish"
+		}
+		body := root + ":\n  secrets:\n    key: val\n"
+		if err := os.WriteFile(filepath.Join(vaultDir, "main.plain.ward"), []byte(body), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cfg := "vaults:\n  - name: myfish::default\n    path: .ward/vaults/myfish::default\n  - name: myfish::restricted\n    path: .ward/vaults/myfish::restricted\n"
+	if err := os.WriteFile(filepath.Join(wardDir, "config.yaml"), []byte(cfg), 0644); err != nil {
+		t.Fatal(err)
+	}
+	run := func(arg string) []string {
+		out, _, code := testutil.Run(t, bin, dir, "__complete", "get", arg)
+		if code != 0 {
+			t.Fatalf("exit %d: %q", code, out)
+		}
+		var got []string
+		for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
+			line = strings.TrimSpace(line)
+			if line == "" || strings.HasPrefix(line, ":") {
+				continue
+			}
+			got = append(got, line)
+		}
+		return got
+	}
+
+	if got := run("myfish::"); len(got) != 1 || got[0] != "myfish::restricted:" {
+		t.Errorf("myfish:: → %v", got)
+	}
+	got := run("myfish::restricted:sec")
+	found := false
+	for _, g := range got {
+		if g == "myfish::restricted:secrets.key" {
+			found = true
+		}
+		if !strings.HasPrefix(g, "myfish::restricted:sec") {
+			t.Errorf("unexpected candidate %q", g)
+		}
+	}
+	if !found {
+		t.Errorf("expected myfish::restricted:secrets.key in %v", got)
 	}
 }

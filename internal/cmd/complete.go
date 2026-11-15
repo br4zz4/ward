@@ -69,7 +69,8 @@ func completeDotPaths(_ *cobra.Command, _ []string, toComplete string) ([]string
 
 func completeScopes(tree map[string]*secrets.Node, toComplete string) ([]string, cobra.ShellCompDirective) {
 	var matches []string
-	if !strings.Contains(toComplete, ":") {
+	vault, _, qualified := secrets.SplitVaultQualifier(toComplete)
+	if !qualified || len(toComplete) == len(vault) {
 		for vault := range tree {
 			if strings.HasPrefix(vault+":", toComplete) {
 				matches = append(matches, vault+":")
@@ -78,8 +79,7 @@ func completeScopes(tree map[string]*secrets.Node, toComplete string) ([]string,
 		sort.Strings(matches)
 		return matches, cobra.ShellCompDirectiveNoSpace | cobra.ShellCompDirectiveNoFileComp
 	}
-	vault, _, _ := strings.Cut(toComplete, ":")
-	node, ok := tree[vault]
+	node, ok := tree[config.CanonicalVaultName(vault)]
 	if !ok || node.Children == nil {
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
