@@ -1,6 +1,6 @@
 ---
 title: ward set lê valor de arquivo (@path) e stdin (-)
-status: in_progress
+status: done
 created: 2026-11-15
 updated: 2026-11-15
 owner: "@o_porpino"
@@ -133,7 +133,7 @@ A tool MCP `ward_set` sempre grava literal: invoca `set --literal -- <path> <val
 
 Na 0.5.1, `ward set vault:scope.KEY @/tmp/secret.val` sai com 0 e grava a string `@/tmp/secret.val`. O valor corrompido só apareceu em runtime: foi passado como `workload_identity_provider` ao `google-github-actions/auth` e resultou em 403 no GCP, sem nenhum aviso no momento da escrita. `@file` é convenção conhecida (curl, gh), então o usuário espera esse comportamento. Hoje o valor só pode ir como argumento, o que deixa o segredo no histórico do shell e no `ps`, e dificulta passar valores longos (JSON de service account, PEM). Ler de arquivo ou stdin, com falha alta em qualquer erro de leitura, resolve o bug e esses dois problemas.
 
-Versão: **minor `0.6.0`** (feature nova). É uma quebra de comportamento para quem gravava `@...` de propósito: o comando passa a falhar com erro explícito, nunca a corromper em silêncio. A quebra fica registrada no README e na mensagem da tag.
+Versão: **minor `0.7.0`** (feature nova). É uma quebra de comportamento para quem gravava `@...` de propósito: o comando passa a falhar com erro explícito, nunca a corromper em silêncio. A quebra fica registrada no README e na mensagem da tag.
 
 # how
 
@@ -185,11 +185,11 @@ Sem telas (CLI).
 
 ### Task 6: documentação
 **Arquivos:** Modify `README.md` (seção `### ward set <scope> <value>`); `docs/CONTEXT.md` já ganhou o termo **Value source**.
-**Entrega:** tabela de value source, exemplos (`ward set app:ci.SA_JSON @sa.json`, `pbpaste | ward set app:k -`, `ward set --literal app:handle @org`), regras (quebra final, 1 MiB, UTF-8, path relativo ao cwd) e nota de compatibilidade da 0.6.0 ("values starting with `@` or equal to `-` are no longer stored literally; use `--literal` or `@@`").
+**Entrega:** tabela de value source, exemplos (`ward set app:ci.SA_JSON @sa.json`, `pbpaste | ward set app:k -`, `ward set --literal app:handle @org`), regras (quebra final, 1 MiB, UTF-8, path relativo ao cwd) e nota de compatibilidade da 0.7.0 ("values starting with `@` or equal to `-` are no longer stored literally; use `--literal` or `@@`").
 **Valida:** leitura do diff do README.
 
 ### Release (techleader, após o merge)
-Tag `v0.6.0` em `origin/main`, com mensagem que cita a quebra de comportamento, seguida de `asdf install ward 0.6.0 && asdf global ward 0.6.0` (ver `AGENTS.md`).
+Tag `v0.7.0` em `origin/main`, com mensagem que cita a quebra de comportamento, seguida de `asdf install ward 0.7.0 && asdf global ward 0.7.0` (ver `AGENTS.md`).
 
 ## SEQUENCE
 1. #<pr1> — set lê valor de arquivo e stdin
@@ -217,9 +217,9 @@ Merge in this order: #<pr1>
 - [x] Valor literal comum mantém o comportamento e o stderr não contém "(from" (e2e)
 - [x] MCP `ward_set` com `@/etc/hosts` grava literal (teste em `internal/mcp`)
 - [x] Nenhum path hardcoded com `/`: uso de `filepath` (revisão); suíte verde em macOS e Linux (CI)
-- [ ] Release `v0.6.0` publicado e instalado via asdf
+- [x] Release `v0.7.0` publicado e instalado via asdf (0.6.0 já existia; última era 0.6.2)
 
 ## documentation
 
-- `README.md` — seção `ward set`: value source, exemplos, regras e nota de compatibilidade da 0.6.0.
+- `README.md` — seção `ward set`: value source, exemplos, regras e nota de compatibilidade da 0.7.0.
 - `docs/CONTEXT.md` — termo **Value source** (feito junto com esta spec).
