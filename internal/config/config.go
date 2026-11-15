@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -218,12 +219,11 @@ func CheckVaultIdentities(vaults []Source) error {
 			return fmt.Errorf("duplicate vault name: %q and %q are the same vault", prev, v.Name)
 		}
 		canon[c] = v.Name
-		for _, e := range KeyEnvNames(v.Name) {
-			if prev, ok := envs[e]; ok {
-				return fmt.Errorf("vaults %q and %q derive the same key env var %s", prev, v.Name, e)
-			}
-			envs[e] = v.Name
+		e := KeyEnvNames(v.Name)[0]
+		if prev, ok := envs[e]; ok {
+			return fmt.Errorf("vaults %q and %q derive the same key env var %s", prev, v.Name, e)
 		}
+		envs[e] = v.Name
 	}
 	return nil
 }
@@ -235,8 +235,11 @@ func detectKeyFile(name string) (string, error) {
 	var firstData []byte
 	for _, cand := range KeyFileCandidates(name) {
 		data, err := os.ReadFile(cand)
-		if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
 			continue
+		}
+		if err != nil {
+			return "", fmt.Errorf("reading key file %s: %w", cand, err)
 		}
 		if first == "" {
 			first, firstData = cand, data

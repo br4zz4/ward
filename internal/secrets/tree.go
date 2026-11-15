@@ -1,6 +1,10 @@
 package secrets
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/br4zz4/ward/internal/config"
+)
 
 // NodeKind classifies what lives at a dot-path within a decrypted YAML tree.
 type NodeKind int
@@ -136,7 +140,7 @@ func (t *Tree) rootKey(seg string) string {
 	if _, ok := t.root[seg]; ok {
 		return seg
 	}
-	alias := seg + "::default"
+	alias := seg + config.NamespaceSep + config.DefaultSubVault
 	if _, ok := t.root[alias]; ok {
 		return alias
 	}

@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 
@@ -43,5 +45,29 @@ func TestCompleteScopes_subvault_cases(t *testing.T) {
 		if !reflect.DeepEqual(got, c.want) {
 			t.Errorf("completeScopes(%q) = %v, want %v", c.in, got, c.want)
 		}
+	}
+}
+
+func TestCompleteVaultNames_offers_canonical_names(t *testing.T) {
+	// arrange
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, ".ward"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	cfg := "vaults:\n  - name: myfish::default\n    path: .ward/vaults/myfish::default\n  - name: myfish::restricted\n    path: .ward/vaults/myfish::restricted\n"
+	if err := os.WriteFile(filepath.Join(dir, ".ward", "config.yaml"), []byte(cfg), 0644); err != nil {
+		t.Fatal(err)
+	}
+	orig, _ := os.Getwd()
+	t.Cleanup(func() { os.Chdir(orig) })
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	// act
+	got, _ := completeVaultNames(nil, nil, "")
+	// assert
+	want := []string{"myfish", "myfish::restricted"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %v, want %v", got, want)
 	}
 }

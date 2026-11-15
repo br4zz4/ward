@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -106,10 +107,14 @@ Sub-vaults use <namespace>::<name>, e.g. ward vault add myfish::restricted`,
 				fatal(err)
 			}
 
-			existing, _ := secrets.Discover([]string{vaultPath})
+			existing, err := secrets.Discover([]string{vaultPath})
+			if err != nil && !errors.Is(err, os.ErrNotExist) {
+				fatal(fmt.Errorf("reading %s: %w", vaultPath, err))
+			}
 			var token string
+			var cleanup func()
 			if len(existing) == 0 {
-				token, err = provisionVault(name, vaultPath)
+				token, cleanup, err = provisionVault(name, vaultPath)
 				if err != nil {
 					fatal(err)
 				}
@@ -117,6 +122,9 @@ Sub-vaults use <namespace>::<name>, e.g. ward vault add myfish::restricted`,
 
 			cfg.Vaults = append(cfg.Vaults, config.Source{Name: name, Path: vaultPath})
 			if err := config.Save(cfgPath, cfg); err != nil {
+				if cleanup != nil {
+					cleanup()
+				}
 				fatal(fmt.Errorf("updating %s: %w", cfgPath, err))
 			}
 			fmt.Printf("\n  %s✓%s vault %s%s%s added (%s%s%s)\n\n",
@@ -133,33 +141,49 @@ Sub-vaults use <namespace>::<name>, e.g. ward vault add myfish::restricted`,
 
 // provisionVault generates .ward/<name>.key, gitignores it, creates the vault
 // directory with an encrypted secrets.ward rooted at name, and returns the
-// portable key token.
-func provisionVault(name, vaultPath string) (string, error) {
+// portable key token plus a cleanup that undoes what it created.
+func provisionVault(name, vaultPath string) (token string, cleanup func(), err error) {
 	keyFile := ".ward/" + name + ".key"
-	if _, err := os.Stat(keyFile); err == nil {
-		return "", fmt.Errorf("%s already exists — remove it or pick another name", keyFile)
+	if _, statErr := os.Stat(keyFile); statErr == nil {
+		return "", nil, fmt.Errorf("%s already exists — remove it or pick another name", keyFile)
 	}
 	if err := os.MkdirAll(".ward", 0755); err != nil {
-		return "", fmt.Errorf("creating .ward/: %w", err)
-	}
-	if err := wardage.GenerateKey(keyFile); err != nil {
-		return "", err
-	}
-	token, err := encodeWardKey(keyFile)
-	if err != nil {
-		return "", err
+		return "", nil, fmt.Errorf("creating .ward/: %w", err)
 	}
 	if err := ensureGitignore(keyFile); err != nil {
-		return "", err
+		return "", nil, err
+	}
+	dirExisted := true
+	if _, statErr := os.Stat(vaultPath); statErr != nil {
+		dirExisted = false
+	}
+	cleanup = func() {
+		os.Remove(keyFile)
+		if !dirExisted {
+			os.RemoveAll(vaultPath)
+		} else {
+			os.Remove(vaultPath + "/secrets.ward")
+		}
+	}
+	fail := func(e error) (string, func(), error) {
+		cleanup()
+		return "", nil, e
+	}
+	if err := wardage.GenerateKey(keyFile); err != nil {
+		return fail(err)
+	}
+	token, err = encodeWardKey(keyFile)
+	if err != nil {
+		return fail(err)
 	}
 	if err := os.MkdirAll(vaultPath, 0755); err != nil {
-		return "", fmt.Errorf("creating %s/: %w", vaultPath, err)
+		return fail(fmt.Errorf("creating %s/: %w", vaultPath, err))
 	}
 	if err := encryptIfAbsent(vaultPath+"/secrets.ward", initSecretsStub(name), keyFile); err != nil {
-		return "", err
+		return fail(err)
 	}
 	if err := os.WriteFile(keyFile, []byte(token+"\n"), 0600); err != nil {
-		return "", fmt.Errorf("writing token to %s: %w", keyFile, err)
+		return fail(fmt.Errorf("writing token to %s: %w", keyFile, err))
 	}
-	return token, nil
+	return token, cleanup, nil
 }

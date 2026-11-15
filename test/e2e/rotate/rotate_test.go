@@ -5,10 +5,12 @@ package rotate_test
 import (
 	"encoding/base64"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	wardage "github.com/br4zz4/ward/internal/age"
 	"github.com/br4zz4/ward/test/e2e/testutil"
 )
 
@@ -430,5 +432,163 @@ func TestRotateKey_default_aliases_are_same_target(t *testing.T) {
 		if getCode != 0 || !testutil.Contains(out, "postgres://dev") {
 			t.Errorf("%s: default unreadable: %q", arg, out)
 		}
+	}
+}
+
+func initMyfish(t *testing.T) string {
+	t.Helper()
+	for _, k := range []string{"WARD_KEY", "WARD_KEY_MYFISH", "WARD_KEY_MYFISH_DEFAULT", "WARD_KEY_MYFISH_RESTRICTED"} {
+		t.Setenv(k, "")
+	}
+	dir := filepath.Join(t.TempDir(), "myfish")
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, code := testutil.Run(t, bin, dir, "init"); code != 0 {
+		t.Fatal("init failed")
+	}
+	if _, stderr, code := testutil.Run(t, bin, dir, "set", "myfish:secrets.dev.X", "v1"); code != 0 {
+		t.Fatalf("set failed: %s", stderr)
+	}
+	return dir
+}
+
+func writeFile(t *testing.T, path, content string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestRotateKey_default_with_both_key_files_updates_both(t *testing.T) {
+	// arrange
+	dir := initMyfish(t)
+	long := filepath.Join(dir, ".ward", "myfish::default.key")
+	short := filepath.Join(dir, ".ward", "myfish.key")
+	original, err := os.ReadFile(long)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(short, original, 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	// act
+	_, stderr, code := testutil.Run(t, bin, dir, "rotate-key")
+
+	// assert
+	if code != 0 {
+		t.Fatalf("exit %d: %s", code, stderr)
+	}
+	a, _ := os.ReadFile(long)
+	b, _ := os.ReadFile(short)
+	if string(a) != string(b) {
+		t.Error("both key files must hold the same new key")
+	}
+	if string(a) == string(original) {
+		t.Error("key must have changed")
+	}
+	out, getErr, getCode := testutil.Run(t, bin, dir, "get", "myfish:secrets.dev.X")
+	if getCode != 0 || !testutil.Contains(out, "v1") {
+		t.Errorf("project must still load: code=%d out=%q err=%q", getCode, out, getErr)
+	}
+}
+
+func TestRotateKey_shared_explicit_key_file_errors_and_changes_nothing(t *testing.T) {
+	// arrange
+	dir := newMyfishTwoVaults(t)
+	cfg := "vaults:\n" +
+		"  - name: myfish::default\n    path: .ward/vaults/myfish::default\n    encryption:\n      key_file: .ward/shared.key\n" +
+		"  - name: myfish::restricted\n    path: .ward/vaults/myfish::restricted\n    encryption:\n      key_file: .ward/shared.key\n"
+	raw, _ := os.ReadFile(filepath.Join(dir, ".ward", "myfish::default.key"))
+	writeFile(t, filepath.Join(dir, ".ward", "shared.key"), string(raw))
+	writeFile(t, filepath.Join(dir, ".ward", "config.yaml"), cfg)
+	before := readTree(t, dir)
+
+	// act
+	_, stderr, code := testutil.Run(t, bin, dir, "rotate-key", "myfish::restricted")
+
+	// assert
+	if code == 0 {
+		t.Fatal("expected failure")
+	}
+	for _, want := range []string{"myfish::restricted", "myfish", ".ward/shared.key"} {
+		if !testutil.Contains(stderr, want) {
+			t.Errorf("stderr %q missing %q", stderr, want)
+		}
+	}
+	after := readTree(t, dir)
+	if len(after) != len(before) {
+		t.Errorf("files appeared or vanished: %d -> %d", len(before), len(after))
+	}
+	for path, content := range before {
+		if after[path] != content {
+			t.Errorf("%s changed", path)
+		}
+	}
+}
+
+func TestRotateKey_vault_using_global_key_suggests_project_rotation(t *testing.T) {
+	// arrange
+	dir := initMyfish(t)
+	commons := filepath.Join(dir, "shared", ".ward", "vaults", "commons")
+	writeFile(t, filepath.Join(commons, "main.ward"), "-----BEGIN AGE ENCRYPTED FILE-----\nxxx\n-----END AGE ENCRYPTED FILE-----\n")
+	if _, stderr, code := testutil.Run(t, bin, dir, "vault", "add", "commons", "shared/.ward/vaults/commons"); code != 0 {
+		t.Fatalf("vault add: %s", stderr)
+	}
+
+	// act
+	_, stderr, code := testutil.Run(t, bin, dir, "rotate-key", "commons")
+
+	// assert
+	if code == 0 {
+		t.Fatal("expected failure")
+	}
+	if !testutil.Contains(stderr, "ward rotate-key") || !testutil.Contains(stderr, "without a vault") {
+		t.Errorf("expected suggestion to rotate without a vault, got %q", stderr)
+	}
+}
+
+func TestRotateKey_backup_outside_ward_dir_is_gitignored(t *testing.T) {
+	// arrange
+	for _, k := range []string{"WARD_KEY", "WARD_KEY_APP"} {
+		t.Setenv(k, "")
+	}
+	dir := t.TempDir()
+	if out, err := exec.Command("git", "-C", dir, "init", "-q").CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v %s", err, out)
+	}
+	keyPath := filepath.Join(dir, "secrets", "app.key")
+	if err := os.MkdirAll(filepath.Dir(keyPath), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := wardage.GenerateKey(keyPath); err != nil {
+		t.Fatal(err)
+	}
+	vaultDir := filepath.Join(dir, ".ward", "vaults", "app")
+	os.MkdirAll(vaultDir, 0755)
+	if err := (wardage.AgeArmorDecryptor{KeyFile: keyPath}).Encrypt(filepath.Join(vaultDir, "main.ward"), []byte("app:\n  main:\n    k: v\n")); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, filepath.Join(dir, ".ward", "config.yaml"),
+		"encryption:\n  key_file: secrets/app.key\nvaults:\n  - name: app\n    path: .ward/vaults/app\n")
+
+	// act
+	_, stderr, code := testutil.Run(t, bin, dir, "rotate-key")
+
+	// assert
+	if code != 0 {
+		t.Fatalf("exit %d: %s", code, stderr)
+	}
+	matches, _ := filepath.Glob(filepath.Join(dir, "secrets", "app.key.bkp-*"))
+	if len(matches) != 1 {
+		t.Fatalf("expected backup next to the key, got %v", matches)
+	}
+	gi, _ := os.ReadFile(filepath.Join(dir, ".gitignore"))
+	if !testutil.Contains(string(gi), "secrets/*.bkp-*") {
+		t.Errorf(".gitignore missing secrets/*.bkp-*: %q", gi)
 	}
 }

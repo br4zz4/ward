@@ -73,9 +73,12 @@ func rotateProjectKey(cfg *config.Config) {
 	if err != nil {
 		fatal(err)
 	}
+	if err := mirrorKeyFiles(canonical, vaultNames(cfg)...); err != nil {
+		fatal(err)
+	}
 	fmt.Println("Key rotated successfully.")
 	fmt.Printf("Old key backed up to: %s\n", bkpPath)
-	protectBackups()
+	protectBackups(canonical)
 }
 
 // distinctKeyVaults returns the vault names when their effective key files
@@ -105,7 +108,16 @@ func rotateOneVault(cfg *config.Config, name string) {
 	}
 	keyPath := v.Encryption.KeyFile
 	if keyPath == "" {
+		if _, envToken, _ := vaultEnvToken(v.Name); envToken == "" && cfg.Encryption.KeyFile != "" {
+			fatal(fmt.Errorf("vault %s uses the project key %s — run `ward rotate-key` without a vault", v.CanonicalName(), cfg.Encryption.KeyFile))
+		}
 		fatal(fmt.Errorf("rotate-key requires a key file for vault %s — the key is only available via env, so the new key would have nowhere to be stored", v.CanonicalName()))
+	}
+	for i := range cfg.Vaults {
+		other := &cfg.Vaults[i]
+		if other.CanonicalName() != v.CanonicalName() && other.Encryption.KeyFile == keyPath {
+			fatal(fmt.Errorf("key file %s is shared by vaults %s and %s — rotating it would lock %s out", keyPath, v.CanonicalName(), other.CanonicalName(), other.CanonicalName()))
+		}
 	}
 	if _, err := os.Stat(keyPath); err != nil {
 		fatal(fmt.Errorf("rotate-key requires a key file for vault %s — %s not found", v.CanonicalName(), keyPath))
@@ -123,19 +135,12 @@ func rotateOneVault(cfg *config.Config, name string) {
 		fatal(err)
 	}
 
+	if err := mirrorKeyFiles(keyPath, v.Name); err != nil {
+		fatal(err)
+	}
 	newKey, err := os.ReadFile(keyPath)
 	if err != nil {
 		fatal(fmt.Errorf("reading new key: %w", err))
-	}
-	for _, cand := range config.KeyFileCandidates(v.Name) {
-		if cand == keyPath {
-			continue
-		}
-		if _, err := os.Stat(cand); err == nil {
-			if err := os.WriteFile(cand, newKey, 0600); err != nil {
-				fatal(fmt.Errorf("updating %s: %w", cand, err))
-			}
-		}
 	}
 
 	fmt.Printf("Key for vault %s rotated successfully.\n", v.CanonicalName())
@@ -149,13 +154,43 @@ func rotateOneVault(cfg *config.Config, name string) {
 	if len(envs) > 1 {
 		fmt.Printf("  (%s is accepted as well)\n", envs[1])
 	}
-	protectBackups()
+	protectBackups(keyPath)
 }
 
-// protectBackups keeps key backups out of git: *.key does not match them.
-func protectBackups() {
-	_ = ensureGitignore(".ward/*.key.bkp-*")
-	_ = ensureGitignore(".ward/.key.bkp-*")
+func protectBackups(keyPath string) {
+	pattern := filepath.ToSlash(filepath.Join(filepath.Dir(keyPath), "*.bkp-*"))
+	if err := ensureGitignore(pattern); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: could not add %s to .gitignore — do not commit key backups: %v\n", pattern, err)
+	}
+}
+
+func vaultNames(cfg *config.Config) []string {
+	names := make([]string, len(cfg.Vaults))
+	for i, v := range cfg.Vaults {
+		names[i] = v.Name
+	}
+	return names
+}
+
+func mirrorKeyFiles(canonical string, names ...string) error {
+	newKey, err := os.ReadFile(canonical)
+	if err != nil {
+		return fmt.Errorf("reading new key: %w", err)
+	}
+	for _, name := range names {
+		for _, cand := range config.KeyFileCandidates(name) {
+			if cand == canonical {
+				continue
+			}
+			if _, err := os.Stat(cand); err != nil {
+				continue
+			}
+			if err := os.WriteFile(cand, newKey, 0600); err != nil {
+				return fmt.Errorf("updating %s: %w", cand, err)
+			}
+		}
+	}
+	return nil
 }
 
 // canonicalKeyFile returns the path where the key is stored on disk (from config or default).

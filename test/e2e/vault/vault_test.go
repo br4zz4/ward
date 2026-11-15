@@ -242,3 +242,47 @@ func TestVaultAdd_rejects_colliding_envs(t *testing.T) {
 		t.Errorf("stderr %q missing env name", stderr)
 	}
 }
+
+func TestVaultAdd_rejects_path_like_names(t *testing.T) {
+	for _, name := range []string{"../x", "a/b", `a\b`} {
+		// arrange
+		dir := newMyfish(t)
+		// act
+		_, stderr, code := testutil.Run(t, bin, dir, "vault", "add", name)
+		// assert
+		if code == 0 {
+			t.Errorf("%q: expected failure", name)
+		}
+		if !strings.Contains(stderr, "invalid vault name") {
+			t.Errorf("%q: stderr %q missing 'invalid vault name'", name, stderr)
+		}
+	}
+}
+
+func TestVaultAdd_failure_midway_leaves_no_orphan_key(t *testing.T) {
+	// arrange
+	dir := newMyfish(t)
+	cfgPath := filepath.Join(dir, ".ward", "config.yaml")
+	if err := os.Chmod(cfgPath, 0444); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(cfgPath, 0644) })
+	if f, err := os.OpenFile(cfgPath, os.O_WRONLY, 0); err == nil {
+		f.Close()
+		t.Skip("config.yaml still writable (running as root?)")
+	}
+
+	// act
+	_, _, code := testutil.Run(t, bin, dir, "vault", "add", "myfish::restricted")
+
+	// assert
+	if code == 0 {
+		t.Fatal("expected failure when config cannot be written")
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".ward", "myfish::restricted.key")); err == nil {
+		t.Error("orphan key file left behind")
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".ward", "vaults", "myfish::restricted")); err == nil {
+		t.Error("orphan vault folder left behind")
+	}
+}
