@@ -130,3 +130,48 @@ func TestResolveScopes_empty_whole_tree(t *testing.T) {
 		t.Errorf("expected whole-tree root, got %v", rootPaths(rs))
 	}
 }
+
+func TestSplitVaultQualifier(t *testing.T) {
+	cases := []struct {
+		in            string
+		wantVault     string
+		wantRest      string
+		wantQualified bool
+	}{
+		{"myfish::restricted:secrets.production", "myfish::restricted", "secrets.production", true},
+		{"myfish:secrets.dev", "myfish", "secrets.dev", true},
+		{"myfish::restricted", "myfish::restricted", "", true},
+		{"secrets.dev", "", "secrets.dev", false},
+		{":secrets.dev", "", "secrets.dev", false},
+		{"a.b:c", "", "a.b:c", false},
+	}
+	for _, c := range cases {
+		// act
+		vault, rest, qualified := SplitVaultQualifier(c.in)
+		// assert
+		if vault != c.wantVault || rest != c.wantRest || qualified != c.wantQualified {
+			t.Errorf("SplitVaultQualifier(%q) = (%q,%q,%v), want (%q,%q,%v)",
+				c.in, vault, rest, qualified, c.wantVault, c.wantRest, c.wantQualified)
+		}
+	}
+}
+
+func TestParseScope_canonicalizes_vault(t *testing.T) {
+	cases := []struct {
+		in         string
+		wantVault  string
+		wantSecret string
+	}{
+		{"myfish::default:secrets.dev", "myfish", "secrets.dev"},
+		{"myfish::restricted:secrets.x", "myfish::restricted", "secrets.x"},
+	}
+	for _, c := range cases {
+		// act
+		got := ParseScope(c.in)
+		// assert
+		if got.Vault != c.wantVault || got.SecretPath != c.wantSecret {
+			t.Errorf("ParseScope(%q) = {%q,%q}, want {%q,%q}",
+				c.in, got.Vault, got.SecretPath, c.wantVault, c.wantSecret)
+		}
+	}
+}

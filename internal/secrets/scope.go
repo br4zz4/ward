@@ -3,6 +3,8 @@ package secrets
 import (
 	"sort"
 	"strings"
+
+	"github.com/br4zz4/ward/internal/config"
 )
 
 // Scope is a parsed exec/envs/tree argument: an optional vault qualifier plus a
@@ -17,15 +19,41 @@ type Scope struct {
 // dot — a colon appearing inside the dotted path is part of the secret-path. A
 // leading colon means an empty vault (overlay), same as no colon at all.
 func ParseScope(s string) Scope {
-	colon := strings.IndexByte(s, ':')
-	if colon < 0 {
-		return Scope{SecretPath: s}
+	vault, rest, qualified := SplitVaultQualifier(s)
+	if !qualified {
+		return Scope{SecretPath: rest}
 	}
-	dot := strings.IndexByte(s, '.')
-	if dot >= 0 && dot < colon {
-		return Scope{SecretPath: s}
+	return Scope{Vault: config.CanonicalVaultName(vault), SecretPath: rest}
+}
+
+// SplitVaultQualifier splits s into a vault qualifier and the rest. The
+// separator is the first lone colon (not part of "::") before the first dot.
+// With no lone colon but a "::" before the first dot, the whole string is a
+// vault name. A leading colon means no qualifier.
+func SplitVaultQualifier(s string) (vault, rest string, qualified bool) {
+	limit := len(s)
+	if dot := strings.IndexByte(s, '.'); dot >= 0 {
+		limit = dot
 	}
-	return Scope{Vault: s[:colon], SecretPath: s[colon+1:]}
+	hasNS := false
+	for i := 0; i < limit; i++ {
+		if s[i] != ':' {
+			continue
+		}
+		if i+1 < len(s) && s[i+1] == ':' {
+			hasNS = true
+			i++
+			continue
+		}
+		if i == 0 {
+			return "", s[1:], false
+		}
+		return s[:i], s[i+1:], true
+	}
+	if hasNS {
+		return s, "", true
+	}
+	return "", s, false
 }
 
 // TreePath returns the internal tree path for a scope: vault + "." + secret-path

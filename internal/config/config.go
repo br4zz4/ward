@@ -154,15 +154,27 @@ func Load(path string) (*Config, error) {
 		}
 	}
 
+	for _, v := range cfg.Vaults {
+		if err := ValidateVaultName(v.Name); err != nil {
+			return nil, fmt.Errorf("%w in %s", err, path)
+		}
+	}
+	if err := checkVaultIdentities(cfg.Vaults); err != nil {
+		return nil, fmt.Errorf("%w in %s", err, path)
+	}
+
 	// auto-detect per-vault key when no explicit encryption is set on the vault
 	for i := range cfg.Vaults {
 		v := &cfg.Vaults[i]
 		if v.Encryption.KeyEnv != "" || v.Encryption.KeyFile != "" {
 			continue
 		}
-		candidate := filepath.Join(".ward", v.Name+".key")
-		if _, err := os.Stat(candidate); err == nil {
-			v.Encryption.KeyFile = candidate
+		found, err := detectKeyFile(v.Name)
+		if err != nil {
+			return nil, err
+		}
+		if found != "" {
+			v.Encryption.KeyFile = found
 		}
 	}
 
@@ -195,11 +207,53 @@ func Load(path string) (*Config, error) {
 	return cfg, nil
 }
 
+// checkVaultIdentities rejects vaults that share a canonical name or whose
+// derived key env vars overlap (e.g. myfish-restricted and myfish::restricted).
+func checkVaultIdentities(vaults []Source) error {
+	canon := map[string]string{}
+	envs := map[string]string{}
+	for _, v := range vaults {
+		c := v.CanonicalName()
+		if prev, ok := canon[c]; ok {
+			return fmt.Errorf("duplicate vault name: %q and %q are the same vault", prev, v.Name)
+		}
+		canon[c] = v.Name
+		for _, e := range KeyEnvNames(v.Name) {
+			if prev, ok := envs[e]; ok {
+				return fmt.Errorf("vaults %q and %q derive the same key env var %s", prev, v.Name, e)
+			}
+			envs[e] = v.Name
+		}
+	}
+	return nil
+}
+
+// detectKeyFile returns the key file auto-detected for a vault, "" when none
+// exists. When several candidates exist with different contents it errors.
+func detectKeyFile(name string) (string, error) {
+	var first string
+	var firstData []byte
+	for _, cand := range KeyFileCandidates(name) {
+		data, err := os.ReadFile(cand)
+		if err != nil {
+			continue
+		}
+		if first == "" {
+			first, firstData = cand, data
+			continue
+		}
+		if string(data) != string(firstData) {
+			return "", fmt.Errorf("key files %s and %s for vault %q have different contents", first, cand, name)
+		}
+	}
+	return first, nil
+}
+
 // KeyEnvName builds the per-vault key env var name (WARD_KEY_<NAME>) from a
 // vault name, sanitising characters that are invalid in shell env var names:
 // hyphens and dots become underscores, and the result is upper-cased. e.g.
 // "messenger-api" → "WARD_KEY_MESSENGER_API".
 func KeyEnvName(vaultName string) string {
-	safe := strings.NewReplacer("-", "_", ".", "_").Replace(vaultName)
+	safe := strings.NewReplacer("::", "_", "-", "_", ".", "_").Replace(vaultName)
 	return "WARD_KEY_" + strings.ToUpper(safe)
 }

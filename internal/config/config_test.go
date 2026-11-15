@@ -466,3 +466,179 @@ func TestLoad_vault_path_expand_error_propagates(t *testing.T) {
 		t.Fatal("expected error from failing command substitution in vault path")
 	}
 }
+
+func chdirTemp(t *testing.T, dir string) {
+	t.Helper()
+	orig, _ := os.Getwd()
+	t.Cleanup(func() { os.Chdir(orig) })
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func writeKeyFile(t *testing.T, dir, name, content string) {
+	t.Helper()
+	wardDir := filepath.Join(dir, ".ward")
+	if err := os.MkdirAll(wardDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(wardDir, name), []byte(content), 0600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestLoad_rejects_invalid_vault_name(t *testing.T) {
+	for _, name := range []string{"a::b::c", "::b", "a::", "a:b"} {
+		// arrange
+		dir := t.TempDir()
+		cfgPath := writeConfig(t, dir, "vaults:\n  - name: \""+name+"\"\n    path: .ward/vaults/x\n")
+		// act
+		_, err := Load(cfgPath)
+		// assert
+		if err == nil {
+			t.Errorf("%q: expected error", name)
+			continue
+		}
+		if !strings.Contains(err.Error(), "invalid vault name") {
+			t.Errorf("%q: unexpected error: %v", name, err)
+		}
+	}
+}
+
+func TestLoad_rejects_default_declared_twice(t *testing.T) {
+	// arrange
+	dir := t.TempDir()
+	cfgPath := writeConfig(t, dir, `
+vaults:
+  - name: myfish
+    path: .ward/vaults/myfish
+  - name: myfish::default
+    path: .ward/vaults/myfish::default
+`)
+	// act
+	_, err := Load(cfgPath)
+	// assert
+	if err == nil {
+		t.Fatal("expected error for duplicate canonical name")
+	}
+	if !strings.Contains(err.Error(), "duplicate") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestLoad_rejects_colliding_derived_envs(t *testing.T) {
+	// arrange
+	dir := t.TempDir()
+	cfgPath := writeConfig(t, dir, `
+vaults:
+  - name: myfish-restricted
+    path: .ward/vaults/a
+  - name: myfish::restricted
+    path: .ward/vaults/b
+`)
+	// act
+	_, err := Load(cfgPath)
+	// assert
+	if err == nil {
+		t.Fatal("expected error for colliding envs")
+	}
+	for _, want := range []string{"WARD_KEY_MYFISH_RESTRICTED", "myfish-restricted", "myfish::restricted"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q missing %q", err.Error(), want)
+		}
+	}
+}
+
+func TestLoad_subvault_key_file_auto_detected(t *testing.T) {
+	// arrange
+	dir := t.TempDir()
+	writeKeyFile(t, dir, "myfish::restricted.key", "AGE-SECRET-KEY-1FAKE")
+	chdirTemp(t, dir)
+	cfgPath := writeConfig(t, dir, `
+vaults:
+  - name: myfish::restricted
+    path: .ward/vaults/myfish::restricted
+`)
+	// act
+	cfg, err := Load(cfgPath)
+	// assert
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Vaults[0].Encryption.KeyFile != ".ward/myfish::restricted.key" {
+		t.Errorf("got %q", cfg.Vaults[0].Encryption.KeyFile)
+	}
+	if cfg.Vaults[0].Name != "myfish::restricted" {
+		t.Errorf("name changed: %q", cfg.Vaults[0].Name)
+	}
+}
+
+func TestLoad_default_vault_detects_legacy_key_file(t *testing.T) {
+	// arrange
+	dir := t.TempDir()
+	writeKeyFile(t, dir, "myfish.key", "AGE-SECRET-KEY-1FAKE")
+	chdirTemp(t, dir)
+	cfgPath := writeConfig(t, dir, `
+vaults:
+  - name: myfish::default
+    path: .ward/vaults/myfish::default
+`)
+	// act
+	cfg, err := Load(cfgPath)
+	// assert
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Vaults[0].Encryption.KeyFile != ".ward/myfish.key" {
+		t.Errorf("got %q", cfg.Vaults[0].Encryption.KeyFile)
+	}
+	if cfg.Vaults[0].Name != "myfish::default" {
+		t.Errorf("name changed: %q", cfg.Vaults[0].Name)
+	}
+}
+
+func TestLoad_default_vault_divergent_key_files_error(t *testing.T) {
+	// arrange
+	dir := t.TempDir()
+	writeKeyFile(t, dir, "myfish.key", "AGE-SECRET-KEY-1AAA")
+	writeKeyFile(t, dir, "myfish::default.key", "AGE-SECRET-KEY-1BBB")
+	chdirTemp(t, dir)
+	cfgPath := writeConfig(t, dir, `
+vaults:
+  - name: myfish
+    path: .ward/vaults/myfish
+`)
+	// act
+	_, err := Load(cfgPath)
+	// assert
+	if err == nil {
+		t.Fatal("expected error for divergent key files")
+	}
+	for _, want := range []string{".ward/myfish.key", ".ward/myfish::default.key"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q missing %q", err.Error(), want)
+		}
+	}
+}
+
+func TestLoad_default_vault_equal_key_files_ok(t *testing.T) {
+	// arrange
+	dir := t.TempDir()
+	writeKeyFile(t, dir, "myfish.key", "AGE-SECRET-KEY-1AAA")
+	writeKeyFile(t, dir, "myfish::default.key", "AGE-SECRET-KEY-1AAA")
+	chdirTemp(t, dir)
+	cfgPath := writeConfig(t, dir, `
+vaults:
+  - name: myfish
+    path: .ward/vaults/myfish
+`)
+	// act
+	cfg, err := Load(cfgPath)
+	// assert
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Vaults[0].Encryption.KeyFile != ".ward/myfish.key" {
+		t.Errorf("got %q", cfg.Vaults[0].Encryption.KeyFile)
+	}
+}
