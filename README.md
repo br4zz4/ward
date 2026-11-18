@@ -372,7 +372,7 @@ aborts without writing, and the success line shows the origin
 (`(from <path>)` / `(from stdin)`), never the value. The MCP `ward_set` tool
 always stores the value literally.
 
-**Compat break (0.6.0):** values starting with `@` or equal to `-` are no
+**Compat break (0.7.0):** values starting with `@` or equal to `-` are no
 longer stored literally; use `--literal` or `@@`.
 
 - Updates the value when the path already lives in exactly one file.
