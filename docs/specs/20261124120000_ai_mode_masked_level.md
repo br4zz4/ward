@@ -496,8 +496,8 @@ Merge in this order: #<pr1> #<pr2> #<pr3> #<pr4> #<pr5>
 - [x] Recusa do `get` cita exec, check e `--from`, e não cita `ward get` (unit + e2e)
 - [x] Shell humano: sem agente na cadeia, `ward secrets | cat` em claro; agente na cadeia + TTY em claro (testes existentes de `ai_mode_test.go` + e2e de `agent_detection_test.go` verdes)
 - [x] Suíte verde em macOS e Linux (CI)
-- [ ] Releases `v0.7.2` (a `v0.7.1` já existia), `v0.8.0` (tag destaca o novo default), `v0.9.0`, `v0.10.0`, `v0.10.1` publicados e instalados via `mise use -g ward@<versão>`
-- [ ] Banner `FINISHED` impresso como última saída (`br4zz4:finish`, Step 7), só com todos os itens acima marcados
+- [x] Releases `v0.7.2` (a `v0.7.1` já existia), `v0.8.0` (tag destaca o novo default), `v0.9.0`, `v0.10.0`, `v0.10.1` publicados e instalados via `mise use -g ward@<versão>`
+- [x] Banner `FINISHED` impresso como última saída (`br4zz4:finish`, Step 7), só com todos os itens acima marcados
 
 ## documentation
 
