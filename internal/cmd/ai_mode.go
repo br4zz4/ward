@@ -225,34 +225,33 @@ func aiModeReason() string {
 
 // aiModeRefusal prints a styled refusal explaining that secret values are
 // never exposed in AI mode. It must NOT tell the agent to run `ward get` (that
-// would read the value): the agent may EXECUTE a command that uses the secret,
-// but must never READ it.
+// would read the value): the agent may use, check or copy a secret, but must
+// never read it.
 func aiModeRefusal(scope string) {
 	fmt.Fprintf(os.Stderr,
-		"\n  %s✗ AI mode active — secret values are never exposed in AI context%s\n\n"+
-			"  %s→%s you may EXECUTE commands that use the secret, but never READ it:\n\n"+
-			"      %sward exec -- sh -c '<command using the env var>'%s\n\n"+
-			"      (e.g. ward exec -- sh -c 'curl -H \"Authorization: Bearer $API_KEY\" https://api.example.com')\n\n"+
-			"  %s%s%s\n\n",
-		clrLightRed, clrReset,
-		clrGray, clrReset,
-		clrBold, clrReset,
-		clrGray, aiModeReason(), clrReset)
+		"\n  %s✗ AI mode active — secret values are never exposed in AI context%s\n\n%s  %s%s%s\n\n",
+		clrLightRed, clrReset, aiGuidance(), clrGray, aiModeReason(), clrReset)
 	os.Exit(exitAIRefusal)
 }
 
+// aiGuidance lists what an agent may do instead of reading a value: use it,
+// check it against a value held elsewhere, or copy it to another secret.
+func aiGuidance() string {
+	return fmt.Sprintf(
+		"  %s→%s you may USE, CHECK or COPY a secret, but never READ it:\n\n"+
+			"      %suse%s     ward exec -- sh -c '<command using the env var>'\n"+
+			"              (e.g. ward exec -- sh -c 'curl -H \"Authorization: Bearer $API_KEY\" https://api.example.com')\n"+
+			"      %scheck%s   ward check <scope> @<file>      (or: <cmd> | ward check <scope> -)\n"+
+			"      %scopy%s    ward set <dst-scope> --from <src-scope>\n\n",
+		clrGray, clrReset, clrBold, clrReset, clrBold, clrReset, clrBold, clrReset)
+}
+
 // aiModeRefusePlaintext refuses a command that would print decrypted file
-// contents to stdout, pointing at the on-disk alternative.
+// contents to stdout, pointing at what an agent may do instead.
 func aiModeRefusePlaintext(command string) {
 	fmt.Fprintf(os.Stderr,
-		"\n  %s✗ AI mode active — `ward %s` would print decrypted secrets into AI context%s\n\n"+
-			"  %s→%s you may EXECUTE commands that use the secret, but never READ it:\n\n"+
-			"      %sward exec -- sh -c '<command using the env var>'%s\n\n"+
-			"  %s%s%s\n\n",
-		clrLightRed, command, clrReset,
-		clrGray, clrReset,
-		clrBold, clrReset,
-		clrGray, aiModeReason(), clrReset)
+		"\n  %s✗ AI mode active — `ward %s` would print decrypted secrets into AI context%s\n\n%s  %s%s%s\n\n",
+		clrLightRed, command, clrReset, aiGuidance(), clrGray, aiModeReason(), clrReset)
 	os.Exit(exitAIRefusal)
 }
 
