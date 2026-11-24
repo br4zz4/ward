@@ -26,6 +26,18 @@ type Origin struct {
 	Snippet string
 }
 
+// SnippetFilter, when set, rewrites an origin snippet (a raw "key: value" YAML
+// line) before it is printed, so callers can keep values out of conflict output.
+var SnippetFilter func(snippet string) string
+
+// DisplaySnippet returns the snippet in the form that may be printed.
+func DisplaySnippet(snippet string) string {
+	if SnippetFilter == nil {
+		return snippet
+	}
+	return SnippetFilter(snippet)
+}
+
 // Node is either a leaf value with an origin, or a nested map.
 type Node struct {
 	Value     interface{}
@@ -65,7 +77,7 @@ func (e *ConflictError) Error() string {
 					colorLightRed, s.Line, colorReset,
 				)
 				if s.Snippet != "" {
-					fmt.Fprintf(&sb, "    %s%s%s\n", colorGray, s.Snippet, colorReset)
+					fmt.Fprintf(&sb, "    %s%s%s\n", colorGray, DisplaySnippet(s.Snippet), colorReset)
 				}
 			} else {
 				fmt.Fprintf(&sb, "  %s%s%s\n",

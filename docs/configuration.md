@@ -434,7 +434,7 @@ these holds:
 | `--ai-mode` flag | Explicit, per invocation. |
 | `WARD_AI_MODE` | `1`/`true` on (level from the config); `strict`/`masked` on, forcing that level; `0`/`false` off, including auto-detection; empty or unset falls back to auto-detection; any other value fails closed: on, strict, with a warning on stderr. |
 | Agent in the parent process chain | Auto-detection: ward walks its parent pids and matches known agent binaries (`opencode`, `claude`, `codex`, `cursor-agent`, ...). Skipped when stdout is a terminal, so a human shell is never blocked — even one inherited from an agent. |
-| MCP server | `ward --mcp` runs its read tools with `--ai-mode` internally. |
+| MCP server | `ward --mcp` runs every subprocess with `WARD_AI_MODE=1`; the level comes from the project config. |
 
 Use `WARD_AI_MODE=0` to opt out of auto-detection in a shell that sits inside an
 agent's environment. A human shell never turns AI mode on by itself: without an
@@ -472,7 +472,7 @@ seed, never the generated code.
 | `check <scope> <value-source>` | allowed (`match`/`differs`) | allowed |
 | `set <dst> --from <src>` | allowed | allowed |
 
-Every refusal exits with status 3 and tells the agent what it may do instead:
+Every refusal exits with status 3 (the `exec` env-dump guard keeps status 1) and tells the agent what it may do instead:
 use the secret (`ward exec`), check it against a value held elsewhere
 (`ward check`) or copy it (`ward set <dst> --from <src>`). The MCP server runs its subprocesses with
 `WARD_AI_MODE=1`, so the level comes from the project config; `ward_get` returns

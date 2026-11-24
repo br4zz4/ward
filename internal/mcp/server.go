@@ -59,10 +59,7 @@ func run(args ...string) (string, error) {
 
 const exitAIRefusal = 3
 
-// runExit runs ward and returns its stdout and exit status. A non-zero status
-// is not an error here: callers decide what each status means. err is set only
-// when the process could not be run at all.
-func runExit(args ...string) (stdout string, code int, err error) {
+func runExit(args ...string) (stdout, stderr string, code int, err error) {
 	bin, exeErr := os.Executable()
 	if exeErr != nil {
 		bin = "ward"
@@ -73,18 +70,16 @@ func runExit(args ...string) (stdout string, code int, err error) {
 	cmd.Stdout = &outBuf
 	cmd.Stderr = &errBuf
 	runErr := cmd.Run()
-	text := stripANSI(strings.TrimSpace(outBuf.String()))
+	stdout = stripANSI(strings.TrimSpace(outBuf.String()))
+	stderr = stripANSI(strings.TrimSpace(errBuf.String()))
 	if runErr == nil {
-		return text, 0, nil
+		return stdout, stderr, 0, nil
 	}
 	var exitErr *exec.ExitError
 	if errors.As(runErr, &exitErr) {
-		if exitErr.ExitCode() != exitAIRefusal {
-			text = stripANSI(strings.TrimSpace(errBuf.String()))
-		}
-		return text, exitErr.ExitCode(), nil
+		return stdout, stderr, exitErr.ExitCode(), nil
 	}
-	return "", -1, runErr
+	return "", "", -1, runErr
 }
 
 func runWithStdin(stdin string, args ...string) (string, error) {
@@ -195,7 +190,7 @@ func Serve() error {
 			if p == "" {
 				return ok(aiGetInstruction("", "")), nil
 			}
-			out, code, err := runExit(dirArgs(req.GetString("dir", ""), "get", p)...)
+			out, errText, code, err := runExit(dirArgs(req.GetString("dir", ""), "get", "--", p)...)
 			if err != nil {
 				return fail(err), nil
 			}
@@ -205,7 +200,7 @@ func Serve() error {
 			case exitAIRefusal:
 				return ok(aiGetInstruction(p, "")), nil
 			}
-			return fail(errors.New(out)), nil
+			return fail(errors.New(errText)), nil
 		},
 	)
 
@@ -465,17 +460,20 @@ func Serve() error {
 		func(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			path := req.GetString("path", "")
 			valueFile := req.GetString("value_file", "")
-			out, code, err := runExit(dirArgs(req.GetString("dir", ""), "check", "--", path, "@"+valueFile)...)
+			if valueFile == "" || strings.HasPrefix(valueFile, "@") {
+				return fail(errors.New("value_file must be a file path and not start with '@'")), nil
+			}
+			out, errText, code, err := runExit(dirArgs(req.GetString("dir", ""), "check", "--", path, "@"+valueFile)...)
 			if err != nil {
 				return fail(err), nil
 			}
-			switch code {
-			case 0:
+			switch {
+			case code == 0 && out == "match":
 				return ok("match"), nil
-			case 1:
+			case code == 1 && out == "differs":
 				return ok("differs"), nil
 			}
-			return fail(errors.New(out)), nil
+			return fail(errors.New(errText)), nil
 		},
 	)
 

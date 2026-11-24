@@ -377,8 +377,6 @@ func printEngineWarnings(eng *ward.Engine) {
 	}
 }
 
-// errorExitCode is the exit status of every fatal error. It is 1 everywhere
-// except `ward check`, which reserves 1 for "differs" and uses 2 for errors.
 var errorExitCode = 1
 
 // fatal prints err to stderr and exits with errorExitCode.
@@ -614,7 +612,7 @@ func collectListLines(node *secrets.Node, indent int, conflicts map[string]secre
 			})
 			// Ghosted: sources that lost
 			for _, src := range c.Sources[:len(c.Sources)-1] {
-				snippet := src.Snippet
+				snippet := secrets.DisplaySnippet(src.Snippet)
 				if snippet == "" {
 					snippet = src.File
 				}

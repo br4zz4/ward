@@ -40,10 +40,10 @@ func main() {
 		Short:   "Hierarchical secrets manager.",
 		Long:    "Hierarchical secrets manager.",
 		Version: version,
-		PersistentPreRun: func(_ *cobra.Command, _ []string) {
+		PersistentPreRun: func(c *cobra.Command, _ []string) {
 			if err := cmd.ApplyDirFlag(dirPath); err != nil {
 				fmt.Fprintln(os.Stderr, "ward:", err)
-				os.Exit(1)
+				os.Exit(exitCodeFor(c))
 			}
 			cmd.SetConfigFile(configPath)
 			cmd.SetAIMode(aiModeFlag)
@@ -127,6 +127,14 @@ func main() {
 
 	if err := root.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+		found, _, _ := root.Find(os.Args[1:])
+		os.Exit(exitCodeFor(found))
 	}
+}
+
+func exitCodeFor(c *cobra.Command) int {
+	if c != nil && c.Name() == "check" {
+		return 2
+	}
+	return 1
 }

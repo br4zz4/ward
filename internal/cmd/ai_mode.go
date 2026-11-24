@@ -9,11 +9,10 @@ import (
 	"strings"
 
 	"github.com/br4zz4/ward/internal/config"
+	"github.com/br4zz4/ward/internal/secrets"
 	"golang.org/x/term"
 )
 
-// exitAIRefusal is the exit status of every command refused in AI mode, so
-// callers can tell a refusal from a failure.
 const exitAIRefusal = 3
 
 // aiModeFlag tracks whether the persistent --ai-mode flag was passed. It is
@@ -65,8 +64,6 @@ func warnAIModeOnce(msg string) {
 	fmt.Fprintln(os.Stderr, msg)
 }
 
-// aiEnvState is how WARD_AI_MODE reads: unset (auto-detect), on, off, or an
-// unrecognised value, which fails closed as on with the strict level.
 type aiEnvState int
 
 const (
@@ -146,7 +143,11 @@ func configAILevel() aiLevel {
 		return aiConfigCacheLevel
 	}
 	level := levelMasked
-	if cfg, err := config.Load(path); err == nil {
+	cfg, err := config.Load(path)
+	if err != nil {
+		warnAIModeOnce(fmt.Sprintf("ward: cannot read %s (%v), using strict", path, err))
+		level = levelStrict
+	} else {
 		switch cfg.AIMode {
 		case "", string(levelMasked):
 		case string(levelStrict):
@@ -234,8 +235,6 @@ func aiModeRefusal(scope string) {
 	os.Exit(exitAIRefusal)
 }
 
-// aiGuidance lists what an agent may do instead of reading a value: use it,
-// check it against a value held elsewhere, or copy it to another secret.
 func aiGuidance() string {
 	return fmt.Sprintf(
 		"  %s→%s you may USE, CHECK or COPY a secret, but never READ it:\n\n"+
@@ -246,8 +245,6 @@ func aiGuidance() string {
 		clrGray, clrReset, clrBold, clrReset, clrBold, clrReset, clrBold, clrReset)
 }
 
-// aiModeRefusePlaintext refuses a command that would print decrypted file
-// contents to stdout, pointing at what an agent may do instead.
 func aiModeRefusePlaintext(command string) {
 	fmt.Fprintf(os.Stderr,
 		"\n  %s✗ AI mode active — `ward %s` would print decrypted secrets into AI context%s\n\n%s  %s%s%s\n\n",
@@ -255,9 +252,6 @@ func aiModeRefusePlaintext(command string) {
 	os.Exit(exitAIRefusal)
 }
 
-// aiValue returns the display form of a secret value: the value itself in
-// normal mode, the masked form at the masked level, or "<sensitive>" at the
-// strict level.
 func aiValue(v string) string {
 	if !IsAIMode() {
 		return v
@@ -283,4 +277,19 @@ func printAIModeBanner() {
 	fmt.Fprintf(os.Stderr, "\n  Choose how much an agent sees with %sai_mode: strict|masked%s in .ward/config.yaml\n", clrBold, clrReset)
 	fmt.Fprintf(os.Stderr, "  (masked, the default, shows only the first and last characters and the length).\n")
 	fmt.Fprintf(os.Stderr, "  Disable auto-detection for a shell with %sWARD_AI_MODE=0%s.\n\n", clrBold, clrReset)
+}
+
+func init() {
+	secrets.SnippetFilter = redactSnippet
+}
+
+func redactSnippet(snippet string) string {
+	if snippet == "" || !IsAIMode() {
+		return snippet
+	}
+	key, value, found := strings.Cut(snippet, ": ")
+	if !found {
+		return maskPlaceholder
+	}
+	return key + ": " + aiValue(strings.Trim(strings.TrimSpace(value), `"'`))
 }

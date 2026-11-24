@@ -12,10 +12,6 @@ const (
 	maskPlaceholder = "<sensitive>"
 )
 
-// maskValue renders a secret for AI mode masked level: the first and last k
-// runes and the length, with k = min(4, n/8), so at most 25% of the value is
-// revealed. Values shorter than 8 runes reveal nothing; multi-line values are
-// fully hidden because their edges say nothing about the value.
 func maskValue(v string) string {
 	if strings.Contains(v, "\n") {
 		return maskPlaceholder

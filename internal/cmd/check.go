@@ -92,8 +92,6 @@ on stderr and nothing on stdout. Works in AI mode: it reveals only equality.`,
 	return c
 }
 
-// splitCheckArgs separates the positional scope (if any) from the value
-// argument, like splitSetArgs but with check's own usage messages.
 func splitCheckArgs(sf *scopeFlags, args []string) (scopePositional []string, value string) {
 	usedFlags := sf.scope != "" || sf.vault != "" || sf.secret != ""
 	if usedFlags {
