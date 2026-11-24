@@ -375,6 +375,19 @@ aborts without writing, and the success line shows the origin
 (`(from <path>)` / `(from stdin)`), never the value. The MCP `ward_set` tool
 always stores the value literally.
 
+#### Copy a secret with `--from`
+
+`ward set <dst> --from <src>` copies the stored value of another secret (a leaf,
+possibly in another vault with another key) without printing it:
+
+```sh
+ward set other:ci.TOKEN --from app:ci.TOKEN
+```
+
+It cannot be combined with a value or `--literal`; a subtree or missing source,
+or a source equal to the destination, aborts without writing. It works in AI
+mode. The MCP `ward_set` tool takes `from` instead of `value` (exactly one).
+
 **Compat break (0.7.0):** values starting with `@` or equal to `-` are no
 longer stored literally; use `--literal` or `@@`.
 

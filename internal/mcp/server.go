@@ -421,15 +421,25 @@ func Serve() error {
 
 	s.AddTool(
 		mcp.NewTool("ward_set",
-			mcp.WithDescription("Set a single secret at a full dot-path"),
+			mcp.WithDescription("Set a single secret at a full dot-path, from a literal 'value' or by copying another stored secret with 'from' (the copied value is never shown). Pass exactly one of value or from."),
 			mcp.WithString("path", mcp.Required(), mcp.Description("scope of the secret to set: 'vault1:group.key1' (colon qualifies the vault)")),
-			mcp.WithString("value", mcp.Required(), mcp.Description("value to store as-is (never read from a file or stdin; '@' and '-' are literal)")),
+			mcp.WithString("value", mcp.Description("value to store as-is (never read from a file or stdin; '@' and '-' are literal). Exclusive with from")),
+			mcp.WithString("from", mcp.Description("scope of another leaf secret whose stored value is copied to path, across vaults too. Exclusive with value")),
 			mcp.WithString("dir", mcp.Description("project directory containing .ward/config.yaml (default: current directory)")),
 		),
 		func(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			path := req.GetString("path", "")
-			value := req.GetString("value", "")
-			out, err := run(dirArgs(req.GetString("dir", ""), "set", "--literal", "--", path, value)...)
+			args := req.GetArguments()
+			_, hasValue := args["value"]
+			from := req.GetString("from", "")
+			if hasValue == (from != "") {
+				return fail(errors.New("pass exactly one of 'value' or 'from'")), nil
+			}
+			setArgs := []string{"set", "--literal", "--", path, req.GetString("value", "")}
+			if from != "" {
+				setArgs = []string{"set", "--from", from, "--", path}
+			}
+			out, err := run(dirArgs(req.GetString("dir", ""), setArgs...)...)
 			if err != nil {
 				return fail(err), nil
 			}
@@ -618,6 +628,7 @@ ward exec [scope] -- cmd     # run command with secrets injected as env vars
 ward export [dot-path]       # export as shell export statements
 ward check <scope> <value|@file|->  # match/differs against the stored secret (exit 0/1, errors 2); works in AI mode, MCP: ward_check
 ward set <dot-path> <value>  # set a single secret at a full dot-path
+ward set <dst> --from <src>  # copy a stored secret to another path/vault without revealing it (MCP: ward_set with from)
 ward unset <dot-path>        # remove a single secret at a full dot-path
 ward import <file.ward>      # read YAML from stdin and encrypt into the given .ward file
 ward file add <f> <vault>    # store a file as a single encrypted secret (e.g. sa.json → app)

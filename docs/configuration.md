@@ -470,6 +470,7 @@ seed, never the generated code.
 | `raw`, `export <file>` (stdout) | refused (exit 3) | refused (exit 3) |
 | `export <file> <out>` (to disk) | allowed | allowed |
 | `check <scope> <value-source>` | allowed (`match`/`differs`) | allowed |
+| `set <dst> --from <src>` | allowed | allowed |
 
 Every refusal exits with status 3. The MCP server runs its subprocesses with
 `WARD_AI_MODE=1`, so the level comes from the project config; `ward_get` returns
