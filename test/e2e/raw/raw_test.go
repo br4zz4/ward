@@ -81,3 +81,56 @@ func TestRaw_single_file_has_no_header(t *testing.T) {
 		t.Errorf("single-file raw should not print a header, got: %q", out)
 	}
 }
+
+func assertRefused(t *testing.T, out, stderr string, code int, leaked ...string) {
+	t.Helper()
+	if code != 3 {
+		t.Fatalf("expected exit 3, got %d", code)
+	}
+	if out != "" {
+		t.Errorf("expected empty stdout, got: %q", out)
+	}
+	for _, v := range leaked {
+		if testutil.Contains(out+stderr, v) {
+			t.Errorf("value %q leaked: %q", v, out+stderr)
+		}
+	}
+}
+
+func TestRaw_file_refused_in_ai_mode_env(t *testing.T) {
+	// arrange
+	t.Setenv("WARD_AI_MODE", "1")
+
+	// act
+	out, stderr, code := testutil.Run(t, bin, fix("basic"), "raw", ".ward/vaults/app/main.plain.ward")
+
+	// assert
+	assertRefused(t, out, stderr, code, "rawapp", "raw-secret")
+}
+
+func TestRaw_no_arg_refused_in_ai_mode_env(t *testing.T) {
+	// arrange
+	t.Setenv("WARD_AI_MODE", "1")
+
+	// act
+	out, stderr, code := testutil.Run(t, bin, fix("multi"), "raw")
+
+	// assert
+	assertRefused(t, out, stderr, code, "rawapp", "localhost")
+}
+
+func TestRaw_file_refused_with_ai_mode_flag(t *testing.T) {
+	// act
+	out, stderr, code := testutil.Run(t, bin, fix("basic"), "raw", ".ward/vaults/app/main.plain.ward", "--ai-mode")
+
+	// assert
+	assertRefused(t, out, stderr, code, "rawapp", "raw-secret")
+}
+
+func TestRaw_no_arg_refused_with_ai_mode_flag(t *testing.T) {
+	// act
+	out, stderr, code := testutil.Run(t, bin, fix("multi"), "raw", "--ai-mode")
+
+	// assert
+	assertRefused(t, out, stderr, code, "rawapp", "localhost")
+}

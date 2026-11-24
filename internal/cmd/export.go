@@ -14,6 +14,9 @@ func NewExportCmd() *cobra.Command {
 		Args:  cobra.RangeArgs(1, 2),
 		Run: func(_ *cobra.Command, args []string) {
 			path := args[0]
+			if len(args) == 1 && IsAIMode() {
+				aiModeRefusePlaintext("export <file>")
+			}
 			if err := requireWardFile(path); err != nil {
 				fatal(err)
 			}

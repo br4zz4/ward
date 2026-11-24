@@ -13,8 +13,17 @@ import (
 )
 
 const fakeWardArgsEnv = "WARD_MCP_TEST_ARGS_FILE"
+const fakeWardRefuseEnv = "WARD_MCP_TEST_REFUSE"
+const fakeWardAIModeFileEnv = "WARD_MCP_TEST_AIMODE_FILE"
 
 func TestMain(m *testing.M) {
+	if out := os.Getenv(fakeWardAIModeFileEnv); out != "" {
+		os.WriteFile(out, []byte(os.Getenv("WARD_AI_MODE")), 0o600)
+	}
+	if os.Getenv(fakeWardRefuseEnv) != "" {
+		os.Stderr.WriteString("ward: refused in AI mode: decrypted content never enters the agent context\n")
+		os.Exit(3)
+	}
 	if out := os.Getenv(fakeWardArgsEnv); out != "" {
 		b, _ := json.Marshal(os.Args[1:])
 		os.WriteFile(out, b, 0o600)
@@ -296,5 +305,72 @@ func TestAiFileInstruction(t *testing.T) {
 	}
 	if !strings.Contains(m["instructions"], "ward file extract service-account.json <dest-dir>") {
 		t.Errorf("unexpected instructions: %q", m["instructions"])
+	}
+}
+
+func TestWardRaw_runs_in_ai_mode_and_returns_refusal_never_yaml(t *testing.T) {
+	// arrange
+	aiFile := filepath.Join(t.TempDir(), "aimode.txt")
+	t.Setenv(fakeWardAIModeFileEnv, aiFile)
+	t.Setenv(fakeWardRefuseEnv, "1")
+	call := `{"jsonrpc":"2.0","id":"call","method":"tools/call","params":{"name":"ward_raw","arguments":{"file":".ward/vaults/app/main.plain.ward"}}}`
+
+	// act
+	got := driveServer(t, []string{initRequest, initializedNotification, call}, []string{"call"})
+
+	// assert
+	b, err := os.ReadFile(aiFile)
+	if err != nil {
+		t.Fatalf("ward subprocess was not invoked: %v", err)
+	}
+	if string(b) != "1" {
+		t.Errorf("subprocess must run with WARD_AI_MODE=1, got %q", string(b))
+	}
+	var res struct {
+		IsError bool `json:"isError"`
+		Content []struct {
+			Text string `json:"text"`
+		} `json:"content"`
+	}
+	if err := json.Unmarshal(got["call"], &res); err != nil {
+		t.Fatal(err)
+	}
+	if !res.IsError {
+		t.Errorf("ward_raw must return a tool error when the CLI refuses, got: %s", got["call"])
+	}
+	if len(res.Content) == 0 || !strings.Contains(res.Content[0].Text, "AI mode") {
+		t.Errorf("expected refusal text, got: %s", got["call"])
+	}
+}
+
+func TestWardRaw_and_export_descriptions_say_refused_in_ai_mode(t *testing.T) {
+	// arrange
+	list := `{"jsonrpc":"2.0","id":"list","method":"tools/list"}`
+
+	// act
+	got := driveServer(t, []string{initRequest, initializedNotification, list}, []string{"list"})
+
+	// assert
+	var res struct {
+		Tools []struct {
+			Name        string `json:"name"`
+			Description string `json:"description"`
+		} `json:"tools"`
+	}
+	if err := json.Unmarshal(got["list"], &res); err != nil {
+		t.Fatal(err)
+	}
+	seen := map[string]bool{}
+	for _, tool := range res.Tools {
+		if tool.Name != "ward_raw" && tool.Name != "ward_export" {
+			continue
+		}
+		seen[tool.Name] = true
+		if !strings.Contains(strings.ToLower(tool.Description), "refused") || !strings.Contains(strings.ToLower(tool.Description), "ai mode") {
+			t.Errorf("%s description must say it is refused in AI mode, got: %q", tool.Name, tool.Description)
+		}
+	}
+	if !seen["ward_raw"] {
+		t.Fatal("ward_raw tool not listed")
 	}
 }

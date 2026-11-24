@@ -11,6 +11,10 @@ import (
 	"golang.org/x/term"
 )
 
+// exitAIRefusal is the exit status of every command refused in AI mode, so
+// callers can tell a refusal from a failure.
+const exitAIRefusal = 3
+
 // aiModeFlag tracks whether the persistent --ai-mode flag was passed. It is
 // set by main.go before command dispatch.
 var aiModeFlag = false
@@ -134,7 +138,22 @@ func aiModeRefusal(scope string) {
 		clrGray, clrReset,
 		clrBold, clrReset,
 		clrGray, aiModeReason(), clrReset)
-	os.Exit(1)
+	os.Exit(exitAIRefusal)
+}
+
+// aiModeRefusePlaintext refuses a command that would print decrypted file
+// contents to stdout, pointing at the on-disk alternative.
+func aiModeRefusePlaintext(command string) {
+	fmt.Fprintf(os.Stderr,
+		"\n  %s✗ AI mode active — `ward %s` would print decrypted secrets into AI context%s\n\n"+
+			"  %s→%s you may EXECUTE commands that use the secret, but never READ it:\n\n"+
+			"      %sward exec -- sh -c '<command using the env var>'%s\n\n"+
+			"  %s%s%s\n\n",
+		clrLightRed, command, clrReset,
+		clrGray, clrReset,
+		clrBold, clrReset,
+		clrGray, aiModeReason(), clrReset)
+	os.Exit(exitAIRefusal)
 }
 
 // aiValue returns the display form of a secret value: the value itself in

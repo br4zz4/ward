@@ -18,6 +18,9 @@ func NewRawCmd() *cobra.Command {
 		Short: "Print the decrypted YAML of a .ward file (all files when none given)",
 		Args:  cobra.MaximumNArgs(1),
 		Run: func(_ *cobra.Command, args []string) {
+			if IsAIMode() {
+				aiModeRefusePlaintext("raw")
+			}
 			eng, err := newEngine()
 			if err != nil {
 				fatal(err)
