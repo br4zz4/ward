@@ -612,7 +612,7 @@ func collectListLines(node *secrets.Node, indent int, conflicts map[string]secre
 			})
 			// Ghosted: sources that lost
 			for _, src := range c.Sources[:len(c.Sources)-1] {
-				snippet := secrets.DisplaySnippet(src.Snippet)
+				snippet := secrets.DisplaySnippet(src)
 				if snippet == "" {
 					snippet = src.File
 				}

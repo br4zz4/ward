@@ -283,13 +283,12 @@ func init() {
 	secrets.SnippetFilter = redactSnippet
 }
 
-func redactSnippet(snippet string) string {
-	if snippet == "" || !IsAIMode() {
-		return snippet
+func redactSnippet(o secrets.Origin) string {
+	if o.Snippet == "" || !IsAIMode() {
+		return o.Snippet
 	}
-	key, value, found := strings.Cut(snippet, ": ")
-	if !found {
-		return maskPlaceholder
+	if !o.Leaf {
+		return o.Key + ":"
 	}
-	return key + ": " + aiValue(strings.Trim(strings.TrimSpace(value), `"'`))
+	return o.Key + ": " + aiValue(o.Value)
 }

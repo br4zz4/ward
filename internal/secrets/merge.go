@@ -24,18 +24,21 @@ type Origin struct {
 	File    string
 	Line    int
 	Snippet string
+	Key     string
+	Value   string
+	Leaf    bool
 }
 
-// SnippetFilter, when set, rewrites an origin snippet (a raw "key: value" YAML
-// line) before it is printed, so callers can keep values out of conflict output.
-var SnippetFilter func(snippet string) string
+// SnippetFilter, when set, renders the line shown for an origin in place of the
+// raw snippet, so callers can keep values out of conflict output.
+var SnippetFilter func(o Origin) string
 
-// DisplaySnippet returns the snippet in the form that may be printed.
-func DisplaySnippet(snippet string) string {
+// DisplaySnippet returns the origin's snippet in the form that may be printed.
+func DisplaySnippet(o Origin) string {
 	if SnippetFilter == nil {
-		return snippet
+		return o.Snippet
 	}
-	return SnippetFilter(snippet)
+	return SnippetFilter(o)
 }
 
 // Node is either a leaf value with an origin, or a nested map.
@@ -77,7 +80,7 @@ func (e *ConflictError) Error() string {
 					colorLightRed, s.Line, colorReset,
 				)
 				if s.Snippet != "" {
-					fmt.Fprintf(&sb, "    %s%s%s\n", colorGray, DisplaySnippet(s.Snippet), colorReset)
+					fmt.Fprintf(&sb, "    %s%s%s\n", colorGray, DisplaySnippet(s), colorReset)
 				}
 			} else {
 				fmt.Fprintf(&sb, "  %s%s%s\n",
@@ -159,7 +162,7 @@ func mergeInto(dst map[string]*Node, src map[string]interface{}, file string, li
 			existing, ok := dst[k]
 			if !ok || existing.Children == nil {
 				if ok && existing.Children == nil && effectiveMode == config.MergeModeError {
-					appendConflict(conflicts, dotPath, existing.Origin, originFor(file, dotPath, lines, rawLines))
+					appendConflict(conflicts, dotPath, existing.Origin, originFor(file, dotPath, nil, lines, rawLines))
 					continue
 				}
 				dst[k] = &Node{Children: map[string]*Node{}}
@@ -169,11 +172,11 @@ func mergeInto(dst map[string]*Node, src map[string]interface{}, file string, li
 		default:
 			existing, ok := dst[k]
 			if ok && effectiveMode == config.MergeModeError {
-				appendConflict(conflicts, dotPath, existing.Origin, originFor(file, dotPath, lines, rawLines))
+				appendConflict(conflicts, dotPath, existing.Origin, originFor(file, dotPath, val, lines, rawLines))
 				continue
 			}
 			overrides := ok
-			dst[k] = &Node{Value: val, Origin: originFor(file, dotPath, lines, rawLines), Overrides: overrides}
+			dst[k] = &Node{Value: val, Origin: originFor(file, dotPath, val, lines, rawLines), Overrides: overrides}
 		}
 	}
 }
@@ -212,8 +215,12 @@ func appendConflict(conflicts *[]Conflict, dotPath string, existingOrigin, newOr
 	})
 }
 
-func originFor(file, dotPath string, lines LineMap, rawLines []string) Origin {
-	o := Origin{File: file}
+func originFor(file, dotPath string, val interface{}, lines LineMap, rawLines []string) Origin {
+	o := Origin{File: file, Key: LeafKey(dotPath)}
+	if val != nil {
+		o.Leaf = true
+		o.Value = fmt.Sprintf("%v", val)
+	}
 	if lines != nil {
 		if ln, ok := lines[dotPath]; ok {
 			o.Line = ln

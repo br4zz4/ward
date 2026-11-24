@@ -170,3 +170,61 @@ func TestMerge_origin_tracked(t *testing.T) {
 		t.Errorf("expected origin base.ward, got %q", tree["x"].Origin.File)
 	}
 }
+
+func TestMerge_conflict_origin_carries_parsed_value_not_the_line(t *testing.T) {
+	// arrange
+	files := []ParsedFile{
+		{File: "a.ward", Data: map[string]interface{}{"pin": "1234"}, Lines: LineMap{"pin": 1}, RawLines: []string{"pin: 1234 # code"}},
+		{File: "b.ward", Data: map[string]interface{}{"pin": "5678"}, Lines: LineMap{"pin": 1}, RawLines: []string{"pin: 5678"}},
+	}
+
+	// act
+	_, err := Merge(files, config.MergeModeError, "")
+
+	// assert
+	var ce *ConflictError
+	if !errors.As(err, &ce) || len(ce.Conflicts) != 1 {
+		t.Fatalf("expected one conflict, got %v", err)
+	}
+	for _, o := range ce.Conflicts[0].Sources {
+		if !o.Leaf || o.Key != "pin" {
+			t.Errorf("origin %+v must be a leaf keyed pin", o)
+		}
+		if o.Value != "1234" && o.Value != "5678" {
+			t.Errorf("origin value must be the parsed value, got %q", o.Value)
+		}
+	}
+}
+
+func TestMerge_conflict_with_map_origin_is_not_a_leaf(t *testing.T) {
+	// arrange
+	files := []ParsedFile{
+		{File: "a.ward", Data: map[string]interface{}{"db": "LEAFSECRET"}},
+		{File: "b.ward", Data: map[string]interface{}{"db": map[string]interface{}{"token": "MAPSECRET"}}},
+	}
+
+	// act
+	_, err := Merge(files, config.MergeModeError, "")
+
+	// assert
+	var ce *ConflictError
+	if !errors.As(err, &ce) || len(ce.Conflicts) == 0 {
+		t.Fatalf("expected a conflict, got %v", err)
+	}
+	leaves, maps := 0, 0
+	for _, c := range ce.Conflicts {
+		for _, o := range c.Sources {
+			if o.Leaf {
+				leaves++
+			} else {
+				maps++
+				if o.Value != "" {
+					t.Errorf("map origin must carry no value, got %q", o.Value)
+				}
+			}
+		}
+	}
+	if leaves == 0 || maps == 0 {
+		t.Errorf("expected a leaf and a map origin, got leaves=%d maps=%d", leaves, maps)
+	}
+}
