@@ -104,18 +104,28 @@ func printJSONValue(dotPath string, node *secrets.Node, now time.Time, raw bool)
 	fmt.Println(string(enc))
 }
 
-// resolveGetTarget returns the dot-path and node a get resolves to. A qualified
-// scope resolves its vault directly; an unqualified one searches for the
-// secret-path under every top-key, requiring exactly one hit (erroring on
-// ambiguity across vaults or when nothing matches).
+// resolveGetTarget returns the dot-path and node a get resolves to, exiting on
+// error. See findTarget for the resolution rules.
 func resolveGetTarget(eng *ward.Engine, result *ward.MergeResult, sc secrets.Scope) (string, *secrets.Node) {
+	dotPath, node, err := findTarget(eng, result, sc)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "ward:", err)
+		os.Exit(errorExitCode)
+	}
+	return dotPath, node
+}
+
+// findTarget resolves a scope to a dot-path and node. A qualified scope
+// resolves its vault directly; an unqualified one searches for the secret-path
+// under every top-key, requiring exactly one hit (erroring on ambiguity across
+// vaults or when nothing matches).
+func findTarget(eng *ward.Engine, result *ward.MergeResult, sc secrets.Scope) (string, *secrets.Node, error) {
 	if sc.Vault != "" {
 		node, err := eng.GetAtPath(result, sc.TreePath())
 		if err != nil {
-			fmt.Fprintln(os.Stderr, "ward:", err)
-			os.Exit(1)
+			return "", nil, err
 		}
-		return sc.TreePath(), node
+		return sc.TreePath(), node, nil
 	}
 
 	type hit struct {
@@ -132,17 +142,25 @@ func resolveGetTarget(eng *ward.Engine, result *ward.MergeResult, sc secrets.Sco
 
 	switch len(hits) {
 	case 0:
-		fmt.Fprintf(os.Stderr, "ward: key not found: %s\n", sc.SecretPath)
-		os.Exit(1)
+		return "", nil, fmt.Errorf("key not found: %s", sc.SecretPath)
 	case 1:
-		return hits[0].dotPath, hits[0].node
-	default:
-		vaults := make([]string, len(hits))
-		for i, h := range hits {
-			vaults[i] = firstSegment(h.dotPath)
-		}
-		fmt.Fprintf(os.Stderr, "ward: %s is defined in multiple vaults (%s) — qualify it as <vault>:%s\n", sc.SecretPath, strings.Join(vaults, ", "), sc.SecretPath)
-		os.Exit(1)
+		return hits[0].dotPath, hits[0].node, nil
 	}
-	return "", nil
+	vaults := make([]string, len(hits))
+	for i, h := range hits {
+		vaults[i] = firstSegment(h.dotPath)
+	}
+	return "", nil, fmt.Errorf("%s is defined in multiple vaults (%s) — qualify it as <vault>:%s", sc.SecretPath, strings.Join(vaults, ", "), sc.SecretPath)
+}
+
+// lookupLeaf resolves a scope to the stored value of a single leaf secret.
+func lookupLeaf(eng *ward.Engine, result *ward.MergeResult, sc secrets.Scope) (dotPath, value string, err error) {
+	dotPath, node, err := findTarget(eng, result, sc)
+	if err != nil {
+		return "", "", err
+	}
+	if node.Children != nil {
+		return "", "", fmt.Errorf("%s is a subtree, not a leaf secret", dotPath)
+	}
+	return dotPath, fmt.Sprintf("%v", node.Value), nil
 }

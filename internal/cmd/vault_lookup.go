@@ -22,7 +22,7 @@ func findVault(cfg *config.Config, name string) *config.Source {
 // not exist. Commands never create vaults implicitly.
 func fatalVaultNotFound(vaultName string) {
 	fmt.Fprint(os.Stderr, vaultNotFoundMessage(vaultName))
-	os.Exit(1)
+	os.Exit(errorExitCode)
 }
 
 // vaultNotFoundMessage builds the styled "vault not found" text. The vault is
