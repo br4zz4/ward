@@ -35,3 +35,17 @@ _Avoid_: dot-path (when a vault qualifier is meant)
 **Value source**:
 Where `ward set` takes a secret's value from: the argument itself (literal), a file (`@<path>`), or stdin (`-`).
 _Avoid_: input, payload
+
+### AI mode
+
+**AI mode**:
+The state in which ward keeps secret values out of an AI agent's context; it has a level, strict or masked.
+_Avoid_: agent mode, safe mode
+
+**Strict**:
+The AI mode level that shows no part of a value (`<sensitive>`) and refuses reads; the default level.
+_Avoid_: rigid, full
+
+**Masked**:
+The AI mode level that shows a single-line value only by its first and last characters and its length (`tok_…a9f2 (51 chars)`), enough to identify the value without revealing it.
+_Avoid_: partial, peek, redacted
