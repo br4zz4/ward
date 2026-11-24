@@ -504,3 +504,32 @@ func TestAgentCommandName(t *testing.T) {
 		})
 	}
 }
+
+func TestAILevel_unreadable_config_is_strict_with_warning(t *testing.T) {
+	// act
+	got := runLevelHelper(t, "1", "ai_mode: [unclosed\n", false, false)
+
+	// assert
+	if !got.ai || got.level != "strict" {
+		t.Errorf("ai=%v level=%q, want strict", got.ai, got.level)
+	}
+	if got.val != "<sensitive>" {
+		t.Errorf("aiValue = %q, want <sensitive>", got.val)
+	}
+	if !strings.Contains(got.stderr, "cannot read") {
+		t.Errorf("stderr missing %q, got %q", "cannot read", got.stderr)
+	}
+}
+
+func TestAILevel_missing_config_is_masked_without_warning(t *testing.T) {
+	// act
+	got := runLevelHelper(t, "1", "-", false, false)
+
+	// assert
+	if got.level != "masked" {
+		t.Errorf("level = %q, want masked", got.level)
+	}
+	if strings.Contains(got.stderr, "cannot read") {
+		t.Errorf("unexpected warning: %q", got.stderr)
+	}
+}

@@ -442,7 +442,7 @@ func TestWardGet_masked_level_returns_masked_field(t *testing.T) {
 	if err := json.Unmarshal(raw, &args); err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"-d", "/proj", "get", "app:main.token"}
+	want := []string{"-d", "/proj", "get", "--", "app:main.token"}
 	if !reflect.DeepEqual(args, want) {
 		t.Errorf("got args %v want %v", args, want)
 	}
@@ -469,6 +469,74 @@ func TestWardGet_strict_level_has_no_masked_field(t *testing.T) {
 	}
 	if m["path"] != "app:main.token" {
 		t.Errorf("unexpected payload: %v", m)
+	}
+}
+
+func TestWardGet_strict_refusal_instructions_guide_three_exits(t *testing.T) {
+	// arrange
+	t.Setenv(fakeWardExitEnv, "3")
+	t.Setenv(fakeWardStderrEnv, "ward: refused in AI mode\n")
+
+	// act
+	res := callWardGet(t, `{"path":"app:main.token"}`)
+
+	// assert
+	if res.IsError || len(res.Content) == 0 {
+		t.Fatalf("expected the instruction payload, got %+v", res)
+	}
+	var m map[string]any
+	if err := json.Unmarshal([]byte(res.Content[0].Text), &m); err != nil {
+		t.Fatalf("expected JSON payload, got %q (%v)", res.Content[0].Text, err)
+	}
+	instructions, _ := m["instructions"].(string)
+	for _, want := range []string{"ward exec", "ward check", "ward set", "--from"} {
+		if !strings.Contains(instructions, want) {
+			t.Errorf("instructions must mention %q, got: %q", want, instructions)
+		}
+	}
+	for field, v := range m {
+		if s, ok := v.(string); ok && strings.Contains(s, "ward get") {
+			t.Errorf("field %q must not suggest running ward get: %q", field, s)
+		}
+	}
+}
+
+func TestWardDocs_ai_mode_section_lists_three_exits_without_ward_get(t *testing.T) {
+	// arrange
+	call := `{"jsonrpc":"2.0","id":"call","method":"tools/call","params":{"name":"ward_docs","arguments":{}}}`
+
+	// act
+	got := driveServer(t, []string{initRequest, initializedNotification, call}, []string{"call"})
+
+	// assert
+	var res toolResult
+	if err := json.Unmarshal(got["call"], &res); err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Content) == 0 {
+		t.Fatalf("empty docs: %s", got["call"])
+	}
+	docs := res.Content[0].Text
+	idx := strings.Index(docs, "## AI mode")
+	if idx < 0 {
+		t.Fatalf("docs must have a '## AI mode' section")
+	}
+	section := docs[idx+len("## AI mode"):]
+	if end := strings.Index(section, "\n## "); end >= 0 {
+		section = section[:end]
+	}
+	for _, want := range []string{"ward exec", "ward check", "ward set", "--from"} {
+		if !strings.Contains(section, want) {
+			t.Errorf("AI mode docs must mention %q", want)
+		}
+	}
+	if strings.Contains(docs, "ward get vault1:group.key1") {
+		t.Errorf("docs must not instruct running `ward get vault1:group.key1`")
+	}
+	for _, banned := range []string{"ward get vault1:group.key1", "run: ward get", "run ward get"} {
+		if strings.Contains(section, banned) {
+			t.Errorf("AI mode section must not instruct running ward get, found %q", banned)
+		}
 	}
 }
 
@@ -776,4 +844,90 @@ func TestWardSet_schema_value_optional_and_from_declared(t *testing.T) {
 		return
 	}
 	t.Fatal("ward_set tool not listed")
+}
+
+func TestWardCheck_exit_1_with_empty_stdout_is_tool_error_not_differs(t *testing.T) {
+	// arrange
+	t.Setenv(fakeWardExitEnv, "1")
+	t.Setenv(fakeWardStderrEnv, "boom\n")
+
+	// act
+	res := callWardCheck(t, `{"path":"app:k","value_file":"/tmp/v","dir":"/nonexistent"}`)
+
+	// assert
+	if !res.IsError || len(res.Content) == 0 {
+		t.Fatalf("expected a tool error, got %+v", res)
+	}
+	if strings.Contains(res.Content[0].Text, "differs") {
+		t.Errorf("must not report differs, got %q", res.Content[0].Text)
+	}
+	if !strings.Contains(res.Content[0].Text, "boom") {
+		t.Errorf("error must carry stderr, got %q", res.Content[0].Text)
+	}
+}
+
+func TestWardCheck_exit_0_with_unexpected_stdout_is_tool_error(t *testing.T) {
+	// arrange
+	t.Setenv(fakeWardExitEnv, "0")
+	t.Setenv(fakeWardStdoutEnv, "")
+	t.Setenv(fakeWardStderrEnv, "weird\n")
+
+	// act
+	res := callWardCheck(t, `{"path":"app:k","value_file":"/tmp/v"}`)
+
+	// assert
+	if !res.IsError {
+		t.Errorf("expected a tool error, got %+v", res)
+	}
+}
+
+func TestWardCheck_invalid_value_file_is_tool_error_without_running_cli(t *testing.T) {
+	cases := map[string]string{
+		"leading at": `{"path":"app:k","value_file":"@/tmp/v"}`,
+		"empty":      `{"path":"app:k","value_file":""}`,
+		"missing":    `{"path":"app:k"}`,
+	}
+	for name, args := range cases {
+		t.Run(name, func(t *testing.T) {
+			// arrange
+			argsFile := filepath.Join(t.TempDir(), "args.json")
+			t.Setenv(fakeWardArgsEnv, argsFile)
+
+			// act
+			res := callWardCheck(t, args)
+
+			// assert
+			if !res.IsError {
+				t.Errorf("expected a tool error, got %+v", res)
+			}
+			if _, err := os.Stat(argsFile); err == nil {
+				t.Errorf("ward subprocess must not run for an invalid value_file")
+			}
+		})
+	}
+}
+
+func TestWardGet_passes_double_dash_before_path(t *testing.T) {
+	// arrange
+	argsFile := filepath.Join(t.TempDir(), "args.json")
+	t.Setenv(fakeWardArgsEnv, argsFile)
+	t.Setenv(fakeWardExitEnv, "0")
+	t.Setenv(fakeWardStdoutEnv, "x\n")
+
+	// act
+	callWardGet(t, `{"path":"-weird:path","dir":"/proj"}`)
+
+	// assert
+	raw, err := os.ReadFile(argsFile)
+	if err != nil {
+		t.Fatalf("ward subprocess was not invoked: %v", err)
+	}
+	var args []string
+	if err := json.Unmarshal(raw, &args); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"-d", "/proj", "get", "--", "-weird:path"}
+	if !reflect.DeepEqual(args, want) {
+		t.Errorf("got args %v want %v", args, want)
+	}
 }

@@ -122,8 +122,6 @@ func splitSetArgs(sf *scopeFlags, args []string) (scopePositional []string, valu
 	return []string{args[0]}, args[1]
 }
 
-// splitSetFromArgs returns the positional destination scope of `set --from`:
-// the destination is the sole positional, or none when a scope flag is used.
 func splitSetFromArgs(sf *scopeFlags, args []string) []string {
 	usedFlags := sf.scope != "" || sf.vault != "" || sf.secret != ""
 	if usedFlags {
@@ -138,9 +136,6 @@ func splitSetFromArgs(sf *scopeFlags, args []string) []string {
 	return args
 }
 
-// copySourceValue resolves the --from source to the stored value of a single
-// leaf, refusing a missing or non-leaf source and a source equal to the
-// destination. It never prints the value.
 func copySourceValue(ed *secretEditor, from, destFull string) (value, source string) {
 	src := secrets.ParseScope(from)
 	if src.Vault == "" && src.SecretPath == "" {

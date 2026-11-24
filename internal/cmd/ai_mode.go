@@ -9,11 +9,10 @@ import (
 	"strings"
 
 	"github.com/br4zz4/ward/internal/config"
+	"github.com/br4zz4/ward/internal/secrets"
 	"golang.org/x/term"
 )
 
-// exitAIRefusal is the exit status of every command refused in AI mode, so
-// callers can tell a refusal from a failure.
 const exitAIRefusal = 3
 
 // aiModeFlag tracks whether the persistent --ai-mode flag was passed. It is
@@ -65,8 +64,6 @@ func warnAIModeOnce(msg string) {
 	fmt.Fprintln(os.Stderr, msg)
 }
 
-// aiEnvState is how WARD_AI_MODE reads: unset (auto-detect), on, off, or an
-// unrecognised value, which fails closed as on with the strict level.
 type aiEnvState int
 
 const (
@@ -146,7 +143,11 @@ func configAILevel() aiLevel {
 		return aiConfigCacheLevel
 	}
 	level := levelMasked
-	if cfg, err := config.Load(path); err == nil {
+	cfg, err := config.Load(path)
+	if err != nil {
+		warnAIModeOnce(fmt.Sprintf("ward: cannot read %s (%v), using strict", path, err))
+		level = levelStrict
+	} else {
 		switch cfg.AIMode {
 		case "", string(levelMasked):
 		case string(levelStrict):
@@ -225,40 +226,32 @@ func aiModeReason() string {
 
 // aiModeRefusal prints a styled refusal explaining that secret values are
 // never exposed in AI mode. It must NOT tell the agent to run `ward get` (that
-// would read the value): the agent may EXECUTE a command that uses the secret,
-// but must never READ it.
+// would read the value): the agent may use, check or copy a secret, but must
+// never read it.
 func aiModeRefusal(scope string) {
 	fmt.Fprintf(os.Stderr,
-		"\n  %s✗ AI mode active — secret values are never exposed in AI context%s\n\n"+
-			"  %s→%s you may EXECUTE commands that use the secret, but never READ it:\n\n"+
-			"      %sward exec -- sh -c '<command using the env var>'%s\n\n"+
-			"      (e.g. ward exec -- sh -c 'curl -H \"Authorization: Bearer $API_KEY\" https://api.example.com')\n\n"+
-			"  %s%s%s\n\n",
-		clrLightRed, clrReset,
-		clrGray, clrReset,
-		clrBold, clrReset,
-		clrGray, aiModeReason(), clrReset)
+		"\n  %s✗ AI mode active — secret values are never exposed in AI context%s\n\n%s  %s%s%s\n\n",
+		clrLightRed, clrReset, aiGuidance(), clrGray, aiModeReason(), clrReset)
 	os.Exit(exitAIRefusal)
 }
 
-// aiModeRefusePlaintext refuses a command that would print decrypted file
-// contents to stdout, pointing at the on-disk alternative.
+func aiGuidance() string {
+	return fmt.Sprintf(
+		"  %s→%s you may USE, CHECK or COPY a secret, but never READ it:\n\n"+
+			"      %suse%s     ward exec -- sh -c '<command using the env var>'\n"+
+			"              (e.g. ward exec -- sh -c 'curl -H \"Authorization: Bearer $API_KEY\" https://api.example.com')\n"+
+			"      %scheck%s   ward check <scope> @<file>      (or: <cmd> | ward check <scope> -)\n"+
+			"      %scopy%s    ward set <dst-scope> --from <src-scope>\n\n",
+		clrGray, clrReset, clrBold, clrReset, clrBold, clrReset, clrBold, clrReset)
+}
+
 func aiModeRefusePlaintext(command string) {
 	fmt.Fprintf(os.Stderr,
-		"\n  %s✗ AI mode active — `ward %s` would print decrypted secrets into AI context%s\n\n"+
-			"  %s→%s you may EXECUTE commands that use the secret, but never READ it:\n\n"+
-			"      %sward exec -- sh -c '<command using the env var>'%s\n\n"+
-			"  %s%s%s\n\n",
-		clrLightRed, command, clrReset,
-		clrGray, clrReset,
-		clrBold, clrReset,
-		clrGray, aiModeReason(), clrReset)
+		"\n  %s✗ AI mode active — `ward %s` would print decrypted secrets into AI context%s\n\n%s  %s%s%s\n\n",
+		clrLightRed, command, clrReset, aiGuidance(), clrGray, aiModeReason(), clrReset)
 	os.Exit(exitAIRefusal)
 }
 
-// aiValue returns the display form of a secret value: the value itself in
-// normal mode, the masked form at the masked level, or "<sensitive>" at the
-// strict level.
 func aiValue(v string) string {
 	if !IsAIMode() {
 		return v
@@ -284,4 +277,18 @@ func printAIModeBanner() {
 	fmt.Fprintf(os.Stderr, "\n  Choose how much an agent sees with %sai_mode: strict|masked%s in .ward/config.yaml\n", clrBold, clrReset)
 	fmt.Fprintf(os.Stderr, "  (masked, the default, shows only the first and last characters and the length).\n")
 	fmt.Fprintf(os.Stderr, "  Disable auto-detection for a shell with %sWARD_AI_MODE=0%s.\n\n", clrBold, clrReset)
+}
+
+func init() {
+	secrets.SnippetFilter = redactSnippet
+}
+
+func redactSnippet(o secrets.Origin) string {
+	if o.Snippet == "" || !IsAIMode() {
+		return o.Snippet
+	}
+	if !o.Leaf {
+		return o.Key + ":"
+	}
+	return o.Key + ": " + aiValue(o.Value)
 }

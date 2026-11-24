@@ -33,7 +33,7 @@ func NewSecretsCmd() *cobra.Command {
 func runSecrets(c *cobra.Command, args []string, prefixed, jsonOut bool) {
 	if jsonOut && IsAIMode() {
 		fmt.Fprintln(os.Stderr, "ward: --json is unavailable in AI mode — secret values are never exposed")
-		os.Exit(1)
+		os.Exit(exitAIRefusal)
 	}
 	scopes := args
 	firstScope := ""

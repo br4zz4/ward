@@ -104,8 +104,6 @@ func printJSONValue(dotPath string, node *secrets.Node, now time.Time, raw bool)
 	fmt.Println(string(enc))
 }
 
-// resolveGetTarget returns the dot-path and node a get resolves to, exiting on
-// error. See findTarget for the resolution rules.
 func resolveGetTarget(eng *ward.Engine, result *ward.MergeResult, sc secrets.Scope) (string, *secrets.Node) {
 	dotPath, node, err := findTarget(eng, result, sc)
 	if err != nil {
@@ -115,10 +113,6 @@ func resolveGetTarget(eng *ward.Engine, result *ward.MergeResult, sc secrets.Sco
 	return dotPath, node
 }
 
-// findTarget resolves a scope to a dot-path and node. A qualified scope
-// resolves its vault directly; an unqualified one searches for the secret-path
-// under every top-key, requiring exactly one hit (erroring on ambiguity across
-// vaults or when nothing matches).
 func findTarget(eng *ward.Engine, result *ward.MergeResult, sc secrets.Scope) (string, *secrets.Node, error) {
 	if sc.Vault != "" {
 		node, err := eng.GetAtPath(result, sc.TreePath())
@@ -153,7 +147,6 @@ func findTarget(eng *ward.Engine, result *ward.MergeResult, sc secrets.Scope) (s
 	return "", nil, fmt.Errorf("%s is defined in multiple vaults (%s) — qualify it as <vault>:%s", sc.SecretPath, strings.Join(vaults, ", "), sc.SecretPath)
 }
 
-// lookupLeaf resolves a scope to the stored value of a single leaf secret.
 func lookupLeaf(eng *ward.Engine, result *ward.MergeResult, sc secrets.Scope) (dotPath, value string, err error) {
 	dotPath, node, err := findTarget(eng, result, sc)
 	if err != nil {

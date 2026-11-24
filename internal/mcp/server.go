@@ -59,10 +59,7 @@ func run(args ...string) (string, error) {
 
 const exitAIRefusal = 3
 
-// runExit runs ward and returns its stdout and exit status. A non-zero status
-// is not an error here: callers decide what each status means. err is set only
-// when the process could not be run at all.
-func runExit(args ...string) (stdout string, code int, err error) {
+func runExit(args ...string) (stdout, stderr string, code int, err error) {
 	bin, exeErr := os.Executable()
 	if exeErr != nil {
 		bin = "ward"
@@ -73,18 +70,16 @@ func runExit(args ...string) (stdout string, code int, err error) {
 	cmd.Stdout = &outBuf
 	cmd.Stderr = &errBuf
 	runErr := cmd.Run()
-	text := stripANSI(strings.TrimSpace(outBuf.String()))
+	stdout = stripANSI(strings.TrimSpace(outBuf.String()))
+	stderr = stripANSI(strings.TrimSpace(errBuf.String()))
 	if runErr == nil {
-		return text, 0, nil
+		return stdout, stderr, 0, nil
 	}
 	var exitErr *exec.ExitError
 	if errors.As(runErr, &exitErr) {
-		if exitErr.ExitCode() != exitAIRefusal {
-			text = stripANSI(strings.TrimSpace(errBuf.String()))
-		}
-		return text, exitErr.ExitCode(), nil
+		return stdout, stderr, exitErr.ExitCode(), nil
 	}
-	return "", -1, runErr
+	return "", "", -1, runErr
 }
 
 func runWithStdin(stdin string, args ...string) (string, error) {
@@ -127,14 +122,21 @@ func aiGetInstruction(path, masked string) string {
 	if path != "" {
 		secretRef = "the secret at '" + path + "'"
 	}
-	instructions := "Never read " + secretRef + ". To use it in a command without "+
-		"seeing it, run: ward exec -- sh -c '<command using the env var>'"
+	dst := "<dst-scope>"
+	src := "<src-scope>"
+	if path != "" {
+		src = path
+	}
+	instructions := "Never read " + secretRef + ". You can: " +
+		"(use) run a command with it without seeing it: ward exec -- sh -c '<command using the env var>'; " +
+		"(check) confirm a value held in a file equals it: ward check " + path + " @<file>, or <cmd> | ward check " + path + " -; " +
+		"(copy) copy it to another secret: ward set " + dst + " --from " + src
 	payload := map[string]string{
 		"path":         path,
 		"sensitive":    "true",
 		"description":  "No description available",
 		"instructions": instructions,
-		"hint":         "Ward never exposes secret values in AI context. You may EXECUTE commands that use the secret (ward exec), but you must never READ it.",
+		"hint":         "Ward never exposes secret values in AI context. You may USE (ward exec), CHECK (ward check) or COPY (ward set --from) a secret, but you must never READ it. The MCP tools ward_check and ward_set (with from) do the last two.",
 	}
 	if masked != "" {
 		payload["masked"] = masked
@@ -188,7 +190,7 @@ func Serve() error {
 			if p == "" {
 				return ok(aiGetInstruction("", "")), nil
 			}
-			out, code, err := runExit(dirArgs(req.GetString("dir", ""), "get", p)...)
+			out, errText, code, err := runExit(dirArgs(req.GetString("dir", ""), "get", "--", p)...)
 			if err != nil {
 				return fail(err), nil
 			}
@@ -198,7 +200,7 @@ func Serve() error {
 			case exitAIRefusal:
 				return ok(aiGetInstruction(p, "")), nil
 			}
-			return fail(errors.New(out)), nil
+			return fail(errors.New(errText)), nil
 		},
 	)
 
@@ -458,17 +460,20 @@ func Serve() error {
 		func(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			path := req.GetString("path", "")
 			valueFile := req.GetString("value_file", "")
-			out, code, err := runExit(dirArgs(req.GetString("dir", ""), "check", "--", path, "@"+valueFile)...)
+			if valueFile == "" || strings.HasPrefix(valueFile, "@") {
+				return fail(errors.New("value_file must be a file path and not start with '@'")), nil
+			}
+			out, errText, code, err := runExit(dirArgs(req.GetString("dir", ""), "check", "--", path, "@"+valueFile)...)
 			if err != nil {
 				return fail(err), nil
 			}
-			switch code {
-			case 0:
+			switch {
+			case code == 0 && out == "match":
 				return ok("match"), nil
-			case 1:
+			case code == 1 && out == "differs":
 				return ok("differs"), nil
 			}
-			return fail(errors.New(out)), nil
+			return fail(errors.New(errText)), nil
 		},
 	)
 
@@ -599,7 +604,14 @@ from a bash tool), or automatically for the MCP tools below. In AI mode secret
 - ward_catalog lists secret paths with descriptions/types — values are never shown,
   making it the safe way to discover what secrets exist.
 
-If a value is needed, EXECUTE a command that consumes it — never read it:
+An agent may USE, CHECK or COPY a secret, never read it:
+
+- use: run a command that consumes it (ward exec; MCP ward_exec).
+- check: confirm a value held outside ward equals the stored one —
+  ward check <scope> @<file>, or <cmd> | ward check <scope> - (MCP ward_check).
+- copy: ward set <dst-scope> --from <src-scope> (MCP ward_set with from).
+
+Using it, for example:
 
 ` + "```" + `sh
 ward exec -- sh -c 'curl -H "Authorization: Bearer $API_KEY" https://api.example.com'
@@ -607,8 +619,9 @@ ward exec -- sh -c 'psql "$DATABASE_URL" -c "select 1"'
 ` + "```" + `
 
 ward get (strict level; at masked it prints the masked value), ward file extract,
-ward raw, ward export <file> (to stdout) and --json refuse in AI mode (exit status 3): they exist to read a value, which must never
-enter agent context. ward export <file> <out> writes to disk and is allowed.
+ward raw, ward export <file> (to stdout) and --json refuse in AI mode (exit status 3):
+they exist to read a value, which must never enter agent context.
+ward export <file> <out> writes to disk and is allowed.
 
 To pin AI mode for the CLI too, set WARD_AI_MODE=1 in your agent's environment
 (e.g. OpenCode opencode.json → "env": { "WARD_AI_MODE": "1" }, or Claude Code

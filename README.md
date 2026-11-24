@@ -373,7 +373,7 @@ Rules for content read from a file or stdin: one trailing newline (`\n` or
 `--dir`; `-` requires piped input (a terminal is an error). Any read error
 aborts without writing, and the success line shows the origin
 (`(from <path>)` / `(from stdin)`), never the value. The MCP `ward_set` tool
-always stores the value literally.
+stores a `value` literally, or copies a secret with `from`.
 
 #### Copy a secret with `--from`
 
