@@ -432,14 +432,50 @@ these holds:
 | Trigger | Notes |
 |---|---|
 | `--ai-mode` flag | Explicit, per invocation. |
-| `WARD_AI_MODE=1` | Explicit; any other non-empty value (`0`) forces AI mode off. |
+| `WARD_AI_MODE` | `1`/`true` on (level from the config); `strict`/`masked` on, forcing that level; `0`/`false` off, including auto-detection; empty or unset falls back to auto-detection; any other value fails closed: on, strict, with a warning on stderr. |
 | Agent in the parent process chain | Auto-detection: ward walks its parent pids and matches known agent binaries (`opencode`, `claude`, `codex`, `cursor-agent`, ...). Skipped when stdout is a terminal, so a human shell is never blocked — even one inherited from an agent. |
 | MCP server | `ward --mcp` runs its read tools with `--ai-mode` internally. |
 
 Use `WARD_AI_MODE=0` to opt out of auto-detection in a shell that sits inside an
-agent's environment. Values are hidden in `secrets`, `tree` and `get`; `get`,
-`file extract`, `raw`, `export <file>` (to stdout) and `--json` refuse outright,
-exiting with status 3. `export <file> <out>` writes to disk and is still allowed.
+agent's environment. A human shell never turns AI mode on by itself: without an
+agent in the parent chain there is no auto-detection, and with stdout on a
+terminal it is skipped.
+
+### Levels
+
+AI mode has two levels, chosen with the top-level `ai_mode` key of
+`.ward/config.yaml` (or `WARD_AI_MODE=strict|masked` for one invocation). The
+default is **masked**; an invalid `ai_mode` fails closed as `strict` with a
+warning.
+
+```yaml
+ai_mode: strict   # or masked (default)
+```
+
+| Level | A single-line value shows as |
+|---|---|
+| `strict` | `<sensitive>` |
+| `masked` | first and last `k` characters and the length: `tok_…a9f2 (51 chars)` |
+
+At the masked level `k = min(4, length / 8)`, so at most 25% of the value is
+revealed; a value under 8 characters shows only its length (`… (7 chars)`);
+multi-line values (PEM, JSON) stay `<sensitive>`; a TOTP secret shows its masked
+seed, never the generated code.
+
+| Command | strict | masked |
+|---|---|---|
+| `tree`, `secrets` | `<sensitive>` | masked value |
+| `get` | refused (exit 3) | prints the masked value |
+| `get --json`, `secrets --json`, `file extract` | refused | refused |
+| `raw`, `export <file>` (stdout) | refused (exit 3) | refused (exit 3) |
+| `export <file> <out>` (to disk) | allowed | allowed |
+
+Every refusal exits with status 3. The MCP server runs its subprocesses with
+`WARD_AI_MODE=1`, so the level comes from the project config; `ward_get` returns
+a `masked` field at the masked level.
+
+The level protects against accidental exposure, not against an agent that sets
+`WARD_AI_MODE=0` or edits the config.
 
 ## CLI flags
 

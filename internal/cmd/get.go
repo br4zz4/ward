@@ -34,7 +34,8 @@ func NewGetCmd() *cobra.Command {
 			os.Exit(1)
 		}
 
-		if IsAIMode() {
+		aiMode := IsAIMode()
+		if aiMode && (jsonOut || AILevel() == levelStrict) {
 			aiModeRefusal(sc.FullPath())
 		}
 
@@ -59,23 +60,31 @@ func NewGetCmd() *cobra.Command {
 		}
 		printEngineWarnings(eng)
 
-dotPath, node := resolveGetTarget(eng, result, sc)
+		dotPath, node := resolveGetTarget(eng, result, sc)
 
-	now := time.Now()
-	if jsonOut {
-		printJSONValue(dotPath, node, now, flagRaw(c))
-		return
+		now := time.Now()
+		if aiMode {
+			if node.Children == nil {
+				fmt.Println(aiValue(fmt.Sprintf("%v", node.Value)))
+				return
+			}
+			printTreeWith(&secrets.Node{Children: map[string]*secrets.Node{lastSegment(dotPath): node}}, 0, aiValue)
+			return
+		}
+		if jsonOut {
+			printJSONValue(dotPath, node, now, flagRaw(c))
+			return
+		}
+		if node.Children == nil {
+			// leaf — print the OTP code when the value is a TOTP secret
+			fmt.Println(otpValue(fmt.Sprintf("%v", node.Value), now, flagRaw(c), flagVerbose(c)))
+			return
+		}
+		// subtree — print tree, applying the same OTP transform to each leaf
+		printTreeWith(&secrets.Node{Children: map[string]*secrets.Node{lastSegment(dotPath): node}}, 0, func(v string) string {
+			return otpValue(v, now, flagRaw(c), flagVerbose(c))
+		})
 	}
-	if node.Children == nil {
-		// leaf — print the OTP code when the value is a TOTP secret
-		fmt.Println(otpValue(fmt.Sprintf("%v", node.Value), now, flagRaw(c), flagVerbose(c)))
-		return
-	}
-	// subtree — print tree, applying the same OTP transform to each leaf
-	printTreeWith(&secrets.Node{Children: map[string]*secrets.Node{lastSegment(dotPath): node}}, 0, func(v string) string {
-		return otpValue(v, now, flagRaw(c), flagVerbose(c))
-	})
-}
 	return c
 }
 

@@ -681,3 +681,33 @@ vaults:
 		t.Errorf("expected env collision error, got %v", err)
 	}
 }
+
+func TestLoad_ai_mode_values(t *testing.T) {
+	cases := []struct {
+		name string
+		yaml string
+		want string
+	}{
+		{"masked", "ai_mode: masked\nvaults: []\n", "masked"},
+		{"strict", "ai_mode: strict\nvaults: []\n", "strict"},
+		{"absent", "vaults: []\n", ""},
+		{"invalid is preserved raw", "ai_mode: loose\nvaults: []\n", "loose"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			// arrange
+			path := writeTemp(t, tc.yaml)
+
+			// act
+			cfg, err := Load(path)
+
+			// assert
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if cfg.AIMode != tc.want {
+				t.Errorf("AIMode = %q, want %q", cfg.AIMode, tc.want)
+			}
+		})
+	}
+}

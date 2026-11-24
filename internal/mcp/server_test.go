@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -15,10 +16,23 @@ import (
 const fakeWardArgsEnv = "WARD_MCP_TEST_ARGS_FILE"
 const fakeWardRefuseEnv = "WARD_MCP_TEST_REFUSE"
 const fakeWardAIModeFileEnv = "WARD_MCP_TEST_AIMODE_FILE"
+const fakeWardExitEnv = "WARD_MCP_TEST_EXIT"
+const fakeWardStdoutEnv = "WARD_MCP_TEST_STDOUT"
+const fakeWardStderrEnv = "WARD_MCP_TEST_STDERR"
 
 func TestMain(m *testing.M) {
 	if out := os.Getenv(fakeWardAIModeFileEnv); out != "" {
 		os.WriteFile(out, []byte(os.Getenv("WARD_AI_MODE")), 0o600)
+	}
+	if exit := os.Getenv(fakeWardExitEnv); exit != "" {
+		if out := os.Getenv(fakeWardArgsEnv); out != "" {
+			b, _ := json.Marshal(os.Args[1:])
+			os.WriteFile(out, b, 0o600)
+		}
+		os.Stdout.WriteString(os.Getenv(fakeWardStdoutEnv))
+		os.Stderr.WriteString(os.Getenv(fakeWardStderrEnv))
+		code, _ := strconv.Atoi(exit)
+		os.Exit(code)
 	}
 	if os.Getenv(fakeWardRefuseEnv) != "" {
 		os.Stderr.WriteString("ward: refused in AI mode: decrypted content never enters the agent context\n")
@@ -248,7 +262,7 @@ func TestExecArgs_noScope(t *testing.T) {
 
 func TestAiGetInstruction_withPath(t *testing.T) {
 	// act
-	got := aiGetInstruction("shared.db.password")
+	got := aiGetInstruction("shared.db.password", "")
 
 	// assert: valid JSON with path, sensitivity flag and guidance
 	var m map[string]string
@@ -277,7 +291,7 @@ func TestAiGetInstruction_withPath(t *testing.T) {
 
 func TestAiGetInstruction_emptyPath(t *testing.T) {
 	// act
-	got := aiGetInstruction("")
+	got := aiGetInstruction("", "")
 
 	// assert: guidance explains execution via ward exec, never reading
 	if strings.Contains(got, "ward get") {
@@ -372,5 +386,105 @@ func TestWardRaw_and_export_descriptions_say_refused_in_ai_mode(t *testing.T) {
 	}
 	if !seen["ward_raw"] {
 		t.Fatal("ward_raw tool not listed")
+	}
+}
+
+type toolResult struct {
+	IsError bool `json:"isError"`
+	Content []struct {
+		Text string `json:"text"`
+	} `json:"content"`
+}
+
+func callWardGet(t *testing.T, args string) toolResult {
+	t.Helper()
+	call := `{"jsonrpc":"2.0","id":"call","method":"tools/call","params":{"name":"ward_get","arguments":` + args + `}}`
+	got := driveServer(t, []string{initRequest, initializedNotification, call}, []string{"call"})
+	var res toolResult
+	if err := json.Unmarshal(got["call"], &res); err != nil {
+		t.Fatal(err)
+	}
+	return res
+}
+
+func TestWardGet_masked_level_returns_masked_field(t *testing.T) {
+	// arrange
+	argsFile := filepath.Join(t.TempDir(), "args.json")
+	t.Setenv(fakeWardArgsEnv, argsFile)
+	t.Setenv(fakeWardExitEnv, "0")
+	t.Setenv(fakeWardStdoutEnv, "tok_…a9f2 (51 chars)\n")
+
+	// act
+	res := callWardGet(t, `{"path":"app:main.token","dir":"/proj"}`)
+
+	// assert
+	if res.IsError || len(res.Content) == 0 {
+		t.Fatalf("expected a successful result, got %+v", res)
+	}
+	var m map[string]string
+	if err := json.Unmarshal([]byte(res.Content[0].Text), &m); err != nil {
+		t.Fatalf("expected JSON payload, got %q (%v)", res.Content[0].Text, err)
+	}
+	if m["masked"] != "tok_…a9f2 (51 chars)" {
+		t.Errorf("masked = %q", m["masked"])
+	}
+	if m["path"] != "app:main.token" || m["sensitive"] != "true" {
+		t.Errorf("unexpected payload: %v", m)
+	}
+	if !strings.Contains(m["instructions"], "ward exec") {
+		t.Errorf("instructions must keep the exec guidance: %q", m["instructions"])
+	}
+	raw, err := os.ReadFile(argsFile)
+	if err != nil {
+		t.Fatalf("ward subprocess was not invoked: %v", err)
+	}
+	var args []string
+	if err := json.Unmarshal(raw, &args); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"-d", "/proj", "get", "app:main.token"}
+	if !reflect.DeepEqual(args, want) {
+		t.Errorf("got args %v want %v", args, want)
+	}
+}
+
+func TestWardGet_strict_level_has_no_masked_field(t *testing.T) {
+	// arrange
+	t.Setenv(fakeWardExitEnv, "3")
+	t.Setenv(fakeWardStderrEnv, "ward: refused in AI mode\n")
+
+	// act
+	res := callWardGet(t, `{"path":"app:main.token"}`)
+
+	// assert
+	if res.IsError || len(res.Content) == 0 {
+		t.Fatalf("a refusal must still return the instruction payload, got %+v", res)
+	}
+	var m map[string]any
+	if err := json.Unmarshal([]byte(res.Content[0].Text), &m); err != nil {
+		t.Fatalf("expected JSON payload, got %q (%v)", res.Content[0].Text, err)
+	}
+	if _, has := m["masked"]; has {
+		t.Errorf("strict payload must not carry a masked field: %v", m)
+	}
+	if m["path"] != "app:main.token" {
+		t.Errorf("unexpected payload: %v", m)
+	}
+}
+
+func TestWardGet_unknown_path_is_tool_error(t *testing.T) {
+	// arrange
+	t.Setenv(fakeWardExitEnv, "1")
+	t.Setenv(fakeWardStderrEnv, "ward: secret not found: app:nope\n")
+
+	// act
+	res := callWardGet(t, `{"path":"app:nope"}`)
+
+	// assert
+	if !res.IsError {
+		t.Errorf("expected a tool error for an unknown path, got %+v", res)
+	}
+	if len(res.Content) > 0 && strings.Contains(res.Content[0].Text, `"masked"`) {
+		t.Errorf("error must not carry a masked field: %q", res.Content[0].Text)
 	}
 }

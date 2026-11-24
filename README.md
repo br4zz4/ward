@@ -262,7 +262,10 @@ ward --raw secrets --json myapp:environments.staging
 `--json` prints a JSON object keyed by env var name with untruncated values
 (though `--raw` still controls OTP handling). `ward get --json` returns
 `{"path","value"}` for a single leaf. Both are refused in AI mode, where secret
-values are never exposed.
+values are never exposed. In AI mode `ward get` refuses at the `strict` level
+and prints a masked value (`tok_…a9f2 (51 chars)`) at the `masked` level, the
+default; set `ai_mode: strict` in `.ward/config.yaml` to keep the strict
+behaviour. See [AI mode](docs/configuration.md#ai-mode).
 
 ### `ward exec [scope...] -- <command>`
 

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -56,6 +57,36 @@ func run(args ...string) (string, error) {
 	return text, nil
 }
 
+const exitAIRefusal = 3
+
+// runExit runs ward and returns its stdout and exit status. A non-zero status
+// is not an error here: callers decide what each status means. err is set only
+// when the process could not be run at all.
+func runExit(args ...string) (stdout string, code int, err error) {
+	bin, exeErr := os.Executable()
+	if exeErr != nil {
+		bin = "ward"
+	}
+	cmd := exec.Command(bin, args...)
+	cmd.Env = aiModeEnv()
+	var outBuf, errBuf bytes.Buffer
+	cmd.Stdout = &outBuf
+	cmd.Stderr = &errBuf
+	runErr := cmd.Run()
+	text := stripANSI(strings.TrimSpace(outBuf.String()))
+	if runErr == nil {
+		return text, 0, nil
+	}
+	var exitErr *exec.ExitError
+	if errors.As(runErr, &exitErr) {
+		if exitErr.ExitCode() != exitAIRefusal {
+			text = stripANSI(strings.TrimSpace(errBuf.String()))
+		}
+		return text, exitErr.ExitCode(), nil
+	}
+	return "", -1, runErr
+}
+
 func runWithStdin(stdin string, args ...string) (string, error) {
 	bin, err := os.Executable()
 	if err != nil {
@@ -91,7 +122,7 @@ func fail(err error) *mcp.CallToolResult {
 // the value is never exposed, and the guidance must NOT tell the agent to run
 // `ward get` (that would read it). The agent may EXECUTE a command that uses
 // the secret, but must never READ the value.
-func aiGetInstruction(path string) string {
+func aiGetInstruction(path, masked string) string {
 	secretRef := "this secret"
 	if path != "" {
 		secretRef = "the secret at '" + path + "'"
@@ -104,6 +135,9 @@ func aiGetInstruction(path string) string {
 		"description":  "No description available",
 		"instructions": instructions,
 		"hint":         "Ward never exposes secret values in AI context. You may EXECUTE commands that use the secret (ward exec), but you must never READ it.",
+	}
+	if masked != "" {
+		payload["masked"] = masked
 	}
 	out, err := json.Marshal(payload)
 	if err != nil {
@@ -144,15 +178,27 @@ func Serve() error {
 	s.AddTool(
 		mcp.NewTool("ward_get",
 			mcp.WithDescription("Return the merged value at a dot-path (or full tree if no path given). "+
-				"In AI mode the value is never returned: the tool replies with the shell command to run instead."),
+				"In AI mode the value is never returned: at the strict level the tool replies with how to use it "+
+				"(ward exec); at the masked level it also returns 'masked', the first and last characters and the length."),
 			mcp.WithString("path", mcp.Description("scope to a secret: 'vault1:group.key1' (one vault) or 'group.key1' (searches all vaults; ambiguous = error)")),
 			mcp.WithString("dir", mcp.Description("project directory containing .ward/config.yaml (default: current directory)")),
 		),
 		func(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			// AI mode: secrets are never exposed in context — reply with the
-			// shell command so the agent can run it in bash without reading it.
 			p := req.GetString("path", "")
-			return ok(aiGetInstruction(p)), nil
+			if p == "" {
+				return ok(aiGetInstruction("", "")), nil
+			}
+			out, code, err := runExit(dirArgs(req.GetString("dir", ""), "get", p)...)
+			if err != nil {
+				return fail(err), nil
+			}
+			switch code {
+			case 0:
+				return ok(aiGetInstruction(p, out)), nil
+			case exitAIRefusal:
+				return ok(aiGetInstruction(p, "")), nil
+			}
+			return fail(errors.New(out)), nil
 		},
 	)
 
@@ -174,7 +220,7 @@ func Serve() error {
 	s.AddTool(
 		mcp.NewTool("ward_tree",
 			mcp.WithDescription("Show merged tree with source file and line for each value. "+
-				"In AI mode values are hidden as <sensitive>."),
+				"In AI mode values are hidden as <sensitive> (strict) or masked, e.g. 'sk_l…a9f2 (51 chars)' (masked, the default)."),
 			mcp.WithString("path", mcp.Description("optional scope: 'vault1:group.key1' (one vault) or 'group.key1' (overlay)")),
 			mcp.WithString("dir", mcp.Description("project directory containing .ward/config.yaml (default: current directory)")),
 		),
@@ -194,7 +240,7 @@ func Serve() error {
 	s.AddTool(
 		mcp.NewTool("ward_envs",
 			mcp.WithDescription("Show environment variables that would be injected by ward exec. "+
-				"In AI mode values are hidden as <sensitive>."),
+				"In AI mode values are hidden as <sensitive> (strict) or masked, e.g. 'sk_l…a9f2 (51 chars)' (masked, the default)."),
 			mcp.WithString("path", mcp.Description("optional scope to select env vars; note: 'ward secrets' is the canonical command name now")),
 			mcp.WithBoolean("prefixed", mcp.Description("use full dot-path names as env var keys")),
 			mcp.WithString("dir", mcp.Description("project directory containing .ward/config.yaml (default: current directory)")),
@@ -503,10 +549,18 @@ env var is set, when ward detects an agent in its parent process chain (CLI call
 from a bash tool), or automatically for the MCP tools below. In AI mode secret
 **values** are never returned to the agent:
 
-- ward_get and ward_file_extract reply with the **shell command** to run instead
-  (e.g. "ward get vault1:group.key1"), so the agent can execute it in bash and pipe
-  or redirect the value without ever reading it.
-- ward_tree and ward_envs show keys/paths with values hidden as "<sensitive>".
+- AI mode has two levels, set with ai_mode: strict|masked in .ward/config.yaml (or
+  WARD_AI_MODE=strict|masked). The default is **masked**.
+  - strict: values are shown as "<sensitive>".
+  - masked: a single-line value shows only its first and last characters and its
+    length, e.g. "tok_…a9f2 (51 chars)" — enough to confirm it is the right value.
+    Values under 8 characters show only the length; multi-line values stay
+    "<sensitive>"; a TOTP secret shows its masked seed, never the code.
+- ward_get returns instructions for using the secret and, at the masked level, a
+  "masked" field with the masked value. ward_file_extract replies with the
+  **shell command** to run instead, so the agent can execute it in bash without
+  ever reading the content.
+- ward_tree and ward_envs show keys/paths with values hidden or masked.
 - ward_catalog lists secret paths with descriptions/types — values are never shown,
   making it the safe way to discover what secrets exist.
 
@@ -517,8 +571,8 @@ ward exec -- sh -c 'curl -H "Authorization: Bearer $API_KEY" https://api.example
 ward exec -- sh -c 'psql "$DATABASE_URL" -c "select 1"'
 ` + "```" + `
 
-ward get, ward file extract, ward raw, ward export <file> (to stdout) and --json
-refuse in AI mode (exit status 3): they exist to read a value, which must never
+ward get (strict level; at masked it prints the masked value), ward file extract,
+ward raw, ward export <file> (to stdout) and --json refuse in AI mode (exit status 3): they exist to read a value, which must never
 enter agent context. ward export <file> <out> writes to disk and is allowed.
 
 To pin AI mode for the CLI too, set WARD_AI_MODE=1 in your agent's environment
