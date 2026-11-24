@@ -1,6 +1,6 @@
 ---
 title: AI mode com nível masked, ward check e set --from
-status: proposed
+status: done
 created: 2026-11-24
 updated: 2026-11-24
 owner: "@o_porpino"
@@ -276,7 +276,7 @@ Cinco PRs empilhados. Cada um vai para produção sozinho e gera release própri
 
 **Entrega:** `raw` e `export` para stdout recusam em AI mode, e toda recusa sai com exit 3.
 **Pronto para prod:** fora do AI mode nada muda. Em AI mode, só fecha a saída de plaintext.
-**Release:** patch `v0.7.1`.
+**Release:** patch `v0.7.2` (a tag `v0.7.1` já existia).
 **Valida:** `make test && make test.e2e`.
 
 ### Task 1.1: exit 3 nas recusas
@@ -466,37 +466,37 @@ Merge in this order: #<pr1> #<pr2> #<pr3> #<pr4> #<pr5>
 
 # definition of done
 
-- [ ] Todo cenário de "acceptance criteria" foi validado (automatizado ou verificado com comando exato)
-- [ ] Testes automáticos passando — suíte verde, não só a parte nova (`make test && make test.integration && make test.e2e`)
-- [ ] Toda task do "how" executada
-- [ ] Documentação atualizada (README, `docs/configuration.md`, `wardDocs`, `AGENTS.md`; `docs/CONTEXT.md` feito junto com esta spec)
-- [ ] Staging: `staging: none` (sem staging declarado no `AGENTS.md` do repo)
-- [ ] Cada PR da sequência validado isoladamente (build e testes verdes sem os PRs seguintes)
-- [ ] Último PR liga a funcionalidade e remove código temporário (não há código temporário nem flag)
-- [ ] Issue aberta para `ward edit`/`ward new` com `EDITOR=cat` em AI mode (`br4zz4:issue`)
-- [ ] Sem config, `WARD_AI_MODE=1 ward secrets` mostra `tok_…a9f2 (51 chars)` (e2e)
-- [ ] `ai_mode: strict` → `<sensitive>` em tree e `get` com exit 3 (e2e)
-- [ ] `WARD_AI_MODE=strict|masked` sobrepõe a config nos dois sentidos (e2e)
-- [ ] `WARD_AI_MODE=true` liga e `false` desliga (unit + e2e)
-- [ ] Valor desconhecido na env → strict + aviso no stderr (unit + e2e)
-- [ ] `ai_mode` inválido na config → strict + aviso (unit + e2e)
-- [ ] `maskValue` com 51/16/10/8/7/0 runes, unicode e multi-line conforme a tabela (unit)
-- [ ] Multi-line em masked → `<sensitive>` (e2e)
-- [ ] TOTP em masked mostra a seed mascarada, nunca o código (e2e)
-- [ ] `--json` (secrets/get) e `file extract` recusam em masked (e2e)
-- [ ] `ward_get` MCP: `masked` presente em masked, ausente em strict, erro em path inexistente (`internal/mcp`)
-- [ ] `ward raw` (com e sem arquivo) em AI mode: exit 3, stdout vazio; `ward_raw` MCP recusa (e2e + `internal/mcp`)
-- [ ] `ward export <file>` em AI mode: exit 3; `ward export <file> <out>` grava e sai com 0 (e2e)
-- [ ] `ward check` match (0), differs (1) via `@file` e `-`, erros (2) com stdout vazio (e2e)
-- [ ] `ward check` funciona com `WARD_AI_MODE=strict` (e2e)
-- [ ] `ward_check` MCP: match, differs sem erro, erro em path inexistente (`internal/mcp`)
-- [ ] `ward set other:k --from app:k` copia entre vaults com chaves diferentes, stderr sem o valor (e2e)
-- [ ] `set --from` inválido (valor junto, `--literal`, subtree, inexistente, origem == destino): exit ≠ 0 e nenhum `.ward` alterado (e2e)
-- [ ] `ward_set` MCP com `from` copia; `value`+`from` ou nenhum → erro sem gravar (`internal/mcp`)
-- [ ] Recusa do `get` cita exec, check e `--from`, e não cita `ward get` (unit + e2e)
-- [ ] Shell humano: sem agente na cadeia, `ward secrets | cat` em claro; agente na cadeia + TTY em claro (testes existentes de `ai_mode_test.go` + e2e de `agent_detection_test.go` verdes)
-- [ ] Suíte verde em macOS e Linux (CI)
-- [ ] Releases `v0.7.1`, `v0.8.0` (tag destaca o novo default), `v0.9.0`, `v0.10.0`, `v0.10.1` publicados e instalados via `mise use -g ward@<versão>`
+- [x] Todo cenário de "acceptance criteria" foi validado (automatizado ou verificado com comando exato)
+- [x] Testes automáticos passando — suíte verde, não só a parte nova (`make test && make test.integration && make test.e2e`)
+- [x] Toda task do "how" executada
+- [x] Documentação atualizada (README, `docs/configuration.md`, `wardDocs`, `AGENTS.md`; `docs/CONTEXT.md` feito junto com esta spec)
+- [x] Staging: `staging: none` (sem staging declarado no `AGENTS.md` do repo)
+- [x] Cada PR da sequência validado isoladamente (build e testes verdes sem os PRs seguintes)
+- [x] Último PR liga a funcionalidade e remove código temporário (não há código temporário nem flag)
+- [x] Issue aberta para `ward edit`/`ward new` com `EDITOR=cat` em AI mode (`br4zz4:issue`): #41; achados do review: #42 (vault add/rotate-key imprimem a chave) e #43 (`ward --nope check` sai 1)
+- [x] Sem config, `WARD_AI_MODE=1 ward secrets` mostra `tok_…a9f2 (51 chars)` (e2e)
+- [x] `ai_mode: strict` → `<sensitive>` em tree e `get` com exit 3 (e2e)
+- [x] `WARD_AI_MODE=strict|masked` sobrepõe a config nos dois sentidos (e2e)
+- [x] `WARD_AI_MODE=true` liga e `false` desliga (unit + e2e)
+- [x] Valor desconhecido na env → strict + aviso no stderr (unit + e2e)
+- [x] `ai_mode` inválido na config → strict + aviso (unit + e2e)
+- [x] `maskValue` com 51/16/10/8/7/0 runes, unicode e multi-line conforme a tabela (unit)
+- [x] Multi-line em masked → `<sensitive>` (e2e)
+- [x] TOTP em masked mostra a seed mascarada, nunca o código (e2e)
+- [x] `--json` (secrets/get) e `file extract` recusam em masked (e2e)
+- [x] `ward_get` MCP: `masked` presente em masked, ausente em strict, erro em path inexistente (`internal/mcp`)
+- [x] `ward raw` (com e sem arquivo) em AI mode: exit 3, stdout vazio; `ward_raw` MCP recusa (e2e + `internal/mcp`)
+- [x] `ward export <file>` em AI mode: exit 3; `ward export <file> <out>` grava e sai com 0 (e2e)
+- [x] `ward check` match (0), differs (1) via `@file` e `-`, erros (2) com stdout vazio (e2e)
+- [x] `ward check` funciona com `WARD_AI_MODE=strict` (e2e)
+- [x] `ward_check` MCP: match, differs sem erro, erro em path inexistente (`internal/mcp`)
+- [x] `ward set other:k --from app:k` copia entre vaults com chaves diferentes, stderr sem o valor (e2e)
+- [x] `set --from` inválido (valor junto, `--literal`, subtree, inexistente, origem == destino): exit ≠ 0 e nenhum `.ward` alterado (e2e)
+- [x] `ward_set` MCP com `from` copia; `value`+`from` ou nenhum → erro sem gravar (`internal/mcp`)
+- [x] Recusa do `get` cita exec, check e `--from`, e não cita `ward get` (unit + e2e)
+- [x] Shell humano: sem agente na cadeia, `ward secrets | cat` em claro; agente na cadeia + TTY em claro (testes existentes de `ai_mode_test.go` + e2e de `agent_detection_test.go` verdes)
+- [x] Suíte verde em macOS e Linux (CI)
+- [ ] Releases `v0.7.2` (a `v0.7.1` já existia), `v0.8.0` (tag destaca o novo default), `v0.9.0`, `v0.10.0`, `v0.10.1` publicados e instalados via `mise use -g ward@<versão>`
 - [ ] Banner `FINISHED` impresso como última saída (`br4zz4:finish`, Step 7), só com todos os itens acima marcados
 
 ## documentation
