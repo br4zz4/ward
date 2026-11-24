@@ -646,3 +646,134 @@ func TestWardCheck_schema_has_no_literal_value(t *testing.T) {
 	}
 	t.Fatal("ward_check tool not listed")
 }
+
+func callWardSet(t *testing.T, args string) toolResult {
+	t.Helper()
+	call := `{"jsonrpc":"2.0","id":"call","method":"tools/call","params":{"name":"ward_set","arguments":` + args + `}}`
+	got := driveServer(t, []string{initRequest, initializedNotification, call}, []string{"call"})
+	var res toolResult
+	if err := json.Unmarshal(got["call"], &res); err != nil {
+		t.Fatal(err)
+	}
+	return res
+}
+
+func readSubprocessArgs(t *testing.T, argsFile string) []string {
+	t.Helper()
+	raw, err := os.ReadFile(argsFile)
+	if err != nil {
+		t.Fatalf("ward subprocess was not invoked: %v", err)
+	}
+	var args []string
+	if err := json.Unmarshal(raw, &args); err != nil {
+		t.Fatal(err)
+	}
+	return args
+}
+
+func TestWardSet_from_invokes_cli_with_from_flag(t *testing.T) {
+	// arrange
+	argsFile := filepath.Join(t.TempDir(), "args.json")
+	t.Setenv(fakeWardArgsEnv, argsFile)
+
+	// act
+	res := callWardSet(t, `{"path":"other:main.k","from":"app:main.k"}`)
+
+	// assert
+	if res.IsError {
+		t.Fatalf("expected success, got %+v", res)
+	}
+	want := []string{"set", "--from", "app:main.k", "--", "other:main.k"}
+	if got := readSubprocessArgs(t, argsFile); !reflect.DeepEqual(got, want) {
+		t.Errorf("got %v want %v", got, want)
+	}
+}
+
+func TestWardSet_from_with_dir_prepends_dir_flag(t *testing.T) {
+	// arrange
+	argsFile := filepath.Join(t.TempDir(), "args.json")
+	t.Setenv(fakeWardArgsEnv, argsFile)
+
+	// act
+	res := callWardSet(t, `{"path":"other:main.k","from":"app:main.k","dir":"/proj"}`)
+
+	// assert
+	if res.IsError {
+		t.Fatalf("expected success, got %+v", res)
+	}
+	want := []string{"-d", "/proj", "set", "--from", "app:main.k", "--", "other:main.k"}
+	if got := readSubprocessArgs(t, argsFile); !reflect.DeepEqual(got, want) {
+		t.Errorf("got %v want %v", got, want)
+	}
+}
+
+func TestWardSet_value_and_from_together_is_tool_error_without_running_cli(t *testing.T) {
+	// arrange
+	argsFile := filepath.Join(t.TempDir(), "args.json")
+	t.Setenv(fakeWardArgsEnv, argsFile)
+
+	// act
+	res := callWardSet(t, `{"path":"other:main.k","value":"v","from":"app:main.k"}`)
+
+	// assert
+	if !res.IsError {
+		t.Errorf("expected a tool error, got %+v", res)
+	}
+	if _, err := os.Stat(argsFile); err == nil {
+		t.Errorf("ward subprocess must not run when value and from are both given")
+	}
+}
+
+func TestWardSet_without_value_nor_from_is_tool_error_without_running_cli(t *testing.T) {
+	// arrange
+	argsFile := filepath.Join(t.TempDir(), "args.json")
+	t.Setenv(fakeWardArgsEnv, argsFile)
+
+	// act
+	res := callWardSet(t, `{"path":"other:main.k"}`)
+
+	// assert
+	if !res.IsError {
+		t.Errorf("expected a tool error, got %+v", res)
+	}
+	if _, err := os.Stat(argsFile); err == nil {
+		t.Errorf("ward subprocess must not run when neither value nor from is given")
+	}
+}
+
+func TestWardSet_schema_value_optional_and_from_declared(t *testing.T) {
+	// arrange
+	list := `{"jsonrpc":"2.0","id":"list","method":"tools/list"}`
+
+	// act
+	got := driveServer(t, []string{initRequest, initializedNotification, list}, []string{"list"})
+
+	// assert
+	var res struct {
+		Tools []struct {
+			Name        string `json:"name"`
+			InputSchema struct {
+				Properties map[string]json.RawMessage `json:"properties"`
+				Required   []string                   `json:"required"`
+			} `json:"inputSchema"`
+		} `json:"tools"`
+	}
+	if err := json.Unmarshal(got["list"], &res); err != nil {
+		t.Fatal(err)
+	}
+	for _, tool := range res.Tools {
+		if tool.Name != "ward_set" {
+			continue
+		}
+		if _, ok := tool.InputSchema.Properties["from"]; !ok {
+			t.Errorf("ward_set must declare from")
+		}
+		for _, r := range tool.InputSchema.Required {
+			if r == "value" || r == "from" {
+				t.Errorf("%q must not be required on its own, required: %v", r, tool.InputSchema.Required)
+			}
+		}
+		return
+	}
+	t.Fatal("ward_set tool not listed")
+}

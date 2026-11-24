@@ -13,7 +13,7 @@ import (
 
 func NewSetCmd() *cobra.Command {
 	c := &cobra.Command{
-		Use:   "set [scope] <value|@file|->",
+		Use:   "set [scope] <value|@file|-> | set [scope] --from <source-scope>",
 		Short: "Set a single secret at a scope",
 		Long: `Set a single secret at a scope.
 
@@ -25,7 +25,11 @@ The value is taken from:
 
 Content read from a file or stdin loses one trailing newline; it must be
 non-empty, valid UTF-8 and at most 1 MiB. Use --literal to store the argument
-exactly as given (including values starting with "@" or equal to "-").`,
+exactly as given (including values starting with "@" or equal to "-").
+
+With --from <source-scope> the value is copied from another stored secret (a
+leaf, possibly in another vault) without being printed; it cannot be combined
+with a value or --literal.`,
 		Args: cobra.ArbitraryArgs,
 		ValidArgsFunction: func(c *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 			if len(args) > 0 {
@@ -37,11 +41,24 @@ exactly as given (including values starting with "@" or equal to "-").`,
 	sf := registerScopeFlags(c)
 	var literal bool
 	c.Flags().BoolVar(&literal, "literal", false, `store the value as-is; do not read @file or - (stdin)`)
+	var from string
+	c.Flags().StringVar(&from, "from", "", "copy the stored value of another secret (a leaf) instead of taking a value")
 	c.Run = func(_ *cobra.Command, args []string) {
-		scopePositional, rawValue := splitSetArgs(sf, args)
-		value, source, err := resolveSetValue(rawValue, literal, os.Stdin, term.IsTerminal(int(os.Stdin.Fd())))
-		if err != nil {
-			fatal(err)
+		var scopePositional []string
+		var value, source string
+		if from != "" {
+			if literal {
+				fatal(fmt.Errorf("--from cannot be combined with --literal"))
+			}
+			scopePositional = splitSetFromArgs(sf, args)
+		} else {
+			var rawValue string
+			var err error
+			scopePositional, rawValue = splitSetArgs(sf, args)
+			value, source, err = resolveSetValue(rawValue, literal, os.Stdin, term.IsTerminal(int(os.Stdin.Fd())))
+			if err != nil {
+				fatal(err)
+			}
 		}
 
 		sc, err := resolveScopeArg(sf, scopePositional)
@@ -54,6 +71,14 @@ exactly as given (including values starting with "@" or equal to "-").`,
 
 		ed := newSecretEditor()
 		vault := ed.vaultForScope(sc)
+
+		if from != "" {
+			destFull := dotPath
+			if sc.Vault == "" {
+				destFull = vault.CanonicalName() + "." + dotPath
+			}
+			value, source = copySourceValue(ed, from, destFull)
+		}
 
 		// A leaf lives in exactly one file. More than one → Type-1 conflict.
 		targets := secrets.FilesMatching(ed.files, dotPath, secrets.IsLeaf)
@@ -95,6 +120,48 @@ func splitSetArgs(sf *scopeFlags, args []string) (scopePositional []string, valu
 		fatal(fmt.Errorf("usage: set <scope> <value> (e.g. set vault1:group.key1 value1)"))
 	}
 	return []string{args[0]}, args[1]
+}
+
+// splitSetFromArgs returns the positional destination scope of `set --from`:
+// the destination is the sole positional, or none when a scope flag is used.
+func splitSetFromArgs(sf *scopeFlags, args []string) []string {
+	usedFlags := sf.scope != "" || sf.vault != "" || sf.secret != ""
+	if usedFlags {
+		if len(args) != 0 {
+			fatal(fmt.Errorf("set --from takes no value; the source is the --from scope"))
+		}
+		return nil
+	}
+	if len(args) != 1 {
+		fatal(fmt.Errorf("usage: set <destination-scope> --from <source-scope>"))
+	}
+	return args
+}
+
+// copySourceValue resolves the --from source to the stored value of a single
+// leaf, refusing a missing or non-leaf source and a source equal to the
+// destination. It never prints the value.
+func copySourceValue(ed *secretEditor, from, destFull string) (value, source string) {
+	src := secrets.ParseScope(from)
+	if src.Vault == "" && src.SecretPath == "" {
+		fatal(fmt.Errorf("--from needs a source scope"))
+	}
+	if src.Vault != "" && findVault(ed.cfg, src.Vault) == nil {
+		fatalVaultNotFound(src.Vault)
+	}
+	result, err := ed.eng.MergeScoped(src.TreePath())
+	if err != nil {
+		fatal(err)
+	}
+	srcPath, value, err := lookupLeaf(ed.eng, result, src)
+	if err != nil {
+		fatal(err)
+	}
+	if srcPath == destFull {
+		fatal(fmt.Errorf("source and destination are the same: %s", src.FullPath()))
+	}
+	vaultName, secretPath, _ := strings.Cut(srcPath, ".")
+	return value, "secret " + vaultName + ":" + secretPath
 }
 
 // resolveSetTarget picks the file to write: the sole existing file that defines
