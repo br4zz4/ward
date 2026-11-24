@@ -59,13 +59,14 @@ func runViaWrapper(t *testing.T, wrapper, dir string, extraEnv []string, args ..
 func TestGet_auto_detects_agent_ancestor(t *testing.T) {
 	// arrange
 	wrapper := writeWrapper(t, "opencode")
+	dir := project(t, "strict", defaultBody)
 
 	// act
-	out, stderr, code := runViaWrapper(t, wrapper, treeFixture(), nil, "get", "app:main.name")
+	out, stderr, code := runViaWrapper(t, wrapper, dir, nil, "get", "app:main.token")
 
 	// assert
-	if code == 0 {
-		t.Fatalf("expected refusal (non-zero exit), got 0")
+	if code != 3 {
+		t.Fatalf("expected refusal exit code 3, got %d", code)
 	}
 	if out != "" {
 		t.Errorf("expected empty stdout in AI mode, got: %q", testutil.StripANSI(out))
@@ -74,7 +75,7 @@ func TestGet_auto_detects_agent_ancestor(t *testing.T) {
 	if !testutil.Contains(clean, "AI mode active") {
 		t.Errorf("expected AI mode refusal on stderr, got: %q", clean)
 	}
-	if testutil.Contains(clean, "myapp") {
+	if testutil.Contains(clean, "tok_AbCd") {
 		t.Errorf("secret value leaked in AI mode: %q", clean)
 	}
 }

@@ -1,9 +1,166 @@
 package cmd
 
 import (
+	"bytes"
+	"fmt"
 	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
 	"testing"
 )
+
+const levelHelperEnv = "WARD_CMD_TEST_LEVEL_HELPER"
+const levelHelperFlagEnv = "WARD_CMD_TEST_LEVEL_FLAG"
+const levelHelperAgentEnv = "WARD_CMD_TEST_LEVEL_AGENT"
+const levelHelperSample = "tok_AbCdEfGhIjKlMnOpQrStUvWxYz0123456789abcdefXa9f2"
+
+func TestAILevelHelperProcess(t *testing.T) {
+	if os.Getenv(levelHelperEnv) != "1" {
+		t.Skip("helper process only")
+	}
+	stdoutIsTerminal = func() bool { return false }
+	agent := os.Getenv(levelHelperAgentEnv) == "1"
+	parentPid := os.Getppid()
+	processInfoFn = func(pid int) (string, int) {
+		if pid == parentPid && agent {
+			return "/Users/x/.opencode/bin/opencode", 1
+		}
+		return "/bin/zsh", 1
+	}
+	SetAIMode(os.Getenv(levelHelperFlagEnv) == "1")
+	on := IsAIMode()
+	level := AILevel()
+	fmt.Printf("RESULT ai=%v level=%s val=%s\n", on, level, aiValue(levelHelperSample))
+	os.Exit(0)
+}
+
+type levelRun struct {
+	ai     bool
+	level  string
+	val    string
+	stderr string
+}
+
+func runLevelHelper(t *testing.T, env, config string, flag, agent bool) levelRun {
+	t.Helper()
+	dir := t.TempDir()
+	if config != "-" {
+		if err := os.MkdirAll(filepath.Join(dir, ".ward"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, ".ward", "config.yaml"), []byte(config+"vaults: []\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	c := exec.Command(os.Args[0], "-test.run=^TestAILevelHelperProcess$")
+	c.Dir = dir
+	envs := []string{levelHelperEnv + "=1", "WARD_AI_MODE=" + env}
+	if flag {
+		envs = append(envs, levelHelperFlagEnv+"=1")
+	}
+	if agent {
+		envs = append(envs, levelHelperAgentEnv+"=1")
+	}
+	c.Env = append(os.Environ(), envs...)
+	var out, errb bytes.Buffer
+	c.Stdout, c.Stderr = &out, &errb
+	if err := c.Run(); err != nil {
+		t.Fatalf("helper failed: %v\nstdout: %s\nstderr: %s", err, out.String(), errb.String())
+	}
+	var res levelRun
+	res.stderr = errb.String()
+	for _, line := range strings.Split(out.String(), "\n") {
+		if !strings.HasPrefix(line, "RESULT ") {
+			continue
+		}
+		rest := strings.TrimPrefix(line, "RESULT ai=")
+		aiStr, rest, _ := strings.Cut(rest, " level=")
+		level, val, _ := strings.Cut(rest, " val=")
+		res.ai = aiStr == "true"
+		res.level = level
+		res.val = val
+		return res
+	}
+	t.Fatalf("no RESULT line in helper output: %q", out.String())
+	return res
+}
+
+func TestAILevel_resolution_table(t *testing.T) {
+	cases := []struct {
+		name       string
+		env        string
+		config     string
+		flag       bool
+		agent      bool
+		wantAI     bool
+		wantLevel  string
+		wantStderr string
+	}{
+		{"env 1 without config file is masked", "1", "-", false, false, true, "masked", ""},
+		{"env 1 with config lacking ai_mode is masked", "1", "", false, false, true, "masked", ""},
+		{"env true enables masked by default", "true", "", false, false, true, "masked", ""},
+		{"env strict forces strict", "strict", "", false, false, true, "strict", ""},
+		{"env masked forces masked", "masked", "", false, false, true, "masked", ""},
+		{"env masked overrides config strict", "masked", "ai_mode: strict\n", false, false, true, "masked", ""},
+		{"env strict overrides config masked", "strict", "ai_mode: masked\n", false, false, true, "strict", ""},
+		{"env 1 reads config strict", "1", "ai_mode: strict\n", false, false, true, "strict", ""},
+		{"env 1 reads config masked", "1", "ai_mode: masked\n", false, false, true, "masked", ""},
+		{"env true reads config strict", "true", "ai_mode: strict\n", false, false, true, "strict", ""},
+		{"env 0 disables", "0", "ai_mode: strict\n", false, true, false, "", ""},
+		{"env false disables even under agent", "false", "", false, true, false, "", ""},
+		{"empty env without agent is off", "", "", false, false, false, "", ""},
+		{"empty env with agent reads config strict", "", "ai_mode: strict\n", false, true, true, "strict", ""},
+		{"empty env with agent and no config is masked", "", "-", false, true, true, "masked", ""},
+		{"flag wins over env 0 and is masked by default", "0", "", true, false, true, "masked", ""},
+		{"flag wins over env false and reads config strict", "false", "ai_mode: strict\n", true, false, true, "strict", ""},
+		{"unknown env is fail-closed strict", "masekd", "", false, false, true, "strict", `ward: unknown WARD_AI_MODE value "masekd", using strict`},
+		{"unknown env beats config masked", "masekd", "ai_mode: masked\n", false, false, true, "strict", `unknown WARD_AI_MODE value "masekd", using strict`},
+		{"invalid config ai_mode is fail-closed strict", "1", "ai_mode: loose\n", false, false, true, "strict", `ward: unknown ai_mode "loose" in `},
+		{"invalid config ai_mode under auto-detection", "", "ai_mode: loose\n", false, true, true, "strict", `unknown ai_mode "loose"`},
+		{"env masked overrides invalid config", "masked", "ai_mode: loose\n", false, false, true, "masked", ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			// act
+			got := runLevelHelper(t, tc.env, tc.config, tc.flag, tc.agent)
+
+			// assert
+			if got.ai != tc.wantAI {
+				t.Errorf("IsAIMode() = %v, want %v", got.ai, tc.wantAI)
+			}
+			if tc.wantAI && got.level != tc.wantLevel {
+				t.Errorf("AILevel() = %q, want %q", got.level, tc.wantLevel)
+			}
+			if tc.wantAI {
+				want := "<sensitive>"
+				if tc.wantLevel == "masked" {
+					want = "tok_…a9f2 (51 chars)"
+				}
+				if got.val != want {
+					t.Errorf("aiValue = %q, want %q", got.val, want)
+				}
+			}
+			if tc.wantStderr != "" {
+				if !strings.Contains(got.stderr, tc.wantStderr) {
+					t.Errorf("stderr missing %q, got %q", tc.wantStderr, got.stderr)
+				}
+				if n := strings.Count(got.stderr, "unknown "); n != 1 {
+					t.Errorf("expected the warning exactly once, got %d in %q", n, got.stderr)
+				}
+			} else if strings.Contains(got.stderr, "unknown ") {
+				t.Errorf("unexpected warning on stderr: %q", got.stderr)
+			}
+		})
+	}
+}
+
+func TestAILevel_constants(t *testing.T) {
+	// assert
+	if levelStrict != aiLevel("strict") || levelMasked != aiLevel("masked") {
+		t.Errorf("unexpected level constants: %q %q", levelStrict, levelMasked)
+	}
+}
 
 func stubProcessTree(t *testing.T, cmdlines map[int]string, ppids map[int]int, startPid int) *int {
 	t.Helper()

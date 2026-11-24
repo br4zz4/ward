@@ -42,6 +42,7 @@ type Source struct {
 type Config struct {
 	Encryption Encryption `yaml:"encryption,omitempty"`
 	DefaultDir string     `yaml:"default_dir,omitempty"`
+	AIMode     string     `yaml:"ai_mode,omitempty"`
 	Vaults     []Source   `yaml:"vaults"`
 	Sources    []Source   `yaml:"sources,omitempty"` // legacy: migrated to Vaults on load
 }

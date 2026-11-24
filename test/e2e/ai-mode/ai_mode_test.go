@@ -33,6 +33,7 @@ func treeFixture() string { return fix("tree", "basic") }
 // --- ward get --ai-mode refuses ---
 
 func TestGet_ai_mode_refuses(t *testing.T) {
+	t.Setenv("WARD_AI_MODE", "strict")
 	out, stderr, code := testutil.Run(t, bin, treeFixture(), "get", "app:main.name", "--ai-mode")
 	if code != 3 {
 		t.Fatalf("expected refusal exit code 3, got %d", code)
@@ -49,10 +50,10 @@ func TestGet_ai_mode_refuses(t *testing.T) {
 // --- ward get with WARD_AI_MODE=1 refuses ---
 
 func TestGet_env_var_ai_mode_refuses(t *testing.T) {
-	t.Setenv("WARD_AI_MODE", "1")
+	t.Setenv("WARD_AI_MODE", "strict")
 	out, stderr, code := testutil.Run(t, bin, treeFixture(), "get", "app:main.name")
-	if code == 0 {
-		t.Fatalf("expected refusal (non-zero exit), got 0")
+	if code != 3 {
+		t.Fatalf("expected refusal exit code 3, got %d", code)
 	}
 	clean := testutil.StripANSI(out+stderr)
 	if !testutil.Contains(clean, "AI mode") {
@@ -66,6 +67,7 @@ func TestGet_env_var_ai_mode_refuses(t *testing.T) {
 // --- ward tree --ai-mode shows paths but no values ---
 
 func TestTree_ai_mode_shows_paths_hides_values(t *testing.T) {
+	t.Setenv("WARD_AI_MODE", "strict")
 	out, _, code := testutil.Run(t, bin, treeFixture(), "tree", "--ai-mode")
 	if code != 0 {
 		t.Fatalf("tree --ai-mode should exit 0, got %d", code)
@@ -85,6 +87,7 @@ func TestTree_ai_mode_shows_paths_hides_values(t *testing.T) {
 // --- ward secrets --ai-mode shows KEY=<sensitive> ---
 
 func TestSecrets_ai_mode_hides_values(t *testing.T) {
+	t.Setenv("WARD_AI_MODE", "strict")
 	out, _, code := testutil.Run(t, bin, fix("secrets", "basic"), "secrets", "--ai-mode")
 	if code != 0 {
 		t.Fatalf("secrets --ai-mode should exit 0, got %d", code)

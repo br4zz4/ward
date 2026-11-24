@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/br4zz4/ward/internal/config"
 	"golang.org/x/term"
 )
 
@@ -45,19 +46,118 @@ var stdoutIsTerminal = func() bool {
 	return term.IsTerminal(int(os.Stdout.Fd()))
 }
 
+type aiLevel string
+
+const (
+	levelStrict aiLevel = "strict"
+	levelMasked aiLevel = "masked"
+)
+
+const aiModeEnvVar = "WARD_AI_MODE"
+
+var aiModeWarned = map[string]bool{}
+
+func warnAIModeOnce(msg string) {
+	if aiModeWarned[msg] {
+		return
+	}
+	aiModeWarned[msg] = true
+	fmt.Fprintln(os.Stderr, msg)
+}
+
+// aiEnvState is how WARD_AI_MODE reads: unset (auto-detect), on, off, or an
+// unrecognised value, which fails closed as on with the strict level.
+type aiEnvState int
+
+const (
+	aiEnvUnset aiEnvState = iota
+	aiEnvOn
+	aiEnvOff
+	aiEnvUnknown
+)
+
+func readAIEnv() (aiEnvState, aiLevel) {
+	switch v := os.Getenv(aiModeEnvVar); v {
+	case "":
+		return aiEnvUnset, ""
+	case "1", "true":
+		return aiEnvOn, ""
+	case "strict":
+		return aiEnvOn, levelStrict
+	case "masked":
+		return aiEnvOn, levelMasked
+	case "0", "false":
+		return aiEnvOff, ""
+	default:
+		warnAIModeOnce(fmt.Sprintf("ward: unknown %s value %q, using strict", aiModeEnvVar, v))
+		return aiEnvUnknown, levelStrict
+	}
+}
+
 // IsAIMode reports whether secret values must be suppressed from output.
-// Precedence: the --ai-mode flag, then the WARD_AI_MODE env var ("1" on, any
-// other value off), then auto-detection of an AI agent in the parent process
-// chain — the latter skipped when stdout is a terminal. MCP tools always run in
-// AI mode by passing --ai-mode explicitly.
+// Precedence: the --ai-mode flag, then the WARD_AI_MODE env var (1/true/strict/
+// masked on, 0/false off, unknown fails closed as on), then auto-detection of
+// an AI agent in the parent process chain — the latter skipped when stdout is a
+// terminal. MCP tools always run in AI mode through WARD_AI_MODE=1.
 func IsAIMode() bool {
 	if aiModeFlag {
 		return true
 	}
-	if v := os.Getenv("WARD_AI_MODE"); v != "" {
-		return v == "1"
+	switch state, _ := readAIEnv(); state {
+	case aiEnvOn, aiEnvUnknown:
+		return true
+	case aiEnvOff:
+		return false
 	}
 	return agentAncestor() != "" && !stdoutIsTerminal()
+}
+
+// AILevel returns the AI mode level: WARD_AI_MODE=strict|masked, then the
+// ai_mode key of the project config, then masked. An invalid config value
+// fails closed as strict.
+func AILevel() aiLevel {
+	if state, level := readAIEnv(); level != "" && state != aiEnvOff {
+		return level
+	}
+	return configAILevel()
+}
+
+type aiConfigKey struct {
+	path string
+	size int64
+	mod  int64
+}
+
+var (
+	aiConfigCacheKey   aiConfigKey
+	aiConfigCacheLevel aiLevel
+)
+
+func configAILevel() aiLevel {
+	path, err := resolvedConfigFile()
+	if err != nil {
+		return levelMasked
+	}
+	key := aiConfigKey{path: path}
+	if st, err := os.Stat(path); err == nil {
+		key.size, key.mod = st.Size(), st.ModTime().UnixNano()
+	}
+	if aiConfigCacheLevel != "" && key == aiConfigCacheKey {
+		return aiConfigCacheLevel
+	}
+	level := levelMasked
+	if cfg, err := config.Load(path); err == nil {
+		switch cfg.AIMode {
+		case "", string(levelMasked):
+		case string(levelStrict):
+			level = levelStrict
+		default:
+			warnAIModeOnce(fmt.Sprintf("ward: unknown ai_mode %q in %s, using strict", cfg.AIMode, path))
+			level = levelStrict
+		}
+	}
+	aiConfigCacheKey, aiConfigCacheLevel = key, level
+	return level
 }
 
 // agentAncestor walks the parent chain and returns the name of the agent
@@ -114,8 +214,8 @@ func aiModeReason() string {
 	if aiModeFlag {
 		return "the --ai-mode flag is set"
 	}
-	if os.Getenv("WARD_AI_MODE") == "1" {
-		return "WARD_AI_MODE=1 is set"
+	if v := os.Getenv(aiModeEnvVar); v != "" && v != "0" && v != "false" {
+		return fmt.Sprintf("WARD_AI_MODE=%s is set", v)
 	}
 	if name := agentAncestor(); name != "" {
 		return fmt.Sprintf("ward was started by the %s agent", name)
@@ -157,12 +257,16 @@ func aiModeRefusePlaintext(command string) {
 }
 
 // aiValue returns the display form of a secret value: the value itself in
-// normal mode, or "<sensitive>" in AI mode.
+// normal mode, the masked form at the masked level, or "<sensitive>" at the
+// strict level.
 func aiValue(v string) string {
-	if IsAIMode() {
-		return "<sensitive>"
+	if !IsAIMode() {
+		return v
 	}
-	return v
+	if AILevel() == levelMasked {
+		return maskValue(v)
+	}
+	return maskPlaceholder
 }
 
 // printAIModeBanner explains how ward keeps secrets out of AI agent context.
@@ -177,5 +281,7 @@ func printAIModeBanner() {
 	fmt.Fprintf(os.Stderr, "        %sClaude Code%s  .claude.json  →  %s\"env\": { \"WARD_AI_MODE\": \"1\" }%s\n", clrCyan, clrReset, clrGray, clrReset)
 	fmt.Fprintf(os.Stderr, "\n    2)  Or always pass %s--ai-mode%s when running ward from a script\n", clrBold, clrReset)
 	fmt.Fprintf(os.Stderr, "        %sward get db.password --ai-mode%s\n", clrGray, clrReset)
-	fmt.Fprintf(os.Stderr, "\n  Disable auto-detection for a shell with %sWARD_AI_MODE=0%s.\n\n", clrBold, clrReset)
+	fmt.Fprintf(os.Stderr, "\n  Choose how much an agent sees with %sai_mode: strict|masked%s in .ward/config.yaml\n", clrBold, clrReset)
+	fmt.Fprintf(os.Stderr, "  (masked, the default, shows only the first and last characters and the length).\n")
+	fmt.Fprintf(os.Stderr, "  Disable auto-detection for a shell with %sWARD_AI_MODE=0%s.\n\n", clrBold, clrReset)
 }
