@@ -34,8 +34,8 @@ func treeFixture() string { return fix("tree", "basic") }
 
 func TestGet_ai_mode_refuses(t *testing.T) {
 	out, stderr, code := testutil.Run(t, bin, treeFixture(), "get", "app:main.name", "--ai-mode")
-	if code == 0 {
-		t.Fatalf("expected refusal (non-zero exit), got 0")
+	if code != 3 {
+		t.Fatalf("expected refusal exit code 3, got %d", code)
 	}
 	clean := testutil.StripANSI(out+stderr)
 	if !testutil.Contains(clean, "AI mode") {

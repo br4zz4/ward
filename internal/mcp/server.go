@@ -217,7 +217,8 @@ func Serve() error {
 
 	s.AddTool(
 		mcp.NewTool("ward_raw",
-			mcp.WithDescription("Show the raw (decrypted) contents of a .ward file (all files when none given)"),
+			mcp.WithDescription("Show the raw (decrypted) contents of a .ward file (all files when none given). "+
+				"Always refused through MCP: AI mode never exposes decrypted contents."),
 			mcp.WithString("file", mcp.Description("optional path to a .ward file")),
 			mcp.WithString("dir", mcp.Description("project directory containing .ward/config.yaml (default: current directory)")),
 		),
@@ -295,7 +296,8 @@ func Serve() error {
 
 	s.AddTool(
 		mcp.NewTool("ward_export",
-			mcp.WithDescription("Export merged secrets as shell export statements"),
+			mcp.WithDescription("Export merged secrets as shell export statements. "+
+				"Refused in AI mode: decrypted contents are never printed."),
 			mcp.WithString("dir", mcp.Description("project directory containing .ward/config.yaml (default: current directory)")),
 		),
 		func(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -515,8 +517,9 @@ ward exec -- sh -c 'curl -H "Authorization: Bearer $API_KEY" https://api.example
 ward exec -- sh -c 'psql "$DATABASE_URL" -c "select 1"'
 ` + "```" + `
 
-ward get, ward file extract and --json refuse in AI mode: they exist to read
-a value, which must never enter agent context.
+ward get, ward file extract, ward raw, ward export <file> (to stdout) and --json
+refuse in AI mode (exit status 3): they exist to read a value, which must never
+enter agent context. ward export <file> <out> writes to disk and is allowed.
 
 To pin AI mode for the CLI too, set WARD_AI_MODE=1 in your agent's environment
 (e.g. OpenCode opencode.json → "env": { "WARD_AI_MODE": "1" }, or Claude Code

@@ -438,7 +438,8 @@ these holds:
 
 Use `WARD_AI_MODE=0` to opt out of auto-detection in a shell that sits inside an
 agent's environment. Values are hidden in `secrets`, `tree` and `get`; `get`,
-`file extract` and `--json` refuse outright.
+`file extract`, `raw`, `export <file>` (to stdout) and `--json` refuse outright,
+exiting with status 3. `export <file> <out>` writes to disk and is still allowed.
 
 ## CLI flags
 
