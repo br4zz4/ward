@@ -73,7 +73,7 @@ func newEngine() (*ward.Engine, error) {
 				clrCyan, clrReset,
 				clrGray, clrReset,
 			)
-			os.Exit(1)
+			os.Exit(errorExitCode)
 		}
 		return nil, fmt.Errorf("finding config: %w", err)
 	}
@@ -377,10 +377,14 @@ func printEngineWarnings(eng *ward.Engine) {
 	}
 }
 
-// fatal prints err to stderr and exits 1.
+// errorExitCode is the exit status of every fatal error. It is 1 everywhere
+// except `ward check`, which reserves 1 for "differs" and uses 2 for errors.
+var errorExitCode = 1
+
+// fatal prints err to stderr and exits with errorExitCode.
 func fatal(err error) {
 	fmt.Fprintln(os.Stderr, "ward:", err)
-	os.Exit(1)
+	os.Exit(errorExitCode)
 }
 
 // fatalNoSources prints a styled error when no .ward file or source is configured.
@@ -391,7 +395,7 @@ func fatalNoSources() {
 		clrLightRed, clrReset, clrCyan, clrReset,
 		clrGray, clrReset, clrBold, clrReset,
 	)
-	os.Exit(1)
+	os.Exit(errorExitCode)
 }
 
 // --- ANSI colour constants ---------------------------------------------------

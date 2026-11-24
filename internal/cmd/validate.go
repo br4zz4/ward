@@ -108,7 +108,7 @@ func mustValidateStructure(cfg *config.Config, cfgPath string) {
 		fmt.Fprintf(os.Stderr, "  %s•%s %s\n", clrLightRed, clrReset, v)
 	}
 	fmt.Fprintf(os.Stderr, "\n  %suse %sward edit <file>%s to fix the key path%s\n\n", clrGray, clrCyan, clrGray, clrReset)
-	os.Exit(1)
+	os.Exit(errorExitCode)
 }
 
 // expectedFileDotPath builds the dot-path the file's root key should follow.

@@ -438,6 +438,31 @@ func Serve() error {
 	)
 
 	s.AddTool(
+		mcp.NewTool("ward_check",
+			mcp.WithDescription("Check whether the contents of a file equal the stored secret, without revealing either. "+
+				"Replies 'match' or 'differs'. Use it to confirm a value held outside ward is the right one."),
+			mcp.WithString("path", mcp.Required(), mcp.Description("scope of the secret to compare against: 'vault1:group.key1'")),
+			mcp.WithString("value_file", mcp.Required(), mcp.Description("path of a file holding the value to compare (absolute recommended; one trailing newline is ignored). A literal value is not accepted")),
+			mcp.WithString("dir", mcp.Description("project directory containing .ward/config.yaml (default: current directory)")),
+		),
+		func(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			path := req.GetString("path", "")
+			valueFile := req.GetString("value_file", "")
+			out, code, err := runExit(dirArgs(req.GetString("dir", ""), "check", "--", path, "@"+valueFile)...)
+			if err != nil {
+				return fail(err), nil
+			}
+			switch code {
+			case 0:
+				return ok("match"), nil
+			case 1:
+				return ok("differs"), nil
+			}
+			return fail(errors.New(out)), nil
+		},
+	)
+
+	s.AddTool(
 		mcp.NewTool("ward_unset",
 			mcp.WithDescription("Remove a single secret at a full dot-path"),
 			mcp.WithString("path", mcp.Required(), mcp.Description("scope of the secret to remove: 'vault1:group.key1'")),
@@ -591,6 +616,7 @@ ward inspect [dot-path]      # ancestry chain showing where each value comes fro
 ward vaults                  # list all configured vault paths
 ward exec [scope] -- cmd     # run command with secrets injected as env vars
 ward export [dot-path]       # export as shell export statements
+ward check <scope> <value|@file|->  # match/differs against the stored secret (exit 0/1, errors 2); works in AI mode, MCP: ward_check
 ward set <dot-path> <value>  # set a single secret at a full dot-path
 ward unset <dot-path>        # remove a single secret at a full dot-path
 ward import <file.ward>      # read YAML from stdin and encrypt into the given .ward file

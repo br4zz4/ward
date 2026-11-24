@@ -488,3 +488,161 @@ func TestWardGet_unknown_path_is_tool_error(t *testing.T) {
 		t.Errorf("error must not carry a masked field: %q", res.Content[0].Text)
 	}
 }
+
+func callWardCheck(t *testing.T, args string) toolResult {
+	t.Helper()
+	call := `{"jsonrpc":"2.0","id":"call","method":"tools/call","params":{"name":"ward_check","arguments":` + args + `}}`
+	got := driveServer(t, []string{initRequest, initializedNotification, call}, []string{"call"})
+	var res toolResult
+	if err := json.Unmarshal(got["call"], &res); err != nil {
+		t.Fatal(err)
+	}
+	return res
+}
+
+func TestWardCheck_match_invokes_cli_with_value_file(t *testing.T) {
+	// arrange
+	argsFile := filepath.Join(t.TempDir(), "args.json")
+	t.Setenv(fakeWardArgsEnv, argsFile)
+	t.Setenv(fakeWardExitEnv, "0")
+	t.Setenv(fakeWardStdoutEnv, "match\n")
+
+	// act
+	res := callWardCheck(t, `{"path":"app:k","value_file":"/tmp/v","dir":"/proj"}`)
+
+	// assert
+	if res.IsError || len(res.Content) == 0 {
+		t.Fatalf("expected a successful result, got %+v", res)
+	}
+	if !strings.Contains(res.Content[0].Text, "match") || strings.Contains(res.Content[0].Text, "differs") {
+		t.Errorf("expected match, got %q", res.Content[0].Text)
+	}
+	raw, err := os.ReadFile(argsFile)
+	if err != nil {
+		t.Fatalf("ward subprocess was not invoked: %v", err)
+	}
+	var args []string
+	if err := json.Unmarshal(raw, &args); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"-d", "/proj", "check", "--", "app:k", "@/tmp/v"}
+	if !reflect.DeepEqual(args, want) {
+		t.Errorf("got args %v want %v", args, want)
+	}
+}
+
+func TestWardCheck_without_dir_omits_dir_flag(t *testing.T) {
+	// arrange
+	argsFile := filepath.Join(t.TempDir(), "args.json")
+	t.Setenv(fakeWardArgsEnv, argsFile)
+	t.Setenv(fakeWardExitEnv, "0")
+	t.Setenv(fakeWardStdoutEnv, "match\n")
+
+	// act
+	res := callWardCheck(t, `{"path":"app:k","value_file":"/tmp/v"}`)
+
+	// assert
+	if res.IsError {
+		t.Fatalf("expected success, got %+v", res)
+	}
+	raw, err := os.ReadFile(argsFile)
+	if err != nil {
+		t.Fatalf("ward subprocess was not invoked: %v", err)
+	}
+	var args []string
+	if err := json.Unmarshal(raw, &args); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"check", "--", "app:k", "@/tmp/v"}
+	if !reflect.DeepEqual(args, want) {
+		t.Errorf("got args %v want %v", args, want)
+	}
+}
+
+func TestWardCheck_differs_is_success_not_tool_error(t *testing.T) {
+	// arrange
+	t.Setenv(fakeWardExitEnv, "1")
+	t.Setenv(fakeWardStdoutEnv, "differs\n")
+
+	// act
+	res := callWardCheck(t, `{"path":"app:k","value_file":"/tmp/v"}`)
+
+	// assert
+	if res.IsError || len(res.Content) == 0 {
+		t.Fatalf("differs must be a successful result, got %+v", res)
+	}
+	if !strings.Contains(res.Content[0].Text, "differs") {
+		t.Errorf("expected differs, got %q", res.Content[0].Text)
+	}
+}
+
+func TestWardCheck_exit_2_is_tool_error_with_stderr(t *testing.T) {
+	// arrange
+	t.Setenv(fakeWardExitEnv, "2")
+	t.Setenv(fakeWardStderrEnv, "ward: secret not found: app:nope\n")
+
+	// act
+	res := callWardCheck(t, `{"path":"app:nope","value_file":"/tmp/v"}`)
+
+	// assert
+	if !res.IsError || len(res.Content) == 0 {
+		t.Fatalf("expected a tool error, got %+v", res)
+	}
+	if !strings.Contains(res.Content[0].Text, "secret not found: app:nope") {
+		t.Errorf("error must carry stderr, got %q", res.Content[0].Text)
+	}
+}
+
+func TestWardCheck_other_exit_code_is_tool_error(t *testing.T) {
+	// arrange
+	t.Setenv(fakeWardExitEnv, "3")
+	t.Setenv(fakeWardStderrEnv, "ward: boom\n")
+
+	// act
+	res := callWardCheck(t, `{"path":"app:k","value_file":"/tmp/v"}`)
+
+	// assert
+	if !res.IsError {
+		t.Errorf("expected a tool error for exit 3, got %+v", res)
+	}
+}
+
+func TestWardCheck_schema_has_no_literal_value(t *testing.T) {
+	// arrange
+	list := `{"jsonrpc":"2.0","id":"list","method":"tools/list"}`
+
+	// act
+	got := driveServer(t, []string{initRequest, initializedNotification, list}, []string{"list"})
+
+	// assert
+	var res struct {
+		Tools []struct {
+			Name        string `json:"name"`
+			InputSchema struct {
+				Properties map[string]json.RawMessage `json:"properties"`
+				Required   []string                   `json:"required"`
+			} `json:"inputSchema"`
+		} `json:"tools"`
+	}
+	if err := json.Unmarshal(got["list"], &res); err != nil {
+		t.Fatal(err)
+	}
+	for _, tool := range res.Tools {
+		if tool.Name != "ward_check" {
+			continue
+		}
+		for _, p := range []string{"path", "value_file", "dir"} {
+			if _, ok := tool.InputSchema.Properties[p]; !ok {
+				t.Errorf("ward_check must declare %q", p)
+			}
+		}
+		if _, has := tool.InputSchema.Properties["value"]; has {
+			t.Errorf("ward_check must not accept a literal value")
+		}
+		if len(tool.InputSchema.Properties) != 3 {
+			t.Errorf("expected exactly path, value_file and dir, got %v", tool.InputSchema.Properties)
+		}
+		return
+	}
+	t.Fatal("ward_check tool not listed")
+}

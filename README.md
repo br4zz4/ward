@@ -385,6 +385,20 @@ longer stored literally; use `--literal` or `@@`.
 - If the write leaves an env var colliding with a different dot-path, it still
   succeeds and prints a non-blocking warning.
 
+### `ward check <scope> <value|@file|->`
+
+Check whether a value held outside ward equals the stored secret, without
+printing either. The value comes from the same sources as `ward set`.
+
+```sh
+ward check app:ci.TOKEN @token.txt
+pbpaste | ward check app:ci.TOKEN -
+```
+
+- Prints `match` (exit 0) or `differs` (exit 1); nothing else — no diff, length or position.
+- Any error (missing key, a subtree, an unreadable file, not a ward project) exits 2 with the reason on stderr and nothing on stdout, so `differs` is never confused with a failure.
+- Works in AI mode at both levels: it reveals equality only. MCP: `ward_check` (takes a `value_file`, never a literal).
+
 ### `ward unset <scope>`
 
 Remove a single secret at a **scope** (`[vault:]secret-path`), passed

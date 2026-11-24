@@ -94,6 +94,7 @@ func main() {
 	all = append(all, group(groupSecret,
 		cmd.NewGetCmd(),
 		cmd.NewSetCmd(),
+		cmd.NewCheckCmd(),
 		cmd.NewUnsetCmd(),
 		cmd.NewTreeCmd(),
 		cmd.NewCatalogCmd(),
