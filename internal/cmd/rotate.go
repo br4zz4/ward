@@ -145,6 +145,11 @@ func rotateOneVault(cfg *config.Config, name string) {
 
 	fmt.Printf("Key for vault %s rotated successfully.\n", v.CanonicalName())
 	fmt.Printf("Old key backed up to: %s\n", bkpPath)
+	if IsAIMode() {
+		printKeyHiddenNotice(keyPath)
+		protectBackups(keyPath)
+		return
+	}
 	token := strings.TrimSpace(string(newKey))
 	if !strings.HasPrefix(token, "ward-") {
 		token = "ward-" + base64.URLEncoding.EncodeToString(newKey)

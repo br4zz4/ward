@@ -23,6 +23,9 @@ func NewEditCmd() *cobra.Command {
 		Args:  cobra.MaximumNArgs(2),
 		ValidArgsFunction: completeWardFiles,
 		Run: func(_ *cobra.Command, args []string) {
+			if IsAIMode() {
+				aiModeRefusePlaintext("edit")
+			}
 			path := wardFilePath(args)
 
 			eng, err := newEngine()

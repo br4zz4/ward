@@ -18,6 +18,9 @@ func NewNewCmd() *cobra.Command {
 		Args:              cobra.ExactArgs(2),
 		ValidArgsFunction: completeVaultNames,
 		Run: func(_ *cobra.Command, args []string) {
+			if IsAIMode() {
+				aiModeRefusePlaintext("new")
+			}
 			vaultName := args[0]
 			pathArg := args[1]
 

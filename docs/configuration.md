@@ -467,7 +467,8 @@ seed, never the generated code.
 | `tree`, `secrets` | `<sensitive>` | masked value |
 | `get` | refused (exit 3) | prints the masked value |
 | `get --json`, `secrets --json`, `file extract` | refused | refused |
-| `raw`, `export <file>` (stdout) | refused (exit 3) | refused (exit 3) |
+| `raw`, `edit`, `new`, `export <file>` (stdout) | refused (exit 3) | refused (exit 3) |
+| `vault add`, `rotate-key`, `init` | key written to its file, not printed | key written to its file, not printed |
 | `export <file> <out>` (to disk) | allowed | allowed |
 | `check <scope> <value-source>` | allowed (`match`/`differs`) | allowed |
 | `set <dst> --from <src>` | allowed | allowed |
