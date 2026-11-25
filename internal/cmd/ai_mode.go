@@ -245,6 +245,11 @@ func aiGuidance() string {
 		clrGray, clrReset, clrBold, clrReset, clrBold, clrReset, clrBold, clrReset)
 }
 
+func printKeyHiddenNotice(keyPath string) {
+	fmt.Printf("  %s→%s the key was written to %s%s%s and is not printed in AI mode\n\n",
+		clrGray, clrReset, clrCyan, keyPath, clrReset)
+}
+
 func aiModeRefusePlaintext(command string) {
 	fmt.Fprintf(os.Stderr,
 		"\n  %s✗ AI mode active — `ward %s` would print decrypted secrets into AI context%s\n\n%s  %s%s%s\n\n",

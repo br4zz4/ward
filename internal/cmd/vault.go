@@ -131,7 +131,9 @@ Sub-vaults use <namespace>::<name>, e.g. ward vault add myfish::restricted`,
 				clrGreen, clrReset,
 				clrCyan, name, clrReset,
 				clrGrayLight, vaultPath, clrReset)
-			if token != "" {
+			if token != "" && IsAIMode() {
+				printKeyHiddenNotice(fmt.Sprintf(".ward/%s.key", name))
+			} else if token != "" {
 				fmt.Printf("  %s=%s\n", config.KeyEnvName(name), token)
 				fmt.Printf("  %s↑ copy this to CI / secrets manager — key stored in .ward/%s.key%s\n\n", clrGray, name, clrReset)
 			}

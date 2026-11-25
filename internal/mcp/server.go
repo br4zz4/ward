@@ -619,9 +619,10 @@ ward exec -- sh -c 'psql "$DATABASE_URL" -c "select 1"'
 ` + "```" + `
 
 ward get (strict level; at masked it prints the masked value), ward file extract,
-ward raw, ward export <file> (to stdout) and --json refuse in AI mode (exit status 3):
+ward raw, ward edit, ward new, ward export <file> (to stdout) and --json refuse in AI mode (exit status 3):
 they exist to read a value, which must never enter agent context.
-ward export <file> <out> writes to disk and is allowed.
+ward export <file> <out> writes to disk and is allowed. ward vault add, rotate-key and
+init never print the vault key in AI mode; it is only written to its key file.
 
 To pin AI mode for the CLI too, set WARD_AI_MODE=1 in your agent's environment
 (e.g. OpenCode opencode.json → "env": { "WARD_AI_MODE": "1" }, or Claude Code

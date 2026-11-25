@@ -43,7 +43,7 @@ func main() {
 		PersistentPreRun: func(c *cobra.Command, _ []string) {
 			if err := cmd.ApplyDirFlag(dirPath); err != nil {
 				fmt.Fprintln(os.Stderr, "ward:", err)
-				os.Exit(exitCodeFor(c))
+				os.Exit(exitCodeFor(c, os.Args[1:]))
 			}
 			cmd.SetConfigFile(configPath)
 			cmd.SetAIMode(aiModeFlag)
@@ -128,13 +128,24 @@ func main() {
 	if err := root.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		found, _, _ := root.Find(os.Args[1:])
-		os.Exit(exitCodeFor(found))
+		os.Exit(exitCodeFor(found, os.Args[1:]))
 	}
 }
 
-func exitCodeFor(c *cobra.Command) int {
+func exitCodeFor(c *cobra.Command, args []string) int {
 	if c != nil && c.Name() == "check" {
 		return 2
+	}
+	if c == nil || c.HasParent() {
+		return 1
+	}
+	for _, a := range args {
+		if a == "--" {
+			break
+		}
+		if a == "check" {
+			return 2
+		}
 	}
 	return 1
 }

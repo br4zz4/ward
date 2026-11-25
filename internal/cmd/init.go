@@ -122,8 +122,12 @@ func NewInitCmd() *cobra.Command {
 
 				// — WARD_KEY section —
 				ruler("WARD_KEY", clrYellow)
-				fmt.Printf("  %s%s=%s%s\n\n", clrGray, config.KeyEnvName(vaultName), token, clrReset)
-				fmt.Printf("  %s↑ copy this to CI / secrets manager (%s works too)%s\n\n", clrGray, config.KeyEnvName(projectName), clrReset)
+				if IsAIMode() {
+					printKeyHiddenNotice(keyFile)
+				} else {
+					fmt.Printf("  %s%s=%s%s\n\n", clrGray, config.KeyEnvName(vaultName), token, clrReset)
+					fmt.Printf("  %s↑ copy this to CI / secrets manager (%s works too)%s\n\n", clrGray, config.KeyEnvName(projectName), clrReset)
+				}
 
 				// — USEFUL COMMANDS section —
 				ruler("USEFUL COMMANDS", clrOrange)
